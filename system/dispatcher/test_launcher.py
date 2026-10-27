@@ -197,6 +197,30 @@ class LauncherTest(unittest.TestCase):
         kind, record = store.append.call_args.args
         self.assertEqual((kind, record["event"], record["status"]), ("runs", "end", "failed: launcher: CalledProcessError"))
 
+    def test_a_finished_run_records_one_end_and_raises_nothing(self):
+        store = mock.Mock()
+        store.read.return_value = []
+        gh = mock.Mock()
+        gh.api.return_value = {"labels": []}
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(run, "paths", return_value={
+                 "checkout": Path(d, "system"), "worktree": Path(d, "wt"), "settings": Path(d, "s.json"),
+                 "log": Path(d, "run.jsonl"), "state": Path(d, "state")}), \
+             mock.patch.object(run.killswitch, "paused", return_value=(False, "")), \
+             mock.patch.object(run.runner, "claude_login", return_value=("claude.ai", "max")), \
+             mock.patch.object(run.state, "Store", return_value=store), \
+             mock.patch.object(run.post, "GitHub", return_value=gh), \
+             mock.patch.object(run.post, "cmd_claim", return_value="claimed"), \
+             mock.patch.object(run.post, "cmd_release") as release, \
+             mock.patch.object(run, "worktree"), mock.patch.object(run, "remove_worktree"), \
+             mock.patch.object(run, "execute", side_effect=lambda cmd, cwd, env, log, timeout, on_start: (
+                 on_start(4242), log.write_text('{"type": "result", "subtype": "success", "total_cost_usd": 0.5, "num_turns": 3}\n'), "ended")[-1]), \
+             mock.patch("builtins.print"):
+            self.assertEqual(run.main(["reviewer", "--task", "Review PR #32.", "--item", "32", "--claim"]), 0)
+        events = [(c.args[1]["event"], c.args[1].get("status")) for c in store.append.call_args_list]
+        self.assertEqual(events, [("start", None), ("end", "finished")])
+        release.assert_not_called()  # the agent released its own claim; nothing to release
+
     def test_ids_and_task(self):
         self.assertEqual(run.new_run_id("reviewer", NOW), "reviewer-20261027T030000Z")
         self.assertEqual(run.task_text("Review it.", 5), "Review it. Your item: #5.")
