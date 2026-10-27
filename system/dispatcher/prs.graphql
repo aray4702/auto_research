@@ -1,0 +1,14 @@
+query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: OPEN, first: 50, orderBy: {field: CREATED_AT, direction: ASC}) {
+      nodes {
+        number title body isDraft headRefOid headRefName mergeStateStatus reviewDecision
+        author { login }
+        autoMergeRequest { enabledAt }
+        files(first: 100) { nodes { path } }
+        reviews(last: 30) { nodes { author { login } state submittedAt commit { oid } } }
+        commits(last: 1) { nodes { commit { checkSuites(first: 20) { nodes { app { databaseId } checkRuns(first: 10, filterBy: {checkName: "gate"}) { nodes { name status conclusion } } } } } } }
+      }
+    }
+  }
+}
