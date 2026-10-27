@@ -14,6 +14,7 @@ import argparse
 import json
 import os
 import plistlib
+import pwd
 import subprocess
 import sys
 import tomllib
@@ -67,10 +68,16 @@ def claude_command(config, role, task, settings_path):
     ]
 
 
+def run_env(config):
+    """The environment every run starts with, and nothing else. USER is what lets Claude Code find
+    the subscription login in the keychain; without it (or with LOGNAME also set) it signed in with
+    a stray token that belongs to no organization."""
+    return {"PATH": config["runner"]["runner"]["path"], "HOME": str(Path.home()), "USER": pwd.getpwuid(os.getuid()).pw_name}
+
+
 def claude_login(config):
-    """(authMethod, subscriptionType) that a run's bare environment signs Claude Code in with."""
-    r = config["runner"]["runner"]
-    out = subprocess.run([r["claude"], "auth", "status"], env={"PATH": r["path"], "HOME": str(Path.home())},
+    """(authMethod, subscriptionType) that a run's environment signs Claude Code in with."""
+    out = subprocess.run([config["runner"]["runner"]["claude"], "auth", "status"], env=run_env(config),
                          capture_output=True, text=True)
     try:
         status = json.loads(out.stdout)
