@@ -182,12 +182,11 @@ def daily_pass(dry_run, now=None):
     history = [r for r in runs if datetime.fromisoformat(r["at"]) < week]
     snap = github_state.snapshot(gh, identity)
 
-    closed_by_day = {}
+    closed_at = []
     since = (now - timedelta(days=8)).isoformat().replace("+00:00", "Z")
     for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&since={since}&per_page=100", paginate=True):
         if "pull_request" not in i and i.get("closed_at") and not any(x["name"].startswith("record:") for x in i["labels"]):
-            d = datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")).date()
-            closed_by_day[d] = closed_by_day.get(d, 0) + 1
+            closed_at.append(datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")))
     waits = [0.0]
     for item in snap["issues"] + [{"number": p["number"], "labels": p["labels"]} for p in snap["prs"]]:
         if "needs-decision:owner" in item["labels"]:
@@ -201,7 +200,7 @@ def daily_pass(dry_run, now=None):
     open_items = {i["number"] for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])}
     found = (daily.denials(runs, now) + daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
-             + daily.cost_per_item(runs, now, closed_by_day)
+             + daily.cost_per_item(runs, now, closed_at)
              + daily.watch_list(watch["body"] if watch else "", daily.metrics(runs, now, max(waits))))
     live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
     found += daily.protection_breaches(live, identity["branch_protection"])

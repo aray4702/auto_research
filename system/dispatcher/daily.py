@@ -24,14 +24,14 @@ def ends(runs):
 
 
 def denials(runs, now):
-    """The same denial (tool and first words) in two or more runs this week: a permission gap (#44)."""
+    """The same denial (tool and first words) in three or more runs this week: a permission gap (#44)."""
     seen = {}
     for r in ends(recent(runs, now)):
         for signature in set(r.get("denied") or []):
             seen.setdefault(signature, set()).add(r["run_id"])
     return [(f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
              f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}. Grant it by rule, or say in the rules why not.", None)
-            for sig, ids in sorted(seen.items()) if len(ids) >= 2]
+            for sig, ids in sorted(seen.items()) if len(ids) >= 3]
 
 
 def bumpy(runs, now, open_items):
@@ -76,11 +76,12 @@ def new_failures(runs, now, history):
     return out
 
 
-def cost_per_item(runs, now, items_closed_by_day):
-    """Cost per finished item, the last day against the week before it: worse than double, by over $2."""
+def cost_per_item(runs, now, closed_at):
+    """Cost per finished item, the last 24 hours against the 7 days before them: worse than double, by
+    over $2. Spend and closures are counted over the same datetime windows."""
     day = now - timedelta(days=1)
     spend = lambda since, until: sum(r.get("cost_usd") or 0 for r in ends(runs) if since <= datetime.fromisoformat(r["at"]) < until)
-    closed = lambda since, until: sum(n for d, n in items_closed_by_day.items() if since.date() <= d < until.date())
+    closed = lambda since, until: sum(since <= at < until for at in closed_at)
     last, last_items = spend(day, now), closed(day, now) or 1
     base, base_items = spend(now - timedelta(days=8), day), closed(now - timedelta(days=8), day)
     if not base_items or not base:

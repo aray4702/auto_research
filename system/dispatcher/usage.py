@@ -6,6 +6,7 @@ utilization. The system's own share is its runs' cost times caps.toml's points_p
 """
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -46,11 +47,22 @@ def summarize(lines):
 
 
 def denial_signature(denial):
+    """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
+    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
-    if tool == "Bash" and command:
-        return "Bash: " + " ".join(command.split()[:2])
-    return tool
+    if tool != "Bash" or not command:
+        return tool
+    words = []
+    for word in command.split():
+        if "=" in word and not words:
+            continue  # a leading VAR=value assignment: skip it, never record it
+        if not re.fullmatch(r"[a-z][a-z0-9._-]*", word):
+            break
+        words.append(word)
+        if len(words) == 2:
+            break
+    return "Bash: " + (" ".join(words) or "?")
 
 
 def parse_time(iso):

@@ -58,7 +58,7 @@ There is no baseline yet. Until the harness first measures, the gate's pass/fail
 
 ## Branch protection on `main`
 
-These are the settings as applied on 2026-10-26. The Dispatcher's daily audit (step 4) compares the live settings with this list and treats any difference as a rule breach.
+These are the settings as applied on 2026-10-26. The record the Dispatcher's daily audit checks is the machine-readable copy in `system/identity.toml` `[branch_protection]`. Any live difference is a rule breach. Change both together.
 
 - **Merging:** only by pull request, with 1 approval. Stale approvals are dismissed, and code-owner review is required.
 - **Required check:** `gate`, accepted only from GitHub Actions (app ID 15368), so a commit status posted by anyone else can't satisfy it. The branch must be up to date with `main`.
