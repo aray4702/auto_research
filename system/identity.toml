@@ -27,7 +27,7 @@ keychain_account = "aray4702"
 # The Owner's answers from Discord (system/dispatcher/relay.py): a bot reads the escalation channel and
 # relays only this Discord user's answers. Its token is a secret, kept only in the keychain (same account).
 # The relay is off while any of these is empty. The IDs are Discord snowflakes, not secrets.
-discord_bot_keychain_service = "auto_research.discord-bot"
+discord_bot_keychain_service = "auto_research_relay.discord-bot"
 discord_guild_id = "1505352054854516866"
 discord_channel_id = "1564434156568707112"
 owner_discord_user_id = "1334397293616562197"
