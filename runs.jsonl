@@ -48,3 +48,4 @@
 {"at": "2026-10-27T05:54:20+00:00", "event": "start", "item": 45, "pid": 58542, "role": "reviewer", "run_id": "reviewer-20261027T055416Z", "task": "Review PR #45."}
 {"at": "2026-10-27T05:55:27+00:00", "cost_usd": 0.242683, "denials": 2, "event": "end", "five_hour": 0.09, "item": 45, "role": "reviewer", "run_id": "reviewer-20261027T055416Z", "seven_day": 0.07, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 15}
 {"at": "2026-10-27T06:33:15+00:00", "event": "start", "item": 49, "pid": 63305, "role": "coordinator", "run_id": "coordinator-20261027T063310Z", "task": "The Owner answered your question on #49. Act on the answer, then remove needs-decision:owner."}
+{"at": "2026-10-27T06:33:15+00:00", "event": "start", "item": 50, "pid": 63340, "role": "reviewer", "run_id": "reviewer-20261027T063310Z", "task": "Review PR #50."}
