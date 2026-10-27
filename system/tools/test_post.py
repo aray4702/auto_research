@@ -146,6 +146,7 @@ class ReadTest(unittest.TestCase):
             ("GET", "repos/o/r/issues/5"): issue([], title="PR", state="open", body="b", user={"login": "aray4702"},
                                                  created_at="2026-10-27T02:00:00Z", pull_request={}),
             ("GET", "repos/o/r/pulls/5"): {"head": {"ref": "x", "sha": "abc1234def"}, "base": {"ref": "main"}},
+            ("GET", "repos/o/r/issues/5/comments"): [],
             ("GET", "repos/o/r/pulls/5/reviews"): [],
             ("GET", "repos/o/r/pulls/5/comments"): [],
             ("GET", "repos/o/r/commits/abc1234def/check-runs"): {"check_runs": [
