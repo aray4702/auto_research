@@ -9,8 +9,16 @@ permissions:
   contents: read
 
 jobs:
-  placeholder:
+  # S1's done-check (spec/acceptance.md, S1-1 to S1-5): README.md stays true.
+  readme:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
-      - run: echo "No product jobs yet. The first goal adds the build, tests and harness."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The README checks' own tests
+        run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
+      - name: README checks (S1-1 to S1-5)
+        run: python3 -I .github/scripts/check_readme.py --root .
