@@ -32,8 +32,8 @@ class ConsistencyTest(unittest.TestCase):
         })
         self.assertEqual({r["model"] for r in CONFIG["runner"]["roles"].values()}, {"claude-opus-5-5"})
 
-    def test_automation_stays_off_until_step_7(self):
-        self.assertFalse(any(s["enabled"] for s in CONFIG["runner"]["schedules"].values()))
+    def test_automation_is_on_since_step_7(self):
+        self.assertTrue(all(s["enabled"] for s in CONFIG["runner"]["schedules"].values()))
 
 
 class SettingsTest(unittest.TestCase):
@@ -112,9 +112,9 @@ class LoginTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             for job_label, data in runner.plists(CONFIG).items():
                 (Path(d) / f"{job_label}.plist").write_bytes(data)
-            ok = runner.problems(CONFIG, Path(d), lambda job_label: False, "abc", "abc", login=("claude.ai", "max"))
+            ok = runner.problems(CONFIG, Path(d), lambda job_label: True, "abc", "abc", login=("claude.ai", "max"))
             self.assertEqual(ok, [])
-            bad = runner.problems(CONFIG, Path(d), lambda job_label: False, "abc", "abc", login=("oauth_token", None))
+            bad = runner.problems(CONFIG, Path(d), lambda job_label: True, "abc", "abc", login=("oauth_token", None))
             self.assertEqual(len(bad), 1)
             self.assertIn("not the max subscription", bad[0])
 
@@ -126,22 +126,22 @@ class CliLinkTest(unittest.TestCase):
             agents.mkdir()
             for job_label, data in runner.plists(CONFIG).items():
                 (agents / f"{job_label}.plist").write_bytes(data)
-            off = lambda job_label: False
-            self.assertEqual(runner.problems(CONFIG, agents, off, "a", "a", cli=(link, target)), [f"{link} doesn't link to {target}"])
+            on = lambda job_label: True
+            self.assertEqual(runner.problems(CONFIG, agents, on, "a", "a", cli=(link, target)), [f"{link} doesn't link to {target}"])
             link.parent.mkdir()
             link.symlink_to(target)
-            self.assertEqual(runner.problems(CONFIG, agents, off, "a", "a", cli=(link, target)), [])
+            self.assertEqual(runner.problems(CONFIG, agents, on, "a", "a", cli=(link, target)), [])
 
 
 class LaunchdTest(unittest.TestCase):
-    def test_jobs_render_deterministically_and_disabled(self):
+    def test_jobs_render_deterministically_and_enabled(self):
         first, second = runner.plists(CONFIG), runner.plists(CONFIG)
         self.assertEqual(first, second)
         jobs = {label: plistlib.loads(data) for label, data in first.items()}
         self.assertEqual(sorted(label.rsplit(".", 1)[1] for label in jobs), [
             "builder-daily", "dispatcher-daily", "dispatcher-poll", "dispatcher-reconcile",
         ])
-        self.assertTrue(all(job["Disabled"] for job in jobs.values()))
+        self.assertFalse(any(job["Disabled"] for job in jobs.values()))
         self.assertTrue(all(job["AbandonProcessGroup"] for job in jobs.values()))
         poll = jobs["com.aray4702.auto-research.dispatcher-poll"]
         self.assertEqual(poll["StartInterval"], 120)
@@ -151,23 +151,24 @@ class LaunchdTest(unittest.TestCase):
     def test_check_finds_missing_changed_stray_and_unapplied(self):
         with tempfile.TemporaryDirectory() as d:
             agents = Path(d)
-            not_loaded = lambda job_label: False
-            found = runner.problems(CONFIG, agents, not_loaded, "abc", "abc")
+            loaded = lambda job_label: True
+            found = runner.problems(CONFIG, agents, loaded, "abc", "abc")
             self.assertEqual(len(found), 4)
             self.assertTrue(all("is not installed" in p for p in found))
             for job_label, data in runner.plists(CONFIG).items():
                 (agents / f"{job_label}.plist").write_bytes(data)
-            self.assertEqual(runner.problems(CONFIG, agents, not_loaded, "abc", "abc"), [])
+            self.assertEqual(runner.problems(CONFIG, agents, loaded, "abc", "abc"), [])
             (agents / "com.aray4702.auto-research.dispatcher-poll.plist").write_bytes(b"changed")
             (agents / "com.aray4702.auto-research.old-job.plist").write_bytes(b"stray")
-            found = runner.problems(CONFIG, agents, not_loaded, "abc", "def")
+            found = runner.problems(CONFIG, agents, loaded, "abc", "def")
             self.assertEqual(found, [
                 "com.aray4702.auto-research.dispatcher-poll.plist differs from runner.toml",
                 "com.aray4702.auto-research.old-job.plist is installed but not in runner.toml",
                 "the applied checkout is at abc, main is at def",
             ])
-            loaded_anyway = lambda job_label: True
-            self.assertTrue(any("is loaded" in p for p in runner.problems(CONFIG, agents, loaded_anyway, "abc", "def")))
+            not_loaded = lambda job_label: False
+            found = runner.problems(CONFIG, agents, not_loaded, "abc", "def")
+            self.assertTrue(any("is not loaded, but runner.toml has it enabled" in p for p in found), found)
 
 
 if __name__ == "__main__":

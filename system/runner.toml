@@ -93,25 +93,26 @@ allow = [
 ]
 product_tools = false
 
-# launchd jobs. All stay disabled until blueprint §8 step 7 turns on the automation.
+# launchd jobs, enabled at blueprint §8 step 7. To stop new work, throw the kill switch (arsys pause);
+# to remove the jobs, set enabled = false by PR and apply.
 [schedules.dispatcher-poll]
-enabled = false
+enabled = true
 interval_seconds = 120
 command = ["system/dispatcher/dispatch.py", "poll"]
 
 [schedules.dispatcher-reconcile]
-enabled = false
+enabled = true
 minute = 5
 command = ["system/dispatcher/dispatch.py", "reconcile"]
 
 [schedules.dispatcher-daily]
-enabled = false
+enabled = true
 hour = 7
 minute = 30
 command = ["system/dispatcher/dispatch.py", "daily"]
 
 [schedules.builder-daily]
-enabled = false
+enabled = true
 hour = 8
 minute = 0
 command = ["system/dispatcher/run.py", "builder", "--task", "Daily run: follow the daily run in your role file."]
