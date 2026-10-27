@@ -62,7 +62,9 @@ def execute(cmd, cwd, env, log_path, timeout_s, on_start=lambda pid: None):
     """Run cmd, streaming its output to log_path. Returns 'ended' or 'timeout'."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     with open(log_path, "wb") as log:
-        proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        # stdin is empty: claude -p otherwise waits for piped input it will never get.
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                                start_new_session=True)
         on_start(proc.pid)
         try:
             proc.wait(timeout=timeout_s)
