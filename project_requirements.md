@@ -5,6 +5,7 @@
 | ------- | ---------- | ----------------------------------------------- | ------------- |
 | 1.0     | 2026-10-26 | [aray4702@gmail.com](mailto:aray4702@gmail.com) | First version |
 | 1.1     | 2026-10-26 | builder, from the Owner's answers (17:43 and 17:52 PT) | Project table completed (blueprint §8 step 1) |
+| 1.2     | 2026-10-26 | builder, from the Owner's choice (20:31 PT) | Seed goal S1 for the build's supervised runs (blueprint §8 step 5) |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -63,6 +64,7 @@ measure (or the IDs of the requirements it delivers) and any deadline.
 | ID  | Goal                    | Measurable outcome or requirement IDs              | Deadline |
 | --- | ----------------------- | -------------------------------------------------- | -------- |
 | G0  | the starting point (§0) | its done-check, from Definition (none for scratch) |          |
+| S1  | Seed goal for the build's supervised runs (blueprint §8 step 5): exercises every role end to end. Struck through once step 5 passes; product goals start at G1 | `README.md` says what the product is, how to build it and how to run its checks | none |
 | G1  |                         |                                                    |          |
 
 
