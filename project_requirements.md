@@ -4,6 +4,7 @@
 | Version | Date       | By                                              | Change        |
 | ------- | ---------- | ----------------------------------------------- | ------------- |
 | 1.0     | 2026-10-26 | [aray4702@gmail.com](mailto:aray4702@gmail.com) | First version |
+| 1.1     | 2026-10-26 | builder, from the Owner's answers (17:43 PT)    | Project table completed (blueprint §8 step 1) |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -14,19 +15,19 @@ system turns each into a question with a recommended answer.
 ## Project
 
 
-| Field                                                             | Value                                                                                                                                                                                                                      |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Owner's GitHub login                                              | `aray4702`                                                                                                                                                                                                                 |
-| Repository (`owner/name`)                                         | `aray4702/hello_world_app`                                                                                                                                                                                                 |
-| Visibility and GitHub plan                                        | ___ (public: anyone can read and comment; private: branch protection needs a paid plan)                                                                                                                                    |
-| Second GitHub account as code owner of protected paths (optional) | ___ (with one, you approve protected PRs from it, again after each refresh from main; without one, an agent acting through your account could merge a protected PR, and the dashboard lists every merge from your account) |
-| Time zone for every time written for you                          | `America/Los_Angeles` (PT)                                                                                                                                                                                                 |
-| Chat for escalations (required)                                   | ___ (e.g. a Discord or Slack channel; GitHub doesn't notify you of what agents post through your account)                                                                                                                  |
-| Claude plan, and where agents may run                             | ___ (e.g. Max; cloud, local or both)                                                                                                                                                                                       |
-| System limits: share of the Claude plan                           | ___ (e.g. 60 % of the weekly limit; your own sessions use the rest)                                                                                                                                                        |
-| System limits: CI minutes and money per month                     | ___                                                                                                                                                                                                                        |
-| Decisions you hand down from the start (standing rules, optional) | ___ (e.g. "the Coordinator may close duplicates")                                                                                                                                                                          |
-| Master copy of the blueprint and a blank requirements file        | ___ (a repo or folder outside any product repo; lessons that hold for any product go there)                                                                                                                                |
+| Field | Value |
+| --- | --- |
+| Owner's GitHub login | `aray4702` |
+| Repository (`owner/name`) | `aray4702/auto_research` |
+| Visibility and GitHub plan | public; GitHub Free (assumed: the plan isn't readable with the current token, and the Owner didn't object) |
+| Second GitHub account as code owner of protected paths (optional) | `sloan3165` ? (no GitHub account with this login was found on 2026-10-26). It must not be logged in where agents run |
+| Time zone for every time written for you | `America/Los_Angeles` (PT) |
+| Chat for escalations (required) | a Discord channel, through a webhook. The URL is a secret, kept in the macOS keychain on the Owner's Mac: service `auto_research.escalation-webhook`, account `aray4702` |
+| Claude plan, and where agents may run | Max, tier `25x` ? (the known tiers are 5x and 20x); local only, on the Owner's Mac |
+| System limits: share of the Claude plan | 20 % of the weekly limit |
+| System limits: CI minutes and money per month | $0; GitHub-hosted standard runners only (free for public repos); 3,000 minutes, as an early-warning signal |
+| Decisions you hand down from the start (standing rules, optional) | none |
+| Master copy of the blueprint and a blank requirements file | `aray4702/blueprint-master` (private repo) |
 
 
 At a system limit the system pauses and asks you.
@@ -38,7 +39,7 @@ Tick one, or an existing codebase and a reference it should replicate; blueprint
 system writes its done-check for you to approve. No tick means not decided yet:
 the system is built and waits, and sections 1-11 can stay empty.
 
-- [ ] **Scratch:** an empty repository.
+- [x] **Scratch:** an empty repository.
 - [ ] **Existing codebase:** repository ___ (moved into the Project repository, or developed in place?); what must keep working ___.
 - [ ] **Replicate a reference:** implementation ___, version or commit ___, where its source can be read ___; whether it can be built and run in CI beside the product, on the same inputs ___; whether its licence allows porting its code ___; how strictly to match it (behaviour, constants, defaults) ___; known deviations you accept ___.
 
