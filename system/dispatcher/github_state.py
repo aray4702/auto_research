@@ -90,6 +90,7 @@ def pull_request(node, labels, identity, patterns):
         "head": node["headRefOid"], "branch": node["headRefName"],
         "merge_state": node["mergeStateStatus"], "review_decision": node["reviewDecision"],
         "auto_merge": node["autoMergeRequest"] is not None,
+        "author": (node.get("author") or {}).get("login"),
         "author_role": author_role((node.get("author") or {}).get("login"), node["body"], identity),
         "labels": labels, "files": files, "protected": any(is_protected(f, patterns) for f in files),
         "resolves": sorted({int(n) for n in RESOLVES.findall(node["body"] or "")}),
