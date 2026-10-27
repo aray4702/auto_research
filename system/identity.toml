@@ -17,3 +17,8 @@ key_keychain_account = "aray4702"
 approvers = ["reviewer", "dispatcher"]
 # Every installation token is scoped to this repo and to these permissions.
 token_permissions = { pull_requests = "write", contents = "read", checks = "read" }
+
+[escalation]
+# The Owner's chat: a Discord webhook. Its URL is a secret, kept only in the keychain.
+keychain_service = "auto_research.escalation-webhook"
+keychain_account = "aray4702"

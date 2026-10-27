@@ -1,0 +1,87 @@
+"""A snapshot of what the Dispatcher acts on: open items, open PRs, the work order and the
+protected paths. Reads only.
+"""
+
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+QUERY = (Path(__file__).parent / "prs.graphql").read_text()
+ACTIONS_APP_ID = 15368  # GitHub Actions, the only app whose `gate` check branch protection accepts
+ROW = re.compile(r"^\|\s*\d+\s*\|\s*#(\d+)\b[^|]*\|\s*([^|]*?)\s*\|")
+MARKER = re.compile(r"^<!-- role:([a-z]+)")
+
+
+def work_order(body):
+    """[(item, parallel_safe)] from the work order's table, in order."""
+    rows = []
+    for line in (body or "").splitlines():
+        m = ROW.match(line.strip())
+        if m:
+            rows.append((int(m[1]), m[2].strip().lower() in {"yes", "y", "true", "✓"}))
+    return rows
+
+
+def protected_patterns(text):
+    return [line.split()[0] for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+
+
+def is_protected(path, patterns):
+    for pattern in patterns:
+        p = pattern.lstrip("/")
+        if (p.endswith("/") and path.startswith(p)) or path == p:
+            return True
+    return False
+
+
+def author_role(login, body, identity):
+    """The role that opened a PR, or None for the Owner's own PRs and outsiders'."""
+    m = MARKER.match(body or "")
+    return m[1] if m and login == identity["owner_login"] else None
+
+
+def gate_of(node):
+    """'SUCCESS', 'FAILURE' (any other completed conclusion) or None while pending or absent."""
+    commits = node["commits"]["nodes"]
+    suites = commits[0]["commit"]["checkSuites"]["nodes"] if commits else []
+    for suite in suites:
+        if (suite.get("app") or {}).get("databaseId") != ACTIONS_APP_ID:
+            continue
+        for check in suite["checkRuns"]["nodes"]:
+            if check["status"] == "COMPLETED":
+                return "SUCCESS" if check["conclusion"] == "SUCCESS" else "FAILURE"
+    return None
+
+
+def pull_request(node, labels, identity, patterns):
+    files = [f["path"] for f in node["files"]["nodes"]]
+    return {
+        "number": node["number"], "title": node["title"], "draft": node["isDraft"],
+        "head": node["headRefOid"], "branch": node["headRefName"],
+        "merge_state": node["mergeStateStatus"], "review_decision": node["reviewDecision"],
+        "auto_merge": node["autoMergeRequest"] is not None,
+        "author_role": author_role((node.get("author") or {}).get("login"), node["body"], identity),
+        "labels": labels, "files": files, "protected": any(is_protected(f, patterns) for f in files),
+        "gate": gate_of(node),
+        "reviews": [
+            {"login": (r.get("author") or {}).get("login"), "state": r["state"], "commit": (r.get("commit") or {}).get("oid"),
+             "at": r.get("submittedAt")}
+            for r in node["reviews"]["nodes"]
+        ],
+    }
+
+
+def snapshot(gh, identity, codeowners=ROOT / ".github" / "CODEOWNERS"):
+    owner, name = identity["repo"].split("/")
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=open&per_page=100", paginate=True)
+    labels_of = {i["number"]: {x["name"] for x in i["labels"]} for i in everything}
+    issues = [
+        {"number": i["number"], "title": i["title"], "labels": labels_of[i["number"]], "body": i.get("body") or "",
+         "url": i["html_url"]}
+        for i in everything if "pull_request" not in i
+    ]
+    patterns = protected_patterns(codeowners.read_text()) if codeowners.exists() else []
+    nodes = gh.graphql(QUERY, owner=owner, name=name)["repository"]["pullRequests"]["nodes"]
+    prs = [pull_request(n, labels_of.get(n["number"], set()), identity, patterns) for n in nodes]
+    order_issue = next((i for i in issues if "record:work-order" in i["labels"]), None)
+    return {"issues": issues, "prs": prs, "work_order": work_order(order_issue["body"] if order_issue else "")}
