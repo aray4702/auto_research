@@ -181,6 +181,37 @@ class ViewsTest(unittest.TestCase):
         self.assertIn("KILL SWITCH: THROWN", views.text(d))
 
 
+class MergesTest(unittest.TestCase):
+    def test_every_merge_from_the_owners_account_across_pages(self):
+        pages = [
+            {"pageInfo": {"hasNextPage": True, "endCursor": "c1"}, "nodes": [
+                {"number": 50, "title": "a", "mergedAt": "2026-10-27T06:42:00Z", "url": "u", "mergedBy": {"login": SECOND}},
+                {"number": 45, "title": "b", "mergedAt": "2026-10-27T06:35:00Z", "url": "u", "mergedBy": {"login": "aray4702"}}]},
+            {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": [
+                {"number": 3, "title": "c", "mergedAt": "2026-10-27T01:37:00Z", "url": "u", "mergedBy": {"login": "aray4702"}}]},
+        ]
+        gh = mock.Mock()
+        gh.graphql.side_effect = lambda q, **v: {"repository": {"pullRequests": pages[0 if v["after"] is None else 1]}}
+        self.assertEqual([m["number"] for m in data.merges_by_owner_account(gh, IDENTITY)], [45, 3])
+        self.assertEqual(gh.graphql.call_args_list[1].kwargs["after"], "c1")
+
+    def test_reaching_the_page_bound_with_pages_left_is_loud(self):
+        page = {"pageInfo": {"hasNextPage": True, "endCursor": "c"}, "nodes": [
+            {"number": 45, "title": "b", "mergedAt": "2026-10-27T06:35:00Z", "url": "u", "mergedBy": {"login": "aray4702"}}]}
+        gh = mock.Mock()
+        gh.graphql.return_value = {"repository": {"pullRequests": page}}
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            data.merges_by_owner_account(gh, IDENTITY, max_pages=2)
+        self.assertEqual(gh.graphql.call_count, 2)
+
+    def test_a_last_page_at_the_bound_is_complete(self):
+        page = {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": [
+            {"number": 45, "title": "b", "mergedAt": "2026-10-27T06:35:00Z", "url": "u", "mergedBy": {"login": "aray4702"}}]}
+        gh = mock.Mock()
+        gh.graphql.return_value = {"repository": {"pullRequests": page}}
+        self.assertEqual([m["number"] for m in data.merges_by_owner_account(gh, IDENTITY, max_pages=1)], [45])
+
+
 class DashboardServerTest(unittest.TestCase):
     def test_serves_the_page_and_favicon_on_localhost_and_refuses_writes(self):
         self.check_server()
