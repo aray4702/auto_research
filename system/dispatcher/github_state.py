@@ -2,6 +2,7 @@
 protected paths. Reads only.
 """
 
+import base64
 import re
 from datetime import datetime
 from pathlib import Path
@@ -36,6 +37,12 @@ def requirement_goals(text):
         if m and m[1] != "G0" and m[2] and not m[2].startswith("~~"):
             goals.append(m[1])
     return goals
+
+
+def requirements_on_main(gh):
+    """project_requirements.md as merged to main: the applied checkout only moves on `runner.py apply`."""
+    f = gh.api("GET", f"repos/{gh.repo}/contents/project_requirements.md?ref=main")
+    return base64.b64decode(f["content"]).decode()
 
 
 def protected_patterns(text):
@@ -118,8 +125,7 @@ def snapshot(gh, identity, closed_since=None, codeowners=ROOT / ".github" / "COD
                 continue
             if i.get("closed_at") and datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")) > closed_since:
                 closed.append(i["number"])
-    requirements = ROOT / "project_requirements.md"
-    goals = requirement_goals(requirements.read_text()) if requirements.exists() else []
+    goals = requirement_goals(requirements_on_main(gh))
     records = gh.api("GET", f"repos/{gh.repo}/issues?state=all&labels=record%3Agoal&per_page=100", paginate=True)
     have = {m[1] for i in records if (m := GOAL_TITLE.match(i["title"]))}
     return {"issues": issues, "prs": prs, "work_order": work_order(order_issue["body"] if order_issue else ""),
