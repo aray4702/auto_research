@@ -67,6 +67,7 @@ class SettingsTest(unittest.TestCase):
         allowed = lambda cmd: any(cmd == p or cmd.startswith(p + " ") for p in prefixes)
         for cmd in ("python3 -I system/tools/runner.py check", "python3 -I system/tools/runner.py apply",
                     "python3 -I system/tools/runner.py settings builder", "python3 -I system/tools/tracker.py check",
+                    "python3 -I system/tools/calibrate.py --record",
                     "python3 -I system/dispatcher/dispatch.py poll --dry-run",
                     "python3 -I system/dispatcher/dispatch.py reconcile --dry-run"):
             self.assertTrue(allowed(cmd), cmd)

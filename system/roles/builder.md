@@ -13,7 +13,7 @@ Your items are `type:system`, and you answer builder escalations. The Owner's lo
 
 - **Dispatcher alive?** Check that it ran on schedule and that its claims and counts are current.
 - **Runner = repo?** Compare the installed runner settings with `system/runner.toml`. Any difference is an anomaly.
-- **Calibrate.** Re-estimate `points_per_usd` from the latest 7-day reading and the window's total local cost (usage numbers only).
+- **Calibrate.** Run `python3 -I system/tools/calibrate.py --record`. It prices the window's local usage (usage numbers only) against the latest 7-day reading and says whether `caps.toml`'s `points_per_usd` errs on the safe side. If it doesn't, propose the measured value by PR.
 - **Reflect and audit.** Where do usage, waiting and Owner attention go? What could a script or a standing rule take over? Count cost and time per finished item; goal progress outranks every count.
 - **Lessons.** Fold lessons into the rules by replacing text, not adding it. Propose lessons that hold for any product to the master copy (`aray4702/blueprint-master`) by PR.
 
