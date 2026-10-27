@@ -8,8 +8,9 @@ from zoneinfo import ZoneInfo
 from system.dispatcher import github_state, killswitch, notify, plan, state, usage
 from system.tools import post, runner
 
-MERGES = """query($q: String!) { search(query: $q, type: ISSUE, first: 30) { nodes { ... on PullRequest {
-  number title mergedAt url mergedBy { login } } } } }"""
+MERGES = """query($owner: String!, $name: String!, $after: String) { repository(owner: $owner, name: $name) {
+  pullRequests(states: MERGED, first: 100, after: $after, orderBy: {field: UPDATED_AT, direction: DESC}) {
+    pageInfo { hasNextPage endCursor } nodes { number title mergedAt url mergedBy { login } } } } }"""
 
 
 def author(pr, identity):
@@ -91,12 +92,20 @@ def usage_view(caps, runs, now, time_zone):
     }
 
 
-def merges_by_owner_account(gh, identity, limit=15):
-    """Merges made from the Owner's account, for the Owner to recognise (blueprint §2's accepted risk)."""
-    q = f"repo:{identity['repo']} is:pr is:merged sort:updated-desc"
-    nodes = gh.graphql(MERGES, q=q)["search"]["nodes"]
-    mine = [n for n in nodes if n and (n.get("mergedBy") or {}).get("login") == identity["owner_login"]]
-    return sorted(mine, key=lambda n: n["mergedAt"], reverse=True)[:limit]
+def merges_by_owner_account(gh, identity, limit=None, max_pages=20):
+    """Every merge made from the Owner's account, newest first, for the Owner to recognise (blueprint §2's
+    accepted risk). All merged PRs are paged through: a window of recent ones hid older merges from
+    the account behind newer ones from the second account."""
+    owner, name = identity["repo"].split("/")
+    mine, after = [], None
+    for _ in range(max_pages):
+        page = gh.graphql(MERGES, owner=owner, name=name, after=after)["repository"]["pullRequests"]
+        mine += [n for n in page["nodes"] if n and (n.get("mergedBy") or {}).get("login") == identity["owner_login"]]
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        after = page["pageInfo"]["endCursor"]
+    mine.sort(key=lambda n: n["mergedAt"], reverse=True)
+    return mine[:limit] if limit else mine
 
 
 def runner_view(config):
