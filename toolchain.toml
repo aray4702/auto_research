@@ -1,0 +1,8 @@
+# The product's toolchain (system/conventions.md). No build toolchain yet: the first goal adds it.
+
+# Permission rules added to the Developer's, Reviewer's and Tester's run settings (runner.py, role_settings).
+[agents]
+allow = [
+  # The product's README checker, as CI runs it.
+  "Bash(python3 -I .github/scripts/check_readme.py --root .)",
+]
