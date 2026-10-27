@@ -6,6 +6,7 @@ comes from AGENT_ROLE and the run ID from AGENT_RUN_ID, both set by whoever star
 
   post.py read <n>
   post.py list [--state open|closed|all] [--kind issue|pr|all] [--label L]...
+  post.py gate [REF]          the gate's result on a commit, branch or tag (default: main)
   post.py comment <n> BODY
   post.py issue-create --title T [--label L]... BODY
   post.py edit-body <n> BODY
@@ -146,6 +147,17 @@ def cmd_read(gh, identity, n):
         lines += ["", f"--- {kind} by {who}, {local_time(at, identity) if at else 'unknown time'} ---"]
         lines.append(MARKER.sub("", p.get("body") or "", count=1).rstrip() or "(empty)")
     return "\n".join(lines)
+
+
+def cmd_gate(gh, identity, ref="main"):
+    """The required `gate` check's result on a commit, from the CI app branch protection accepts."""
+    sha = gh.api("GET", f"repos/{gh.repo}/commits/{urllib.parse.quote(ref, safe='')}")["sha"]
+    runs = gh.api("GET", f"repos/{gh.repo}/commits/{sha}/check-runs?check_name=gate")
+    gates = [r for r in (runs or {}).get("check_runs", []) if (r.get("app") or {}).get("id") == identity["gate_app_id"]]
+    if not gates:
+        return f"gate on {ref} ({sha[:7]}): not reported yet"
+    g = gates[0]
+    return f"gate on {ref} ({sha[:7]}): {g['conclusion'] or g['status']} (run {g.get('html_url', '?')})"
 
 
 def cmd_list(gh, identity, state="open", kind="all", labels=()):
@@ -353,6 +365,7 @@ def parser():
         return c
 
     command("read")
+    command("gate", number=False).add_argument("ref", nargs="?", default="main")
     c = command("list", number=False)
     c.add_argument("--state", choices=["open", "closed", "all"], default="open")
     c.add_argument("--kind", choices=["issue", "pr", "all"], default="all")
@@ -385,6 +398,9 @@ def main(argv=None):
     gh = GitHub(identity["repo"])
     if args.command == "read":
         print(cmd_read(gh, identity, args.n))
+        return 0
+    if args.command == "gate":
+        print(cmd_gate(gh, identity, args.ref))
         return 0
     if args.command == "list":
         print(cmd_list(gh, identity, args.state, args.kind, args.label))
