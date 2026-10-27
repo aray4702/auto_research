@@ -198,6 +198,11 @@ class FakeStore:
         self.appended.append((kind, record))
 
 
+class WordingTest(unittest.TestCase):
+    def test_articles(self):
+        self.assertEqual([dispatch.article(r) for r in ("architect", "developer", "reviewer")], ["an", "a", "a"])
+
+
 class DryRunTest(unittest.TestCase):
     def test_a_dry_run_plans_and_changes_nothing(self):
         stores = []
