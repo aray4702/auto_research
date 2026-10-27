@@ -5,8 +5,9 @@
 # The system's share of the Max 20x plan's 7-day limit, in utilization points (1 point = 1 %).
 weekly_points = 20
 warn_at_points = 15
-# Points per API-equivalent dollar. Conservative until calibrated (first estimate: 1 point ≈ $250).
-points_per_usd = 0.01
+# Points per API-equivalent dollar. Conservative until #43 calibrates it: 1 point ≈ $50, the
+# marginal rate measured in step 5 (4 % at $988, 7 % at $1,137 of all local usage); average ≈ $160.
+points_per_usd = 0.02
 # Owner headroom, read from the account-wide utilization every run reports (0–1).
 hold_new_runs_at_five_hour = 0.50
 pause_at_seven_day = 0.90
