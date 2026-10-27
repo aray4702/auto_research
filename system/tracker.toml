@@ -13,6 +13,7 @@ labels = [
   { name = "state:ready", color = "0e8a16", description = "Scheduled in the work order" },
   { name = "state:claimed", color = "fbca04", description = "A run holds it" },
   { name = "state:blocked", color = "b60205", description = "Waiting on the item it names" },
+  { name = "state:review", color = "c5def5", description = "A plan or design here waits for the Reviewer" },
   { name = "needs-decision:coordinator", color = "d93f0b", description = "Held for the Coordinator's decision" },
   { name = "needs-decision:architect", color = "d93f0b", description = "Held for the Architect's decision" },
   { name = "needs-decision:builder", color = "d93f0b", description = "Held for the builder's decision" },

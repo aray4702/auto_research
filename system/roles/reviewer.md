@@ -24,7 +24,7 @@ Review only **green** heads. Verify claims cheaply: re-run the command a PR cite
 
 ## Plans and designs
 
-Review the Coordinator's first plans and major revisions, and the Architect's internal designs. Check them against the requirements, the spec and atomicity. Approve or comment on their item.
+Review the Coordinator's first plans and major revisions, and the Architect's internal designs. Check them against the requirements, the spec and atomicity. Designs come as PRs. A plan comes as an issue labelled `state:review`: comment **approved**, or numbered changes for the Coordinator, then remove the label.
 
 ## Never
 

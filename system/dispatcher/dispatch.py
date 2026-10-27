@@ -14,7 +14,7 @@ import argparse
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,7 +94,9 @@ def dispatch_pass(command, dry_run, now=None):
     runs = store.read("runs") if not dry_run else runs
     active_items = {r.get("item") for r in usage.active(runs) if r.get("item")}
 
-    snap = github_state.snapshot(gh, identity)
+    # Closing events since the Coordinator's last run ended start it again (blueprint §4.1).
+    ends = [datetime.fromisoformat(r['at']) for r in runs if r['event'] == 'end' and r['role'] == 'coordinator']
+    snap = github_state.snapshot(gh, identity, closed_since=max(ends) if ends else now - timedelta(days=7))
     url = lambda n: f"https://github.com/{identity['repo']}/pull/{n}"
     wanted, renewed = [], set()
 
