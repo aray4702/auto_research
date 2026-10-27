@@ -1,0 +1,69 @@
+# The tracker's labels and records (blueprint §3). Protected path.
+# The label names must match the table in system/rules.md; a test enforces it.
+# Applied with: python3 -I system/tools/tracker.py setup   (check with: ... check)
+
+labels = [
+  { name = "type:fix", color = "1d76db", description = "Item: reproduce, failing test, fix the cause" },
+  { name = "type:feature", color = "1d76db", description = "Item: new behaviour, switched off when it spans items" },
+  { name = "type:definition", color = "1d76db", description = "Item: the Architect's Definition pass" },
+  { name = "type:investigation", color = "1d76db", description = "Item: a question answered with evidence" },
+  { name = "type:release", color = "1d76db", description = "Item: a release built by CI, published by the Owner" },
+  { name = "type:system", color = "1d76db", description = "Item: the builder's system improvement" },
+  { name = "state:triage", color = "ededed", description = "New, not yet triaged" },
+  { name = "state:ready", color = "0e8a16", description = "Scheduled in the work order" },
+  { name = "state:claimed", color = "fbca04", description = "A run holds it" },
+  { name = "state:blocked", color = "b60205", description = "Waiting on the item it names" },
+  { name = "needs-decision:coordinator", color = "d93f0b", description = "Held for the Coordinator's decision" },
+  { name = "needs-decision:architect", color = "d93f0b", description = "Held for the Architect's decision" },
+  { name = "needs-decision:builder", color = "d93f0b", description = "Held for the builder's decision" },
+  { name = "needs-decision:owner", color = "d93f0b", description = "Held for the Owner's decision" },
+  { name = "sev:1", color = "b60205", description = "Crash, data loss or broken main: revert first" },
+  { name = "sev:2", color = "e99695", description = "Serious, not sev:1" },
+  { name = "sev:3", color = "f9d0c4", description = "Minor" },
+  { name = "record:goal", color = "5319e7", description = "Record: a goal, its stages, phases and progress" },
+  { name = "record:work-order", color = "5319e7", description = "Record: the one order of scheduled work" },
+  { name = "record:watch-list", color = "5319e7", description = "Record: risks with signals and thresholds" },
+  { name = "record:decision-log", color = "5319e7", description = "Record: the index of decisions" },
+]
+
+# Records that exist once each from the start. Goal records are opened per goal.
+[[records]]
+label = "record:work-order"
+title = "Work order"
+body = """
+The single order of scheduled work (blueprint §3). **Writer: the Coordinator.** Each change adds a dated note at the top. Severe problems and PRs that need work go ahead of this order.
+
+| Order | Item | Parallel-safe | Note |
+| --- | --- | --- | --- |
+
+There is nothing scheduled yet, because no goals are set.
+"""
+
+[[records]]
+label = "record:watch-list"
+title = "Watch list"
+body = """
+Risks, each with a signal and a threshold that the Dispatcher measures daily (blueprint §4.5). **Writer: the Coordinator.** Each change adds a dated note at the top.
+
+| Risk | Signal | Threshold | Since | Note |
+| --- | --- | --- | --- | --- |
+
+There are no risks yet.
+"""
+
+[[records]]
+label = "record:decision-log"
+title = "Decision log"
+body = """
+The index of decisions. Each decision is recorded on its own item; this table only links to it (blueprint §3). **Writer: the Coordinator.** Each change adds a dated note at the top.
+
+| Date (PT) | Level | Decision | Item |
+| --- | --- | --- | --- |
+| 2026-10-26 17:43 | Owner | Project table: this repo is the product; master copy moves to `aray4702/blueprint-master`; agents run locally; CI costs $0 | #1 |
+| 2026-10-26 17:52 | Owner | Second account `sloan3165`; Max 20x | #1 |
+| 2026-10-26 18:36 | Owner | Sizing: Owner-headroom limits; calibration from local transcripts' usage numbers | #3 |
+| 2026-10-26 18:37 | Owner | Sizing approved (merged) | #3 |
+| 2026-10-26 18:56 | Owner | Keep the second account; branch protection includes administrators | #4 |
+| 2026-10-26 | Owner | Branch protection applied by the builder (choice 4a), with the settings shown first | #7 |
+| 2026-10-26 19:13 | Owner | Keep the Reviewer App's permissions (shared with another project); system tokens scoped to this repo | #7 |
+"""
