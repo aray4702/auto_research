@@ -151,6 +151,13 @@ class MayStartTest(unittest.TestCase):
 
 
 class LauncherTest(unittest.TestCase):
+    def test_a_run_gets_the_runner_environment_and_its_identity_only(self):
+        config = run.runner.load_all()
+        env = run.environment(config, "reviewer", "reviewer-1")
+        self.assertEqual(set(env), {"PATH", "HOME", "USER", "AGENT_ROLE", "AGENT_RUN_ID", "GH_PROMPT_DISABLED", "GIT_TERMINAL_PROMPT"})
+        self.assertNotIn("LOGNAME", env)
+        self.assertEqual((env["AGENT_ROLE"], env["AGENT_RUN_ID"]), ("reviewer", "reviewer-1"))
+
     def test_ids_and_task(self):
         self.assertEqual(run.new_run_id("reviewer", NOW), "reviewer-20261027T030000Z")
         self.assertEqual(run.task_text("Review it.", 5), "Review it. Your item: #5.")

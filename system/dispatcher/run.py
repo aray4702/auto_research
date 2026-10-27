@@ -49,8 +49,7 @@ def paths(config, run_id):
 
 def environment(config, role, run_id):
     return {
-        "PATH": config["runner"]["runner"]["path"], "HOME": str(Path.home()),
-        "AGENT_ROLE": role, "AGENT_RUN_ID": run_id,
+        **runner.run_env(config), "AGENT_ROLE": role, "AGENT_RUN_ID": run_id,
         "GH_PROMPT_DISABLED": "1", "GIT_TERMINAL_PROMPT": "0",
     }
 
