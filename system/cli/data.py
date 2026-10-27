@@ -2,7 +2,6 @@
 dispatcher/state branch and this Mac's runner; nothing is kept. Reads only.
 """
 
-import subprocess
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -13,11 +12,20 @@ MERGES = """query($q: String!) { search(query: $q, type: ISSUE, first: 30) { nod
   number title mergedAt url mergedBy { login } } } } }"""
 
 
+def author(pr, identity):
+    """A role, "owner" for the Owner's own PRs, or an outsider's login: github_state gives no role to either."""
+    if pr["author_role"]:
+        return pr["author_role"]
+    return "owner" if pr["author"] == identity["owner_login"] else f"outsider {pr['author'] or '(deleted account)'}"
+
+
 def waiting_on(pr, identity):
     """Who or what a PR waits on, in the merge flow of blueprint §4.4."""
     bot = identity["reviewer_app"]["bot_login"]
     if pr["draft"]:
         return "draft"
+    if not pr["author_role"] and pr["author"] != identity["owner_login"]:
+        return "you: triage (outside contributor)"
     if pr["gate"] is None:
         return "CI"
     app = plan.latest_review(pr, bot)
@@ -94,10 +102,14 @@ def merges_by_owner_account(gh, identity, limit=15):
 def runner_view(config):
     """The runner check, as the builder's daily run makes it. Errors are shown, not raised."""
     try:
-        subprocess.run(["git", "fetch", "--quiet", "origin", "main"], cwd=runner.ROOT, capture_output=True, timeout=30)
+        try:
+            runner.fetch_main(config)  # under the shared checkout's lock, so it never fails a launcher's fetch
+            stale = []
+        except Exception as e:
+            stale = [f"couldn't fetch origin/main, so main below may be stale: {e}"]
         applied, main = runner.commits(config)
-        found = runner.problems(config, applied_commit=applied, main_commit=main, login=runner.claude_login(config),
-                                cli=runner.cli_link(config))
+        found = stale + runner.problems(config, applied_commit=applied, main_commit=main, login=runner.claude_login(config),
+                                        cli=runner.cli_link(config))
         return {"ok": not found, "problems": found, "applied": (applied or "")[:7], "main": (main or "")[:7]}
     except Exception as e:  # the dashboard must still render
         return {"ok": False, "problems": [f"runner check failed: {e}"], "applied": "", "main": ""}
@@ -116,7 +128,7 @@ def collect(config, gh=None, store=None, now=None, with_runner=True):
         "now": now.isoformat(), "repo": identity["repo"], "time_zone": identity["time_zone"],
         "paused": paused, "pause_reason": why,
         "decisions": decisions(gh, snap, identity),
-        "prs": [{"number": p["number"], "title": p["title"], "author": p["author_role"] or "owner",
+        "prs": [{"number": p["number"], "title": p["title"], "author": author(p, identity),
                  "gate": p["gate"] or "pending", "protected": p["protected"], "waiting_on": waiting_on(p, identity)}
                 for p in snap["prs"]],
         "work_order": [{"order": i + 1, "number": n, "parallel_safe": safe,

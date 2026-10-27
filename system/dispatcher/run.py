@@ -13,8 +13,6 @@ it is still held. With --claim, the item is claimed first, as the Dispatcher doe
 """
 
 import argparse
-import contextlib
-import fcntl
 import json
 import os
 import signal
@@ -81,15 +79,7 @@ def execute(cmd, cwd, env, log_path, timeout_s, on_start=lambda pid: None):
             return "timeout"
 
 
-@contextlib.contextmanager
-def locked(checkout):
-    """Serialize git operations on the shared checkout: two launchers fetching at once collide on refs."""
-    with open(checkout.parent / f"{checkout.name}.lock", "w") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+locked = runner.locked  # the one lock on the shared checkout; the CLI and runner.py fetch under it too
 
 
 def worktree(checkout, path):
