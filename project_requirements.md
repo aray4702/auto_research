@@ -65,7 +65,7 @@ measure (or the IDs of the requirements it delivers) and any deadline.
 | ID  | Goal                    | Measurable outcome or requirement IDs              | Deadline |
 | --- | ----------------------- | -------------------------------------------------- | -------- |
 | G0  | the starting point (§0) | its done-check, from Definition (none for scratch) |          |
-| ~~S1~~ | ~~Seed goal for the build's supervised runs (blueprint §8 step 5): exercises every role end to end. Struck through once step 5 passes; product goals start at G1~~ | ~~`README.md` says what the product is, how to build it and how to run its checks~~ | none |
+| ~~S1~~ | ~~Seed goal for the build's supervised runs (blueprint §8 step 5): exercises every role end to end. Struck through once step 5 passes; product goals start at G1~~ | ~~`README.md` says what the product is, how to build it and how to run its checks~~ | ~~none~~ |
 | G1  |                         |                                                    |          |
 
 
