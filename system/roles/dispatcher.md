@@ -24,9 +24,9 @@ Full reconcile against GitHub, as the safety net for missed polls.
 
 ## Daily (07:30 PT)
 
-- **Anomaly signals** (blueprint §4.5):
-  - watch-list risks past their thresholds;
-  - counts worse than the plan or their own history;
-  - failures of a new kind.
-- **Rule audit:** check every rule a script can check after the fact, including the branch protection recorded in `system/conventions.md`.
+- **Anomaly signals** (blueprint §4.5), each raised once per key with its evidence (`daily.py`):
+  - watch-list risks past their thresholds. A row's Signal names a measured metric (`failed_runs_per_day`, `denials_per_day`, `cost_per_day_usd`, `owner_wait_hours`), and its Threshold is a comparison, such as `> 3`. These go to the Coordinator.
+  - bumpy items: two or more unfinished runs, or three or more runs, in a week. These go to the Coordinator, to re-plan.
+  - failures of a new kind, a recurring permission denial, cost per finished item more than double its week, and runner drift. These go to the builder, as an item held at `needs-decision:builder`.
+- **Rule audit:** check every rule a script can check after the fact, including the branch protection recorded in `system/identity.toml`. A breach throws the kill switch and goes to the Owner (blueprint §4.5).
 - **Usage:** record it by role and item. Warn the Owner as a cap nears; pause at it.

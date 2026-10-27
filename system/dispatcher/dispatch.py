@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import github_state, killswitch, notify, plan, state, usage  # noqa: E402
+from system.dispatcher import daily, github_state, killswitch, notify, plan, state, usage  # noqa: E402
 from system.tools import post, runner  # noqa: E402
 
 
@@ -169,6 +169,76 @@ def dispatch_pass(command, dry_run, now=None):
     return lines or ["nothing to do"]
 
 
+def daily_pass(dry_run, now=None):
+    """Anomaly signals and the rule audit (blueprint §4.5), each taken to its response once per key."""
+    now = now or datetime.now(timezone.utc).replace(microsecond=0)
+    config = runner.load_all()
+    identity = config["identity"]
+    gh = post.GitHub(identity["repo"])
+    me = ("dispatcher", f"dispatcher-{now:%Y%m%dT%H%M%SZ}")
+    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    runs, raised = store.read("runs"), {a["key"] for a in store.read("anomalies")}
+    week = now - timedelta(days=7)
+    history = [r for r in runs if datetime.fromisoformat(r["at"]) < week]
+    snap = github_state.snapshot(gh, identity)
+
+    closed_at = []
+    since = (now - timedelta(days=8)).isoformat().replace("+00:00", "Z")
+    for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&since={since}&per_page=100", paginate=True):
+        if "pull_request" not in i and i.get("closed_at") and not any(x["name"].startswith("record:") for x in i["labels"]):
+            closed_at.append(datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")))
+    waits = [0.0]
+    for item in snap["issues"] + [{"number": p["number"], "labels": p["labels"]} for p in snap["prs"]]:
+        if "needs-decision:owner" in item["labels"]:
+            comments = gh.api("GET", f"repos/{gh.repo}/issues/{item['number']}/comments?per_page=100", paginate=True)
+            found = notify.latest_ask(comments, identity, post.MARKER)
+            if found and not found[2]:
+                asked = datetime.fromisoformat(found[0]["created_at"].replace("Z", "+00:00"))
+                waits.append(round((now - asked).total_seconds() / 3600, 1))
+    watch = next((i for i in snap["issues"] if "record:watch-list" in i["labels"]), None)
+
+    open_items = {i["number"] for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])}
+    found = (daily.denials(runs, now) + daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
+             + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
+             + daily.cost_per_item(runs, now, closed_at)
+             + daily.watch_list(watch["body"] if watch else "", daily.metrics(runs, now, max(waits))))
+    live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
+    found += daily.protection_breaches(live, identity["branch_protection"])
+    applied, main_commit = runner.commits(config)
+    drift = runner.problems(config, applied_commit=applied, main_commit=main_commit,
+                            login=runner.claude_login(config), cli=runner.cli_link(config))
+    if drift:
+        found.append((f"runner:{';'.join(drift)}", "builder", "The runner differs from main",
+                      "runner.py check:\n- " + "\n- ".join(drift), None))
+
+    lines = []
+    for key, level, title, evidence, item in found:
+        if key in raised:
+            continue
+        lines.append(("would raise" if dry_run else "raise") + f" ({level}): {title}")
+        if dry_run:
+            continue
+        body = f"**Anomaly (Dispatcher's daily pass, {now.isoformat()}):** {title}\n\n{evidence}"
+        if level == "owner":
+            subprocess.run(["gh", "variable", "set", killswitch.VARIABLE, "--body", "true", "--repo", gh.repo],
+                           check=True, capture_output=True)
+            made = post.cmd_issue_create(gh, me, f"Rule breach: {title}", ["type:system", "sev:1"], body)
+            n = int(made.split()[0].lstrip("#"))
+            post.cmd_escalate(gh, me, n, "owner", "1. Restore the recorded settings, then resume (`arsys resume`).\n"
+                              "2. Keep the new settings: record them in `system/identity.toml` by PR, then resume.\n\n"
+                              "Recommended: 1, unless you changed them on purpose.")
+        elif level == "coordinator":
+            target = item or (watch["number"] if watch else None)
+            if target:
+                post.cmd_escalate(gh, me, target, "coordinator", body)
+        else:
+            made = post.cmd_issue_create(gh, me, f"Anomaly: {title}", ["type:system", "state:ready", "sev:3"], body)
+            post.cmd_escalate(gh, me, int(made.split()[0].lstrip("#")), "builder", "Respond to this anomaly (blueprint §4.5): fix the cause, "
+                              "and add a check and response so a recurrence is handled without you.")
+        store.append("anomalies", {"key": key, "level": level, "title": title, "at": now.isoformat()})
+    return lines or ["no anomalies"]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", choices=["poll", "reconcile", "daily"])
@@ -176,7 +246,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M %Z")
     if args.command == "daily":
-        print(f"{stamp} daily: the anomaly signals and the rule audit are built in blueprint §8 step 7")
+        thrown, why = killswitch.paused(post.GitHub(runner.load_all()["identity"]["repo"]))
+        if thrown:  # the audit still runs while paused: a breach must reach the Owner
+            print(f"{stamp} daily: paused ({why}); auditing anyway")
+        for line in daily_pass(args.dry_run):
+            print(f"{stamp} daily: {line}")
         return 0
     for line in dispatch_pass(args.command, args.dry_run):
         print(f"{stamp} {args.command}: {line}")

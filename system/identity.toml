@@ -24,3 +24,16 @@ token_permissions = { pull_requests = "write", contents = "read", checks = "read
 # The Owner's chat: a Discord webhook. Its URL is a secret, kept only in the keychain.
 keychain_service = "auto_research.escalation-webhook"
 keychain_account = "aray4702"
+
+# Branch protection on main as recorded (system/conventions.md). The Dispatcher's daily rule audit
+# compares the live settings with these; any difference is a rule breach (blueprint §4.5).
+[branch_protection]
+required_check = "gate"
+required_check_app_id = 15368
+strict = true
+enforce_admins = true
+required_approvals = 1
+dismiss_stale_reviews = true
+require_code_owner_reviews = true
+allow_force_pushes = false
+allow_deletions = false
