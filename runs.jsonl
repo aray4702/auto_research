@@ -70,3 +70,4 @@
 {"at": "2026-10-27T07:00:03+00:00", "cost_usd": 0.376148, "denials": 4, "event": "end", "five_hour": 0.12, "item": null, "role": "coordinator", "run_id": "coordinator-20261027T065824Z", "seven_day": 0.08, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 21}
 {"at": "2026-10-27T07:00:56+00:00", "event": "start", "item": 53, "pid": 76930, "role": "builder", "run_id": "builder-20261027T070053Z", "task": "PR #53 needs work: the Reviewer asked for changes."}
 {"at": "2026-10-27T07:02:18+00:00", "cost_usd": 0.412885, "denials": 2, "event": "end", "five_hour": 0.12, "item": 53, "role": "builder", "run_id": "builder-20261027T070053Z", "seven_day": 0.08, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 27}
+{"at": "2026-10-27T07:03:14+00:00", "event": "start", "item": 53, "pid": 77966, "role": "reviewer", "run_id": "reviewer-20261027T070309Z", "task": "Review PR #53."}
