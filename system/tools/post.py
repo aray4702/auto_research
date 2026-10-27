@@ -103,6 +103,14 @@ class GitHub:
         out = json.loads(r.stdout) if r.stdout.strip() else None
         return [x for page in out for x in page] if paginate else out
 
+    def graphql(self, query, **variables):
+        args = ["gh", "api", "graphql", "--input", "-"]
+        r = self.runner(args, input=json.dumps({"query": query, "variables": variables}), capture_output=True, text=True)
+        out = json.loads(r.stdout) if r.stdout.strip() else {}
+        if r.returncode or out.get("errors"):
+            raise SystemExit(f"gh api graphql failed: {(out.get('errors') or r.stderr.strip())!s:.500}")
+        return out["data"]
+
 
 # --- reading ---------------------------------------------------------------------------
 
