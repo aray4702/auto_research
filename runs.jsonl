@@ -51,3 +51,4 @@
 {"at": "2026-10-27T06:33:15+00:00", "event": "start", "item": 50, "pid": 63340, "role": "reviewer", "run_id": "reviewer-20261027T063310Z", "task": "Review PR #50."}
 {"at": "2026-10-27T06:33:15+00:00", "event": "start", "item": 50, "pid": 63340, "role": "reviewer", "run_id": "reviewer-20261027T063310Z", "task": "Review PR #50."}
 {"at": "2026-10-27T06:34:23+00:00", "cost_usd": 0.269609, "denials": 2, "event": "end", "five_hour": 0.1, "item": 49, "role": "coordinator", "run_id": "coordinator-20261027T063310Z", "seven_day": 0.07, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 17}
+{"at": "2026-10-27T06:35:27+00:00", "cost_usd": 0.402592, "denials": 3, "event": "end", "five_hour": 0.1, "item": 50, "role": "reviewer", "run_id": "reviewer-20261027T063310Z", "seven_day": 0.07, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 25}
