@@ -6,6 +6,8 @@ owner_login = "aray4702"
 # The Owner's second account: code owner of the protected paths, never used by an agent.
 second_login = "sloan3165"
 time_zone = "America/Los_Angeles"
+# GitHub Actions: the only app whose `gate` check run branch protection accepts.
+gate_app_id = 15368
 roles = ["builder", "dispatcher", "architect", "coordinator", "developer", "reviewer", "tester"]
 
 [reviewer_app]
