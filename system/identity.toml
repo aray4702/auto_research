@@ -1,0 +1,19 @@
+# Who the system acts as, and where its credentials live (locations only, never values).
+# Protected path. Read by system/tools/post.py.
+
+repo = "aray4702/auto_research"
+owner_login = "aray4702"
+# The Owner's second account: code owner of the protected paths, never used by an agent.
+second_login = "sloan3165"
+time_zone = "America/Los_Angeles"
+roles = ["builder", "dispatcher", "architect", "coordinator", "developer", "reviewer", "tester"]
+
+[reviewer_app]
+app_id = 5320656
+bot_login = "aray4702-reviewer-app[bot]"
+key_keychain_service = "auto_research.reviewer-app-key"
+key_keychain_account = "aray4702"
+# Roles that may make the App approve: Reviewer runs, and the Dispatcher's renewals.
+approvers = ["reviewer", "dispatcher"]
+# Every installation token is scoped to this repo and to these permissions.
+token_permissions = { pull_requests = "write", contents = "read", checks = "read" }
