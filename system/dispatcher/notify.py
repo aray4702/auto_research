@@ -34,20 +34,28 @@ def unsent(notices, wanted):
     return [(key, text) for key, text in wanted if key not in sent]
 
 
-def owner_questions(item, comments, identity, notices, now, marker):
-    """Notices for an item held at needs-decision:owner: its latest question, or a single reminder
-    a day later. Nothing once the Owner has answered after the question."""
+def latest_ask(comments, identity, marker):
+    """(question comment, the role that asked, answered?) for an item held at needs-decision:owner, or None.
+    Answered means a later comment from the Owner's own accounts, unmarked."""
     owner, second = identity["owner_login"], identity["second_login"]
     asks = [c for c in comments if c["user"]["login"] == owner and marker.match(c.get("body") or "") and ASK in c["body"]]
     if not asks:
-        return []
+        return None
     ask = asks[-1]
     answered = any(
         c["user"]["login"] in (owner, second) and not marker.match(c.get("body") or "") and c["created_at"] > ask["created_at"]
         for c in comments
     )
-    if answered:
+    return ask, marker.match(ask["body"])[1], answered
+
+
+def owner_questions(item, comments, identity, notices, now, marker):
+    """Notices for an item held at needs-decision:owner: its latest question, or a single reminder
+    a day later. Nothing once the Owner has answered after the question."""
+    found = latest_ask(comments, identity, marker)
+    if not found or found[2]:
         return []
+    ask = found[0]
     sent = {n["key"]: n for n in notices}
     key = f"ask:{ask['id']}"
     if key not in sent:
