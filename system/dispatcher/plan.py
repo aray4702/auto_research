@@ -28,7 +28,7 @@ def latest_review(pr, login):
     return reviews[-1] if reviews else None
 
 
-def candidates(snap, active_items, identity, skip_review=()):
+def candidates(snap, active_items, identity, skip_review=(), answered=None):
     """(role, item, task, why) in dispatch order. Nothing already claimed or running is offered."""
     bot = identity["reviewer_app"]["bot_login"]
     free = lambda n, labels: n not in active_items and CLAIMED not in labels
@@ -52,6 +52,12 @@ def candidates(snap, active_items, identity, skip_review=()):
             why.append("it conflicts with main")
         if why and free(pr["number"], pr["labels"]):
             out.append((pr["author_role"], pr["number"], f"PR #{pr['number']} needs work: {', '.join(why)}.", "pr-work"))
+    # The Owner answered a question: start the role that asked it, on its item (records included).
+    for n, role in sorted((answered or {}).items()):
+        labels = next((i["labels"] for i in snap["issues"] if i["number"] == n),
+                      next((p["labels"] for p in snap["prs"] if p["number"] == n), set()))
+        if free(n, labels):
+            out.append((role, n, f"The Owner answered your question on #{n}. Act on the answer, then remove needs-decision:owner.", "answered"))
     for pr in agent_prs:
         review = latest_review(pr, bot)
         reviewed_head = review is not None and review["commit"] == pr["head"]
@@ -95,11 +101,11 @@ def candidates(snap, active_items, identity, skip_review=()):
     return out
 
 
-def choose(snap, runs, caps, identity, now, skip_review=()):
+def choose(snap, runs, caps, identity, now, skip_review=(), answered=None):
     """(starts, skipped): the candidates that fit the caps now, simulating each start in turn."""
     active_items = {r.get("item") for r in usage.active(runs) if r.get("item")}
     starts, skipped, simulated = [], [], list(runs)
-    for role, item, task, why in candidates(snap, active_items, identity, skip_review):
+    for role, item, task, why in candidates(snap, active_items, identity, skip_review, answered):
         if item and any(s[1] == item for s in starts):
             continue
         ok, reasons, _ = usage.may_start(caps, simulated, role, now, identity["time_zone"])
