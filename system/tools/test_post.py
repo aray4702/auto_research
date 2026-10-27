@@ -141,6 +141,20 @@ class ReadTest(unittest.TestCase):
         self.assertIn("--- comment by outsider:stranger", out)
         self.assertIn(("GET", "repos/o/r/issues/1/comments?per_page=100", None), gh.calls)
 
+    def test_read_shows_a_prs_gate(self):
+        gh = FakeGitHub({
+            ("GET", "repos/o/r/issues/5"): issue([], title="PR", state="open", body="b", user={"login": "aray4702"},
+                                                 created_at="2026-10-27T02:00:00Z", pull_request={}),
+            ("GET", "repos/o/r/pulls/5"): {"head": {"ref": "x", "sha": "abc1234def"}, "base": {"ref": "main"}},
+            ("GET", "repos/o/r/pulls/5/reviews"): [],
+            ("GET", "repos/o/r/pulls/5/comments"): [],
+            ("GET", "repos/o/r/commits/abc1234def/check-runs"): {"check_runs": [
+                {"app": {"id": 999}, "conclusion": "success", "status": "completed"},
+                {"app": {"id": IDENTITY["gate_app_id"]}, "conclusion": "failure", "status": "completed"},
+            ]},
+        })
+        self.assertIn("gate: failure", post.cmd_read(gh, IDENTITY, 5))
+
 
 class ListTest(unittest.TestCase):
     def test_list_filters_by_kind_and_label_and_names_the_opener(self):
