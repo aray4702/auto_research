@@ -131,6 +131,10 @@ def cmd_read(gh, identity, n):
     if is_pr:
         pr = gh.api("GET", f"{base}/pulls/{n}")
         lines.append(f"head: {pr['head']['ref']} @ {pr['head']['sha'][:7]}, base: {pr['base']['ref']}")
+        runs = gh.api("GET", f"{base}/commits/{pr['head']['sha']}/check-runs?check_name=gate")
+        gates = [r for r in (runs or {}).get("check_runs", []) if (r.get("app") or {}).get("id") == identity["gate_app_id"]]
+        gate = gates[0] if gates else None
+        lines.append("gate: " + ("not reported yet" if not gate else gate["conclusion"] or gate["status"]))
         reviews = gh.api("GET", f"{base}/pulls/{n}/reviews?per_page=100", paginate=True)
         posts += [(f"review: {r['state'].lower()}", r) for r in reviews]
         notes = gh.api("GET", f"{base}/pulls/{n}/comments?per_page=100", paginate=True)

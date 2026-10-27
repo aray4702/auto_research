@@ -7,7 +7,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 QUERY = (Path(__file__).parent / "prs.graphql").read_text()
-ACTIONS_APP_ID = 15368  # GitHub Actions, the only app whose `gate` check branch protection accepts
 ROW = re.compile(r"^\|\s*\d+\s*\|\s*#(\d+)\b[^|]*\|\s*([^|]*?)\s*\|")
 MARKER = re.compile(r"^<!-- role:([a-z]+)")
 
@@ -40,12 +39,19 @@ def author_role(login, body, identity):
     return m[1] if m and login == identity["owner_login"] else None
 
 
-def gate_of(node):
+def login_of(actor):
+    """A login as REST spells it: GraphQL drops the "[bot]" that REST and identity.toml use for Apps."""
+    actor = actor or {}
+    login = actor.get("login")
+    return f"{login}[bot]" if login and actor.get("__typename") == "Bot" else login
+
+
+def gate_of(node, gate_app_id):
     """'SUCCESS', 'FAILURE' (any other completed conclusion) or None while pending or absent."""
     commits = node["commits"]["nodes"]
     suites = commits[0]["commit"]["checkSuites"]["nodes"] if commits else []
     for suite in suites:
-        if (suite.get("app") or {}).get("databaseId") != ACTIONS_APP_ID:
+        if (suite.get("app") or {}).get("databaseId") != gate_app_id:
             continue
         for check in suite["checkRuns"]["nodes"]:
             if check["status"] == "COMPLETED":
@@ -62,9 +68,9 @@ def pull_request(node, labels, identity, patterns):
         "auto_merge": node["autoMergeRequest"] is not None,
         "author_role": author_role((node.get("author") or {}).get("login"), node["body"], identity),
         "labels": labels, "files": files, "protected": any(is_protected(f, patterns) for f in files),
-        "gate": gate_of(node),
+        "gate": gate_of(node, identity["gate_app_id"]),
         "reviews": [
-            {"login": (r.get("author") or {}).get("login"), "state": r["state"], "commit": (r.get("commit") or {}).get("oid"),
+            {"login": login_of(r.get("author")), "state": r["state"], "commit": (r.get("commit") or {}).get("oid"),
              "at": r.get("submittedAt")}
             for r in node["reviews"]["nodes"]
         ],
