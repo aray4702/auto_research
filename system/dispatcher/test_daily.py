@@ -28,10 +28,14 @@ class DenialsTest(unittest.TestCase):
         self.assertEqual(usage.denial_signature({"tool_name": "Write", "tool_input": {"file_path": "/tmp/x"}}), "Write")
         token = "gh" + "p_" + "A1b2" * 9
         for command, want in [(f"GH_TOKEN={token} gh pr list", "Bash: gh pr"), (f"export API_KEY={token}", "Bash: export"),
-                              (f"curl -H 'Authorization: {token}' x", "Bash: curl"), ("cat /Users/x/secret.txt", "Bash: cat")]:
+                              (f"curl -H 'Authorization: {token}' x", "Bash: curl"), ("cat /Users/x/secret.txt", "Bash: cat"),
+                              ("echo " + "a1b2c3d4" * 5, "Bash: echo"), ("echo xoxb-" + "1234-5678-abcd", "Bash: echo"),
+                              ("cat secret.txt", "Bash: cat"), ("git push", "Bash: git push"), ("gh pr checks 34", "Bash: gh pr")]:
             sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
             self.assertEqual(sig, want, command)
             self.assertNotIn(token, sig)
+            self.assertNotIn("a1b2c3d4", sig)
+            self.assertNotIn("xoxb", sig)
         result = {"type": "result", "subtype": "success", "permission_denials": [{"tool_name": "WebFetch", "tool_input": {}}]}
         self.assertEqual(usage.summarize([json.dumps(result)])["denied"], ["WebFetch"])
 

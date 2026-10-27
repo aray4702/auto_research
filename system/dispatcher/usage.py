@@ -57,7 +57,10 @@ def denial_signature(denial):
     for word in command.split():
         if "=" in word and not words:
             continue  # a leading VAR=value assignment: skip it, never record it
-        if not re.fullmatch(r"[a-z][a-z0-9._-]*", word):
+        # The command may carry digits or dots (python3, post.py); a second word only counts if it is
+        # subcommand-shaped, so a lowercase token, hex string or filename argument is never kept.
+        shape = r"[a-z][a-z0-9._-]*" if not words else r"[a-z]+(-[a-z]+)*"
+        if not re.fullmatch(shape, word) or len(word) > 20:
             break
         words.append(word)
         if len(words) == 2:
