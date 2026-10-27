@@ -55,6 +55,24 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "reviewer")["permissions"]["allow"])
         self.assertNotIn("Bash(make test:*)", runner.role_settings(config, "coordinator")["permissions"]["allow"])
 
+    def test_every_word_prefix_rule_can_match_a_command(self):
+        # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).
+        for role in CONFIG["runner"]["roles"]:
+            for rule in runner.role_settings(CONFIG, role)["permissions"]["allow"]:
+                self.assertFalse(rule.endswith("/:*)"), f"{role}: {rule}")
+
+    def test_the_builder_may_run_its_daily_checks_but_not_a_live_dispatch(self):
+        allow = runner.role_settings(CONFIG, "builder")["permissions"]["allow"]
+        prefixes = [a[len("Bash("):-len(":*)")] for a in allow if a.startswith("Bash(") and a.endswith(":*)")]
+        allowed = lambda cmd: any(cmd == p or cmd.startswith(p + " ") for p in prefixes)
+        for cmd in ("python3 -I system/tools/runner.py check", "python3 -I system/tools/runner.py apply",
+                    "python3 -I system/tools/runner.py settings builder", "python3 -I system/tools/tracker.py check",
+                    "python3 -I system/dispatcher/dispatch.py poll --dry-run",
+                    "python3 -I system/dispatcher/dispatch.py reconcile --dry-run"):
+            self.assertTrue(allowed(cmd), cmd)
+        for cmd in ("python3 -I system/dispatcher/dispatch.py poll", "python3 -I system/dispatcher/run.py builder"):
+            self.assertFalse(allowed(cmd), cmd)
+
     def test_no_role_may_run_raw_gh_writes(self):
         for role in CONFIG["runner"]["roles"]:
             allow = runner.role_settings(CONFIG, role)["permissions"]["allow"]
