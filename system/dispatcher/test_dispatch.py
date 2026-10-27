@@ -21,8 +21,9 @@ def issue(n, *labels, title="t"):
 
 
 def pr(n, role="developer", gate="SUCCESS", head="h2", merge_state="BLOCKED", decision="REVIEW_REQUIRED",
-       reviews=(), labels=(), protected=False, auto_merge=False, draft=False):
+       reviews=(), labels=(), protected=False, auto_merge=False, draft=False, resolves=()):
     return {"number": n, "title": "p", "draft": draft, "head": head, "branch": "b", "merge_state": merge_state,
+            "resolves": list(resolves),
             "review_decision": decision, "auto_merge": auto_merge, "author_role": role, "labels": set(labels),
             "files": [], "protected": protected, "gate": gate,
             "reviews": [{"login": login, "state": s, "commit": c, "at": None} for login, s, c in reviews]}
@@ -109,6 +110,18 @@ class CandidatesTest(unittest.TestCase):
     def test_owner_prs_and_drafts_are_left_alone(self):
         s = snap(prs=[pr(5, role=None, gate="FAILURE"), pr(6, draft=True, gate="FAILURE")])
         self.assertEqual(plan.candidates(s, set(), IDENTITY), [])
+
+    def test_an_item_whose_pr_is_open_is_in_review_not_dispatched_again(self):
+        items = [issue(20, "type:definition", "state:ready"), issue(30, "type:fix", "state:ready")]
+        prs = [pr(23, role="architect", resolves=[20], reviews=[(BOT, "APPROVED", "h2")])]
+        got = plan.candidates(snap(items, prs, order=[(20, True), (30, False)]), set(), IDENTITY)
+        self.assertEqual(got, [], "#20 is in review, and while it is, only parallel-safe items may start")
+        got = plan.candidates(snap(items, prs, order=[(20, True), (30, True)]), set(), IDENTITY)
+        self.assertEqual([c[1] for c in got], [30])
+
+    def test_resolves_is_read_from_the_pr_body(self):
+        node_body = "<!-- role:architect run:a -->\nResolves #20. Also fixes #7; closes #7."
+        self.assertEqual(sorted({int(n) for n in github_state.RESOLVES.findall(node_body)}), [7, 20])
 
     def test_only_parallel_safe_items_start_while_one_is_busy(self):
         items = [issue(4, "type:fix", "state:ready", "state:claimed"), issue(5, "type:fix", "state:ready"),

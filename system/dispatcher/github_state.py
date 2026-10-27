@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 QUERY = (Path(__file__).parent / "prs.graphql").read_text()
 ROW = re.compile(r"^\|\s*\d+\s*\|\s*#(\d+)\b[^|]*\|\s*([^|]*?)\s*\|")
 MARKER = re.compile(r"^<!-- role:([a-z]+)")
+RESOLVES = re.compile(r"\b(?:resolves|fixes|closes)\s+#(\d+)", re.IGNORECASE)
 
 
 def work_order(body):
@@ -68,6 +69,7 @@ def pull_request(node, labels, identity, patterns):
         "auto_merge": node["autoMergeRequest"] is not None,
         "author_role": author_role((node.get("author") or {}).get("login"), node["body"], identity),
         "labels": labels, "files": files, "protected": any(is_protected(f, patterns) for f in files),
+        "resolves": sorted({int(n) for n in RESOLVES.findall(node["body"] or "")}),
         "gate": gate_of(node, identity["gate_app_id"]),
         "reviews": [
             {"login": login_of(r.get("author")), "state": r["state"], "commit": (r.get("commit") or {}).get("oid"),
