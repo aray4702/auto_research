@@ -142,6 +142,25 @@ class ReadTest(unittest.TestCase):
         self.assertIn(("GET", "repos/o/r/issues/1/comments?per_page=100", None), gh.calls)
 
 
+class ListTest(unittest.TestCase):
+    def test_list_filters_by_kind_and_label_and_names_the_opener(self):
+        gh = FakeGitHub({("GET", "repos/o/r/issues?state=open"): [
+            issue(["type:fix", "state:ready"], number=4, title="Crash", state="open", user={"login": "aray4702"},
+                  body="<!-- role:tester run:t1 -->\nsteps"),
+            issue(["record:work-order"], number=11, title="Work order", state="open", user={"login": "aray4702"}, body="x"),
+            issue([], number=9, title="Fix", state="open", user={"login": "stranger"}, body="", pull_request={}),
+        ]})
+        out = post.cmd_list(gh, IDENTITY).splitlines()
+        self.assertEqual(out[0], post.BANNER)
+        self.assertIn("#4 issue [open] Crash (by tester; labels: type:fix, state:ready)", out)
+        self.assertIn("#11 issue [open] Work order (by owner; labels: record:work-order)", out)
+        self.assertIn("#9 PR [open] Fix (by outsider:stranger; labels: none)", out)
+        self.assertEqual(post.cmd_list(gh, IDENTITY, labels=["type:fix"]).splitlines()[2:], [out[2]])
+        self.assertEqual(post.cmd_list(gh, IDENTITY, kind="pr").splitlines()[2:], [out[4]])
+        self.assertEqual(post.cmd_list(gh, IDENTITY, labels=["sev:1"]).splitlines()[2:], ["(none)"])
+        self.assertNotIn("labels=", gh.calls[0][1])
+
+
 class ReviewTest(unittest.TestCase):
     def test_only_approvers_may_review_and_tokens_are_scoped(self):
         sent = []
