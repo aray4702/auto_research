@@ -95,7 +95,8 @@ def usage_view(caps, runs, now, time_zone):
 def merges_by_owner_account(gh, identity, limit=None, max_pages=20):
     """Every merge made from the Owner's account, newest first, for the Owner to recognise (blueprint §2's
     accepted risk). All merged PRs are paged through: a window of recent ones hid older merges from
-    the account behind newer ones from the second account."""
+    the account behind newer ones from the second account. `max_pages` only guards against a runaway
+    loop: reaching it raises, because a list that looks complete but isn't would hide merges again."""
     owner, name = identity["repo"].split("/")
     mine, after = [], None
     for _ in range(max_pages):
@@ -104,6 +105,9 @@ def merges_by_owner_account(gh, identity, limit=None, max_pages=20):
         if not page["pageInfo"]["hasNextPage"]:
             break
         after = page["pageInfo"]["endCursor"]
+    else:
+        raise RuntimeError(f"Stopped after {max_pages} pages of merged PRs with more left, so the list of merges "
+                           "from your account would be incomplete. Raise max_pages in system/cli/data.py.")
     mine.sort(key=lambda n: n["mergedAt"], reverse=True)
     return mine[:limit] if limit else mine
 
