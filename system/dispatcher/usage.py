@@ -6,6 +6,7 @@ utilization. The system's own share is its runs' cost times caps.toml's points_p
 """
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -34,12 +35,37 @@ def summarize(lines):
             "cost_usd": round(result.get("total_cost_usd") or 0, 6),
             "turns": result.get("num_turns"),
             "denials": len(result.get("permission_denials") or []),
+            # What was denied, as the tool and the command's first two words (#44): enough to spot a
+            # recurring permission gap, nothing more of the command.
+            "denied": sorted({denial_signature(d) for d in result.get("permission_denials") or []}),
         }
     if reading:
         out["five_hour"] = reading.get("five_hour", {}).get("utilization")
         out["seven_day"] = reading.get("seven_day", {}).get("utilization")
         out["seven_day_resets_at"] = reading.get("seven_day", {}).get("resetsAt")
     return out
+
+
+def denial_signature(denial):
+    """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
+    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record."""
+    tool = denial.get("tool_name", "?")
+    command = (denial.get("tool_input") or {}).get("command")
+    if tool != "Bash" or not command:
+        return tool
+    words = []
+    for word in command.split():
+        if "=" in word and not words:
+            continue  # a leading VAR=value assignment: skip it, never record it
+        # The command may carry digits or dots (python3, post.py); a second word only counts if it is
+        # subcommand-shaped, so a lowercase token, hex string or filename argument is never kept.
+        shape = r"[a-z][a-z0-9._-]*" if not words else r"[a-z]+(-[a-z]+)*"
+        if not re.fullmatch(shape, word) or len(word) > 20:
+            break
+        words.append(word)
+        if len(words) == 2:
+            break
+    return "Bash: " + (" ".join(words) or "?")
 
 
 def parse_time(iso):
