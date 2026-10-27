@@ -60,12 +60,23 @@ def candidates(snap, active_items, identity, skip_review=()):
         for label, role in DECISION_ROLE.items():
             if label in i["labels"] and free(i["number"], i["labels"]):
                 out.append((role, i["number"], f"Item #{i['number']} needs your decision ({label}).", "decision"))
+    for i in snap["issues"]:
+        if "state:review" in i["labels"] and free(i["number"], i["labels"]):
+            out.append(("reviewer", i["number"], f"Review the plan or design on #{i['number']}.", "plan-review"))
     untriaged = [
         i["number"] for i in issues
         if ("state:triage" in i["labels"] or not any(x.startswith("type:") for x in i["labels"])) and free(i["number"], i["labels"])
     ]
+    tasks, whys = [], []
     if untriaged:
-        out.append(("coordinator", None, "Triage these issues: " + ", ".join(f"#{n}" for n in untriaged) + ".", "triage"))
+        tasks.append("Triage these issues: " + ", ".join(f"#{n}" for n in untriaged) + ".")
+        whys.append("triage")
+    if snap.get("closed"):
+        tasks.append("Items closed since your last run: " + ", ".join(f"#{n}" for n in snap["closed"])
+                     + ". Record their goals' progress, close what is done, and chart and schedule what comes next.")
+        whys.append("closed")
+    if tasks:
+        out.append(("coordinator", None, " ".join(tasks), "+".join(whys)))
     busy = any(n in active_items or n in in_review or CLAIMED in by_number.get(n, {}).get("labels", set())
                for n, _ in snap["work_order"])
     for n, parallel_safe in snap["work_order"]:

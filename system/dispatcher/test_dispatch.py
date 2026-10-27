@@ -92,6 +92,14 @@ class CandidatesTest(unittest.TestCase):
             ("architect", 2, "decision"), ("coordinator", None, "triage"), ("developer", 4, "work-order"),
         ])
 
+    def test_closing_events_and_plan_reviews(self):
+        s = snap(issues=[issue(3), issue(21, "record:goal", "state:review")])
+        s["closed"] = [20]
+        got = [(r, i, t, w) for r, i, t, w in plan.candidates(s, set(), IDENTITY)]
+        self.assertEqual([(r, i, w) for r, i, _, w in got], [("reviewer", 21, "plan-review"), ("coordinator", None, "triage+closed")])
+        self.assertEqual(got[1][2], "Triage these issues: #3. Items closed since your last run: #20. "
+                                    "Record their goals' progress, close what is done, and chart and schedule what comes next.")
+
     def test_claimed_running_and_records_are_never_offered(self):
         s = snap(issues=[issue(1, "type:fix", "sev:1", "state:claimed"), issue(2, "type:fix", "sev:1"), issue(13, "record:decision-log")])
         self.assertEqual(plan.candidates(s, {2}, IDENTITY), [])
@@ -220,6 +228,11 @@ class FakeGitHub:
             self.writes.append((method, path))
         if path.endswith("actions/variables/AGENTS_PAUSED"):
             raise SystemExit("failed: Not Found (HTTP 404)")
+        if path.startswith(f"repos/{self.repo}/issues?state=closed"):
+            assert "since=" in path, path
+            return [{"number": 20, "title": "Def", "labels": [{"name": "type:definition"}], "closed_at": "2026-10-27T02:30:00Z"},
+                    {"number": 13, "title": "Log", "labels": [{"name": "record:decision-log"}], "closed_at": "2026-10-27T02:40:00Z"},
+                    {"number": 5, "title": "Old", "labels": [], "closed_at": "2026-10-10T00:00:00Z"}]
         if path.startswith(f"repos/{self.repo}/issues?"):
             return [
                 {"number": 1, "title": "Crash", "labels": [{"name": "type:fix"}, {"name": "sev:1"}], "html_url": "u", "body": ""},
@@ -256,7 +269,8 @@ class DryRunTest(unittest.TestCase):
             lines = dispatch.dispatch_pass("reconcile", dry_run=True, now=NOW)
         self.assertEqual(lines, [
             "would start a developer run on #1 (sev:1): Item #1 is sev:1: revert first (blueprint §3), then fix the cause.",
-            "would start a coordinator run (triage): Triage these issues: #2.",
+            "would start a coordinator run (triage+closed): Triage these issues: #2. Items closed since your last run: #20. "
+            "Record their goals' progress, close what is done, and chart and schedule what comes next.",
         ])
         spawn.assert_not_called()
         self.assertEqual(stores[0].appended, [])

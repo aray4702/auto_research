@@ -3,6 +3,7 @@ protected paths. Reads only.
 """
 
 import re
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -79,7 +80,8 @@ def pull_request(node, labels, identity, patterns):
     }
 
 
-def snapshot(gh, identity, codeowners=ROOT / ".github" / "CODEOWNERS"):
+def snapshot(gh, identity, closed_since=None, codeowners=ROOT / ".github" / "CODEOWNERS"):
+    """closed_since: also list the items (not records, not PRs) closed after this time."""
     owner, name = identity["repo"].split("/")
     everything = gh.api("GET", f"repos/{gh.repo}/issues?state=open&per_page=100", paginate=True)
     labels_of = {i["number"]: {x["name"] for x in i["labels"]} for i in everything}
@@ -92,4 +94,14 @@ def snapshot(gh, identity, codeowners=ROOT / ".github" / "CODEOWNERS"):
     nodes = gh.graphql(QUERY, owner=owner, name=name)["repository"]["pullRequests"]["nodes"]
     prs = [pull_request(n, labels_of.get(n["number"], set()), identity, patterns) for n in nodes]
     order_issue = next((i for i in issues if "record:work-order" in i["labels"]), None)
-    return {"issues": issues, "prs": prs, "work_order": work_order(order_issue["body"] if order_issue else "")}
+    closed = []
+    if closed_since:
+        since = closed_since.isoformat().replace("+00:00", "Z")
+        for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&since={since}&per_page=100", paginate=True):
+            labels = {x["name"] for x in i["labels"]}
+            if "pull_request" in i or any(x.startswith("record:") for x in labels):
+                continue
+            if i.get("closed_at") and datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")) > closed_since:
+                closed.append(i["number"])
+    return {"issues": issues, "prs": prs, "work_order": work_order(order_issue["body"] if order_issue else ""),
+            "closed": sorted(closed)}
