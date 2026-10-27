@@ -319,7 +319,8 @@ class DryRunTest(unittest.TestCase):
         stores = []
         with mock.patch.object(post, "GitHub", FakeGitHub), \
              mock.patch("system.dispatcher.state.Store", side_effect=lambda *a: stores.append(FakeStore()) or stores[-1]), \
-             mock.patch.object(dispatch, "spawn") as spawn:
+             mock.patch.object(dispatch, "spawn") as spawn, \
+             mock.patch.object(dispatch.relay, "run", return_value=[]):  # never Discord from a test (test_relay.py)
             lines = dispatch.dispatch_pass("reconcile", dry_run=True, now=NOW)
         self.assertEqual(lines, [
             "would start a developer run on #1 (sev:1): Item #1 is sev:1: revert first (blueprint §3), then fix the cause.",
