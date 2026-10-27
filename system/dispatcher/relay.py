@@ -97,6 +97,14 @@ def body(answer, cfg, message_id):
     return f"{answer}\n\n(from Discord: {link(cfg, message_id)})"
 
 
+def posted(comment, cfg, message_id, owner):
+    """Whether a comment is the relay's own post of this message: from the Owner's account, unmarked, and
+    ending with this message's link line. Anyone else quoting the link must not stop a real answer (#78)."""
+    text = comment.get("body") or ""
+    return ((comment.get("user") or {}).get("login") == owner and not text.startswith("<!--")
+            and text.endswith(f"\n\n(from Discord: {link(cfg, message_id)})"))
+
+
 def run(gh, store, identity, dry_run, now):
     """Relay the Owner's new Discord answers; each message is handled once (relays.jsonl). The first run
     records where the channel is and relays nothing older."""
@@ -126,7 +134,7 @@ def run(gh, store, identity, dry_run, now):
                 continue
             # Posted already, if a pass died between posting and recording: never post an answer twice.
             comments = gh.api("GET", f"repos/{gh.repo}/issues/{item}/comments?per_page=100", paginate=True)
-            made = next((c for c in comments if link(cfg, m["id"]) in (c.get("body") or "")), None) \
+            made = next((c for c in comments if posted(c, cfg, m["id"], identity["owner_login"])), None) \
                 or gh.api("POST", f"repos/{gh.repo}/issues/{item}/comments", {"body": body(said, cfg, m["id"])})
             store.append("relays", {"message_id": m["id"], "item": item, "result": "relayed", "comment": made["html_url"],
                                     "at": now.isoformat()})
