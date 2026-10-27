@@ -104,13 +104,22 @@ def merge_plan(snap, identity):
     prs = [pr for pr in snap["prs"] if pr["author_role"] and not pr["draft"]]
     actions = []
     in_flight = [pr for pr in prs if pr["auto_merge"]]
-    ready = sorted((pr for pr in prs if pr["review_decision"] == "APPROVED" and pr["gate"] == "SUCCESS"), key=lambda pr: pr["number"])
+
+    def awaiting_owner(pr):
+        # Protected, green, the Reviewer App's approval on its head: only the Owner's approval is missing.
+        app = latest_review(pr, bot)
+        return pr["protected"] and pr["gate"] == "SUCCESS" and app is not None and app["state"] == "APPROVED" and app["commit"] == pr["head"]
+
+    ready = sorted(
+        (pr for pr in prs if pr["gate"] == "SUCCESS" and (pr["review_decision"] == "APPROVED" or awaiting_owner(pr))),
+        key=lambda pr: pr["number"],
+    )
     queue = in_flight or ready
     if queue:
         nxt = queue[0]
         if nxt["merge_state"] == "BEHIND":
             actions.append(("refresh", nxt["number"], "behind main"))
-        elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"]:
+        elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"] and nxt["review_decision"] == "APPROVED":
             actions.append(("ask-owner-to-merge" if nxt["protected"] else "auto-merge", nxt["number"], nxt["head"]))
     for pr in prs:
         if pr["gate"] != "SUCCESS" or pr["review_decision"] == "APPROVED":
@@ -118,7 +127,8 @@ def merge_plan(snap, identity):
         app, owner = latest_review(pr, bot), latest_review(pr, second)
         if app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
             actions.append(("renew", pr["number"], app["commit"]))
-        if pr["protected"]:
+        if pr["protected"] and pr["merge_state"] != "BEHIND":
+            # Never ask the Owner to approve a PR that's behind main: its refresh would dismiss the approval.
             if owner and owner["state"] == "APPROVED" and owner["commit"] != pr["head"]:
                 actions.append(("ask-owner-to-reapprove", pr["number"], pr["head"]))
             elif app and app["state"] == "APPROVED" and app["commit"] == pr["head"] and not owner:

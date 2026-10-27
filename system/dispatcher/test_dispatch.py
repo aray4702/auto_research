@@ -152,6 +152,21 @@ class MergePlanTest(unittest.TestCase):
         s = snap(prs=[pr(7, merge_state="CLEAN", decision="APPROVED", auto_merge=True), pr(9, merge_state="CLEAN", decision="APPROVED")])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [])
 
+    def test_a_protected_pr_is_refreshed_before_the_owner_is_asked_once(self):
+        # Behind main and waiting only on the Owner: refresh first, ask nothing yet.
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BEHIND", reviews=[(BOT, "APPROVED", "h1")], head="h1")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("refresh", 23, "behind main")])
+        # Refreshed: the App's approval is on the old head, so renew it, and still don't ask the Owner.
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h1")], head="h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 23, "h1")])
+        # Renewed on the new head and up to date: now ask the Owner, once.
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")], head="h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 23, "h2")])
+        # The Owner approved: ask them to merge (protected PRs are theirs to merge).
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="CLEAN", decision="APPROVED",
+                         reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")], head="h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 23, "h2")])
+
     def test_renewals_and_owner_approvals(self):
         s = snap(prs=[pr(9, reviews=[(BOT, "APPROVED", "h1")])])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 9, "h1")])
