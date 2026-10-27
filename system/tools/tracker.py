@@ -12,6 +12,7 @@ Records are created through the posting tool, so they carry the caller's marker
 import argparse
 import re
 import sys
+import time
 import tomllib
 import urllib.parse
 from pathlib import Path
@@ -57,8 +58,10 @@ def existing_labels(gh):
 
 
 def record_issues(gh, label):
-    issues = gh.api("GET", f"repos/{gh.repo}/issues?state=open&labels={quote(label)}&per_page=100", paginate=True)
-    return [i for i in issues if "pull_request" not in i]
+    # Filter here rather than with ?labels=: GitHub's label filter lags a few seconds behind a new
+    # issue, which once made a fresh record look missing (and a second setup could duplicate it).
+    issues = gh.api("GET", f"repos/{gh.repo}/issues?state=open&per_page=100", paginate=True)
+    return [i for i in issues if "pull_request" not in i and label in {x["name"] for x in i["labels"]}]
 
 
 def differs(have, want):
@@ -109,10 +112,15 @@ def main(argv=None):
         return 1
     identity = post.load_identity()
     gh = post.GitHub(identity["repo"])
+    created = []
     if args.command == "setup":
-        for line in setup(gh, config, post.caller_from_env(identity)) or ["nothing to do"]:
+        created = setup(gh, config, post.caller_from_env(identity))
+        for line in created or ["nothing to do"]:
             print(line)
     found = problems(gh, config)
+    for _ in range(3 if created and found else 0):
+        time.sleep(5)  # let GitHub catch up with what setup just created
+        found = problems(gh, config)
     print("FAIL tracker" if found else "PASS tracker: every label and record exists as defined")
     for p in found:
         print(f"  - {p}")
