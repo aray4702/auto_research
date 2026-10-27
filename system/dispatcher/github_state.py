@@ -23,6 +23,21 @@ def work_order(body):
     return rows
 
 
+GOAL_ROW = re.compile(r"^\|\s*([A-Z]+\d+)\s*\|\s*([^|]*?)\s*\|")
+GOAL_TITLE = re.compile(r"^Goal ([A-Z]+\d+):")
+
+
+def requirement_goals(text):
+    """Goal IDs the requirements set: rows of the Goals table with a goal written in, not struck, not G0."""
+    section = text.split("## 2. Goals", 1)[1].split("\n## ", 1)[0] if "## 2. Goals" in text else ""
+    goals = []
+    for line in section.splitlines():
+        m = GOAL_ROW.match(line.strip())
+        if m and m[1] != "G0" and m[2] and not m[2].startswith("~~"):
+            goals.append(m[1])
+    return goals
+
+
 def protected_patterns(text):
     return [line.split()[0] for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
 
@@ -103,5 +118,9 @@ def snapshot(gh, identity, closed_since=None, codeowners=ROOT / ".github" / "COD
                 continue
             if i.get("closed_at") and datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")) > closed_since:
                 closed.append(i["number"])
+    requirements = ROOT / "project_requirements.md"
+    goals = requirement_goals(requirements.read_text()) if requirements.exists() else []
+    records = gh.api("GET", f"repos/{gh.repo}/issues?state=all&labels=record%3Agoal&per_page=100", paginate=True)
+    have = {m[1] for i in records if (m := GOAL_TITLE.match(i["title"]))}
     return {"issues": issues, "prs": prs, "work_order": work_order(order_issue["body"] if order_issue else ""),
-            "closed": sorted(closed)}
+            "closed": sorted(closed), "new_goals": [g for g in goals if g not in have]}
