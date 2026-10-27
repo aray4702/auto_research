@@ -166,7 +166,7 @@ class LauncherTest(unittest.TestCase):
     def test_execute_logs_the_stream_and_enforces_the_timeout(self):
         with tempfile.TemporaryDirectory() as d:
             log, pids = Path(d, "run.jsonl"), []
-            cmd = [sys.executable, "-c", "print('{\"type\": \"result\", \"subtype\": \"success\"}')"]
+            cmd = [sys.executable, "-c", "import sys; assert sys.stdin.read() == ''; print('{\"type\": \"result\", \"subtype\": \"success\"}')"]
             self.assertEqual(run.execute(cmd, d, dict(os.environ), log, 30, pids.append), "ended")
             self.assertIn('"subtype": "success"', log.read_text())
             self.assertEqual(len(pids), 1)
