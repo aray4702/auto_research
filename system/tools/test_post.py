@@ -157,6 +157,25 @@ class ReadTest(unittest.TestCase):
         self.assertIn("gate: failure", post.cmd_read(gh, IDENTITY, 5))
 
 
+class GateTest(unittest.TestCase):
+    def test_gate_reads_main_from_the_ci_app_only(self):
+        gh = FakeGitHub({
+            ("GET", "repos/o/r/commits/main"): {"sha": "55430afeee"},
+            ("GET", "repos/o/r/commits/55430afeee/check-runs"): {"check_runs": [
+                {"app": {"id": 999}, "conclusion": "failure", "status": "completed"},
+                {"app": {"id": IDENTITY["gate_app_id"]}, "conclusion": "success", "status": "completed", "html_url": "u"},
+            ]},
+        })
+        self.assertEqual(post.cmd_gate(gh, IDENTITY), "gate on main (55430af): success (run u)")
+        self.assertEqual(post.parser().parse_args(["gate"]).ref, "main")
+        self.assertEqual(post.parser().parse_args(["gate", "260b357"]).ref, "260b357")
+
+    def test_gate_not_reported_yet(self):
+        gh = FakeGitHub({("GET", "repos/o/r/commits/abc"): {"sha": "abc1234"},
+                         ("GET", "repos/o/r/commits/abc1234/check-runs"): {"check_runs": []}})
+        self.assertEqual(post.cmd_gate(gh, IDENTITY, "abc"), "gate on abc (abc1234): not reported yet")
+
+
 class ListTest(unittest.TestCase):
     def test_list_filters_by_kind_and_label_and_names_the_opener(self):
         gh = FakeGitHub({("GET", "repos/o/r/issues?state=open"): [
