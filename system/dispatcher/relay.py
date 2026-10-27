@@ -19,6 +19,7 @@ SETTINGS = ("discord_bot_keychain_service", "discord_guild_id", "discord_channel
 HELD = "needs-decision:owner"
 ITEM = re.compile(r"#(\d+)")
 LEADING = re.compile(r"^#(\d+)\b[\s:,.-]*")
+MENTION = re.compile(r"^<@!?(\d+)>\s*")
 
 
 def settings(identity):
@@ -66,6 +67,9 @@ def decide(message, cfg, held):
     if from_system(message) or (message.get("author") or {}).get("id") != cfg["owner_discord_user_id"]:
         return None, None
     content = (message.get("content") or "").strip()
+    bots = {u.get("id") for u in message.get("mentions") or [] if u.get("bot")}
+    while (m := MENTION.match(content)) and m[1] in bots:  # "@auto_research #67 1" reads as "#67 1"
+        content = content[m.end():]
     if not content:
         return None, "the message arrived empty. Turn on the bot's Message Content intent (Developer Portal → Bot)."
     lead, ref = LEADING.match(content), message.get("referenced_message")
