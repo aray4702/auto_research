@@ -15,6 +15,12 @@ These are the names and formats the builder chose where the blueprint leaves the
 - **Product code, tests and harness:** placed wherever the first goal's architecture decides.
 - **`.github/workflows/gate.yml`:** the gate, part of the system.
 - **`.github/workflows/product.yml`:** the product's CI jobs, a product file.
+- **`toolchain.toml`** (product file, protected, created by the first goal): the product's toolchain. Its `[agents] allow` list of permission rules (for example `"Bash(make test:*)"`) is added to the Developer's, Reviewer's and Tester's run settings.
+- **`system/runner.toml`:** the runner's settings: each role's model, effort, tools and permissions, the run prompt and the launchd schedules. `system/tools/runner.py apply` installs them on this Mac:
+  - It installs the schedules as `~/Library/LaunchAgents/com.aray4702.auto-research.*.plist`.
+  - It runs them from a clone of `main` at `~/auto_research-runs/system`.
+  - It logs to `~/Library/Logs/auto_research/`.
+  - `runner.py check` compares the installed state with `main`.
 - **`.github/CODEOWNERS`:** lists the protected paths, owned by the Owner's second account, `sloan3165`.
 
 ## Identities

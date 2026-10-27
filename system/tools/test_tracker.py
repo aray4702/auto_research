@@ -31,13 +31,20 @@ class FakeRepo:
             self.labels[name].update(body)
             return self.labels[name]
         if method == "GET" and path.startswith("repos/o/r/issues?"):
-            wanted = tracker.urllib.parse.unquote(path.split("labels=")[1].split("&")[0])
-            return [i for i in self.issues if wanted in i["labels"]]
+            self.assertNoLabelFilter(path)
+            return list(self.issues)
         if method == "POST" and path == "repos/o/r/issues":
-            issue = {"number": len(self.issues) + 1, "labels": body["labels"], "body": body["body"], "html_url": "url"}
+            labels = [{"name": n} for n in body["labels"]]
+            issue = {"number": len(self.issues) + 1, "labels": labels, "body": body["body"], "html_url": "url"}
             self.issues.append(issue)
             return issue
         raise AssertionError(f"unexpected call {method} {path}")
+
+    @staticmethod
+    def assertNoLabelFilter(path):
+        # GitHub's ?labels= filter lags behind new issues; records must be found without it.
+        if "labels=" in path:
+            raise AssertionError(f"records must not be listed with a label filter: {path}")
 
 
 class RulesSyncTest(unittest.TestCase):
@@ -78,7 +85,7 @@ class SetupTest(unittest.TestCase):
     def test_a_duplicated_record_is_a_problem(self):
         repo = FakeRepo()
         tracker.setup(repo, CONFIG, CALLER)
-        repo.issues.append({"number": 99, "labels": ["record:watch-list"]})
+        repo.issues.append({"number": 99, "labels": [{"name": "record:watch-list"}]})
         self.assertEqual(
             tracker.problems(repo, CONFIG), ["record record:watch-list: expected one open issue, found #2, #99"]
         )

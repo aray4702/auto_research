@@ -1,0 +1,108 @@
+# The runner's settings (blueprint §3): how and when agent runs start on this Mac.
+# Protected path. After each merge the builder applies it: python3 -I system/tools/runner.py apply
+# The daily check (runner.py check) treats any difference between this Mac and this file as an anomaly.
+
+[runner]
+claude = "/opt/homebrew/bin/claude"
+python = "/opt/homebrew/bin/python3"
+path = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# <home>/system is the applied checkout of main that the schedules run; runs get worktrees beside it.
+home = "~/auto_research-runs"
+logs = "~/Library/Logs/auto_research"
+launchd_prefix = "com.aray4702.auto-research"
+prompt = "You are the {role} of the development system in this repository. Read system/rules.md, then system/roles/{role}.md, and follow them. {task}"
+# Every run: settings only from --settings, nothing prompts (anything not allowed is denied), no MCP servers.
+flags = [
+  "--restricted", "--strict-mcp-config", "--permission-mode", "dontAsk", "--permission-prompts", "none",
+  "--no-session-persistence", "--output-format", "stream-json", "--verbose",
+]
+
+# Permission rules every role gets. A deny overrides an allow.
+[common]
+allow = [
+  "Read", "Glob", "Grep",
+  "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git fetch:*)",
+  "Bash(git switch:*)", "Bash(git checkout:*)", "Bash(git branch:*)", "Bash(git add:*)", "Bash(git commit:*)",
+  "Bash(git push:*)", "Bash(git merge:*)", "Bash(git rev-parse:*)", "Bash(git ls-files:*)", "Bash(git grep:*)",
+  "Bash(python3 -I system/tools/post.py:*)", "Bash(python3 -I system/gate/generic.py:*)",
+  "Bash(python3 -I -m unittest:*)",
+  "Bash(date:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)",
+  "Bash(sort:*)", "Bash(diff:*)",
+]
+deny = [
+  "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push --force-with-lease:*)",
+  "Bash(git push origin main:*)", "Bash(git push origin HEAD:main:*)", "Bash(git reset --hard:*)",
+  "Bash(gh pr merge:*)", "Bash(gh api:*)", "Bash(security:*)", "Bash(curl:*)", "WebFetch",
+]
+
+# Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
+[roles.architect]
+model = "claude-opus-5-5"
+effort = "high"
+tools = ["Read", "Glob", "Grep", "Bash", "Edit", "Write"]
+allow = ["Edit", "Write"]
+product_tools = false
+
+[roles.coordinator]
+model = "claude-opus-5-5"
+effort = "medium"
+tools = ["Read", "Glob", "Grep", "Bash"]
+allow = []
+product_tools = false
+
+[roles.developer]
+model = "claude-opus-5-5"
+effort = "high"
+tools = ["Read", "Glob", "Grep", "Bash", "Edit", "Write"]
+allow = ["Edit", "Write"]
+product_tools = true
+
+[roles.reviewer]
+model = "claude-opus-5-5"
+effort = "high"
+tools = ["Read", "Glob", "Grep", "Bash"]
+allow = []
+product_tools = true
+
+[roles.tester]
+model = "claude-opus-5-5"
+effort = "medium"
+tools = ["Read", "Glob", "Grep", "Bash"]
+allow = []
+product_tools = true
+
+[roles.builder]
+model = "claude-opus-5-5"
+effort = "high"
+tools = ["Read", "Glob", "Grep", "Bash", "Edit", "Write"]
+allow = [
+  "Edit", "Write",
+  "Bash(python3 -I system/tools/:*)", "Bash(python3 -I system/dispatcher/:*)",
+  "Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)", "Bash(gh run list:*)",
+  "Bash(gh run view:*)", "Bash(gh issue list:*)", "Bash(gh issue view:*)",
+  "Bash(launchctl print:*)",
+]
+product_tools = false
+
+# launchd jobs. All stay disabled until blueprint §8 step 7 turns on the automation.
+[schedules.dispatcher-poll]
+enabled = false
+interval_seconds = 120
+command = ["system/dispatcher/dispatch.py", "poll"]
+
+[schedules.dispatcher-reconcile]
+enabled = false
+minute = 5
+command = ["system/dispatcher/dispatch.py", "reconcile"]
+
+[schedules.dispatcher-daily]
+enabled = false
+hour = 7
+minute = 30
+command = ["system/dispatcher/dispatch.py", "daily"]
+
+[schedules.builder-daily]
+enabled = false
+hour = 8
+minute = 0
+command = ["system/dispatcher/run.py", "builder", "--task", "Daily run: follow the daily run in your role file."]
