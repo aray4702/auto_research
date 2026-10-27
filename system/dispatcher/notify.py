@@ -49,9 +49,10 @@ def latest_ask(comments, identity, marker):
     return ask, marker.match(ask["body"])[1], answered
 
 
-def owner_questions(item, comments, identity, notices, now, marker):
+def owner_questions(item, comments, identity, notices, now, marker, reply=False):
     """Notices for an item held at needs-decision:owner: its latest question, or a single reminder
-    a day later. Nothing once the Owner has answered after the question."""
+    a day later. Nothing once the Owner has answered after the question. With reply, the Owner may answer
+    by replying in the chat (relay.py)."""
     found = latest_ask(comments, identity, marker)
     if not found or found[2]:
         return []
@@ -61,7 +62,8 @@ def owner_questions(item, comments, identity, notices, now, marker):
     if key not in sent:
         question = marker.sub("", ask["body"], count=1).replace(ASK, "").strip()
         return [(key, f"**Decision needed on #{item['number']}: {item['title']}**\n{question[:1200]}\n"
-                      f"{ask['html_url']}\nAnswer in one line on the item.")]
+                      f"{ask['html_url']}\n"
+                      + ("Answer in one line: reply to this message, or on the item." if reply else "Answer in one line on the item."))]
     if f"remind:{ask['id']}" not in sent and now - datetime.fromisoformat(sent[key]["at"]) >= REMIND_AFTER:
         return [(f"remind:{ask['id']}", f"Reminder: #{item['number']} is still waiting for your decision. {ask['html_url']}")]
     return []

@@ -41,6 +41,7 @@ These are the names and formats the builder chose where the blueprint leaves the
 - **Labels and records:** the table in `system/rules.md` is canonical.
 - **Secrets,** recorded by location only:
   - Escalation webhook: macOS keychain, service `auto_research.escalation-webhook`, account `aray4702`.
+  - Discord bot token, for the answer relay: macOS keychain, service `auto_research.discord-bot`, account `aray4702`.
   - Reviewer App private key, base64-encoded: macOS keychain, service `auto_research.reviewer-app-key`, account `aray4702`.
 
 ## The gate

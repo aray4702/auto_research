@@ -24,6 +24,13 @@ token_permissions = { pull_requests = "write", contents = "read", checks = "read
 # The Owner's chat: a Discord webhook. Its URL is a secret, kept only in the keychain.
 keychain_service = "auto_research.escalation-webhook"
 keychain_account = "aray4702"
+# The Owner's answers from Discord (system/dispatcher/relay.py): a bot reads the escalation channel and
+# relays only this Discord user's answers. Its token is a secret, kept only in the keychain (same account).
+# The relay is off while any of these is empty. The IDs are Discord snowflakes, not secrets.
+discord_bot_keychain_service = "auto_research.discord-bot"
+discord_guild_id = ""
+discord_channel_id = ""
+owner_discord_user_id = ""
 
 # Branch protection on main as recorded (system/conventions.md). The Dispatcher's daily rule audit
 # compares the live settings with these; any difference is a rule breach (blueprint §4.5).
