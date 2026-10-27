@@ -1,0 +1,10 @@
+# Protected paths (blueprint §5): agents propose, the Owner merges. Branch protection
+# requires a code-owner review, which only the Owner's second account can give.
+/blueprint.md               @sloan3165
+/project_requirements.md    @sloan3165
+/spec/                      @sloan3165
+/design/architecture.md     @sloan3165
+/design/public-api.md       @sloan3165
+/system/                    @sloan3165
+/.github/                   @sloan3165
+/LICENSE                    @sloan3165
