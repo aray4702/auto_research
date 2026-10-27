@@ -118,7 +118,7 @@ A question goes to the lowest level that can decide it; a sev:1 may go straight 
 
 
 - **Standing rules** hand a kind of decision down with its conditions (e.g. the Coordinator may sign off a changed test bound if the overall measure improves and the bound stays within the spec), or let a kind of change merge on its own under conditions a script can check. The builder proposes them and the Owner grants them; none may raise a cap or change the standing rules, the checks that enforce them, or §5. They live in the standing-rules file.
-- **How:** hold the item and label the level; other work continues. To the Owner: one short question on the item, numbered options and a recommendation, answerable in one line. The Dispatcher forwards it to the Owner's chat with the link and the CLI command that answers it (the Owner isn't notified of posts from their own account). Batch related questions, withdraw moot ones, record each answer on the item. Silence is never consent: remind once, then keep holding.
+- **How:** hold the item and label the level; other work continues. To the Owner: one short question on the item, numbered options and a recommendation, answerable in one line. The Dispatcher forwards it to the Owner's chat with the link (the Owner isn't notified of posts from their own account). The Owner answers on the item, from the CLI, or by replying in the chat: the Dispatcher relays a chat answer to the item as the Owner's, only from the Owner's own chat account, only to an item held for them, with a link back to the message. Batch related questions, withdraw moot ones, record each answer on the item. Silence is never consent: remind once, then keep holding.
 
 
 
