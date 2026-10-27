@@ -28,6 +28,15 @@ class DecideTest(unittest.TestCase):
         self.assertEqual(relay.decide(msg(1, "#67: 2, but wait a day"), CFG, {67}), (67, "2, but wait a day"))
         self.assertEqual(relay.decide(msg(1, "#12 1", ref=NOTICE), CFG, {12, 67}), (12, "1"), "a leading #N wins")
 
+    def test_a_leading_mention_of_the_bot_is_skipped_and_of_a_person_is_not(self):
+        bot, person = {"id": "77", "bot": True}, {"id": "88"}
+        self.assertEqual(relay.decide({**msg(1, "<@77> #67 1"), "mentions": [bot]}, CFG, {67}), (67, "1"))
+        self.assertEqual(relay.decide({**msg(1, "<@!77> 1", ref=NOTICE), "mentions": [bot]}, CFG, {67}), (67, "1"))
+        item, said = relay.decide({**msg(1, "<@88> #67 1"), "mentions": [person]}, CFG, {67})
+        self.assertIsNone(item)
+        self.assertIn("start with its item number", said)
+        self.assertEqual(relay.decide({**msg(1, "<@77>"), "mentions": [bot]}, CFG, {67})[0], None, "a bare mention is no answer")
+
     def test_anyone_but_the_owner_and_the_systems_own_messages_get_no_reply(self):
         self.assertEqual(relay.decide(msg(1, "#67 1", author=STRANGER), CFG, {67}), (None, None))
         self.assertEqual(relay.decide(dict(NOTICE), CFG, {67}), (None, None))
