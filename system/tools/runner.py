@@ -2,7 +2,8 @@
 """The runner: how agent runs start on this Mac, as system/runner.toml defines it.
 
   runner.py check            exit 1 unless the installed launchd jobs and the applied checkout match main
-  runner.py apply            update the applied checkout to origin/main and install the launchd jobs
+  runner.py apply            update the applied checkout to origin/main, then install from it
+  runner.py install          (run by apply, from the applied checkout) link the CLI and install the launchd jobs
   runner.py settings ROLE    print the Claude Code settings a ROLE run gets
 
 The applied checkout (<home>/system) is a clone the schedules run from, never the Owner's checkout.
@@ -196,15 +197,28 @@ def commits(config):
     return applied, main
 
 
-def apply(config):
+def update_checkout(config):
     checkout, done = home(config) / "system", []
     if not (checkout / ".git").exists():
         checkout.parent.mkdir(parents=True, exist_ok=True)
         git("clone", "--quiet", f"https://github.com/{config['identity']['repo']}.git", str(checkout))
         done.append(f"cloned {config['identity']['repo']} into {checkout}")
-    git("fetch", "--quiet", "origin", cwd=checkout)
-    git("checkout", "--quiet", "--detach", "origin/main", cwd=checkout)
+    with locked(checkout):
+        git("fetch", "--quiet", "origin", cwd=checkout)
+        git("checkout", "--quiet", "--detach", "origin/main", cwd=checkout)
     done.append(f"applied checkout at {git('rev-parse', '--short', 'HEAD', cwd=checkout)}")
+    return done
+
+
+def install_command(config):
+    """Installing runs the applied checkout's own runner.py, so the jobs come from main's runner.toml
+    and code, not from what this process loaded before the update (#65)."""
+    python = config["runner"]["runner"]["python"]
+    return [python, "-I", str(home(config) / "system" / "system" / "tools" / "runner.py"), "install"]
+
+
+def install(config):
+    done = []
     Path(config["runner"]["runner"]["logs"]).expanduser().mkdir(parents=True, exist_ok=True)
     link, target = cli_link(config)
     link.parent.mkdir(parents=True, exist_ok=True)
@@ -228,7 +242,7 @@ def apply(config):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["check", "apply", "settings"])
+    parser.add_argument("command", choices=["check", "apply", "install", "settings"])
     parser.add_argument("role", nargs="?")
     args = parser.parse_args(argv)
     config = load_all()
@@ -238,7 +252,14 @@ def main(argv=None):
         print(json.dumps(role_settings(config, args.role), indent=2))
         return 0
     if args.command == "apply":
-        for line in apply(config):
+        for line in update_checkout(config):
+            print(line, flush=True)
+        cmd = install_command(config)
+        os.execv(cmd[0], cmd)
+    if args.command == "install":
+        if ROOT != (home(config) / "system").resolve():
+            parser.error("install runs from the applied checkout; use apply")
+        for line in install(config):
             print(line)
     fetch_main(config)
     applied, main_commit = commits(config)
