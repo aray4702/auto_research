@@ -75,6 +75,7 @@ class SnapshotParsingTest(unittest.TestCase):
                 ]}}
         p = github_state.pull_request(node, set(), IDENTITY, [])
         self.assertEqual([r["login"] for r in p["reviews"]], [BOT, SECOND])
+        self.assertEqual((p["author"], p["author_role"]), ("aray4702", "architect"))
         got = plan.candidates({"issues": [], "prs": [p], "work_order": []}, set(), IDENTITY)
         self.assertEqual([(c[0], c[1], c[3]) for c in got], [("architect", 23, "pr-work")])
 

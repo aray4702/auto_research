@@ -9,6 +9,8 @@ path = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # <home>/system is the applied checkout of main that the schedules run; runs get worktrees beside it.
 home = "~/auto_research-runs"
 logs = "~/Library/Logs/auto_research"
+# The Owner's CLI and dashboard, linked from the applied checkout onto the Owner's PATH.
+cli = "~/.local/bin/arsys"
 launchd_prefix = "com.aray4702.auto-research"
 # Runs must sign in with this Claude subscription; a run that would sign in any other way is refused.
 subscription = "max"
