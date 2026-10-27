@@ -1,0 +1,42 @@
+# Acceptance spec
+
+| Date (PT) | By | Change |
+| --- | --- | --- |
+| 2026-10-26 | architect, #20 | S1-3 and S1-4: the README's `sh` blocks run as one `sh -e` script against the commit under test, with the clone URL redirected to CI's checkout (Reviewer's finding on #23) |
+| 2026-10-26 | architect, #20 | First entry: S1's done-check. Rests on the Owner's answers on #20: 1a 2a 3a 4a |
+
+This file maps each requirement in `project_requirements.md` to the check that work is judged by, and turns each goal's measurable outcome into its **done-check**. Each check says where it runs. The Owner approves every change to it.
+
+The generic requirements (blueprint §1) are mapped by a later Definition item. Until then, the gate's generic checks (`system/conventions.md`, "The gate") are what guard them.
+
+## S1: seed goal, `README.md`
+
+**Goal:** `project_requirements.md` §2, S1. **Measurable outcome:** "`README.md` says what the product is, how to build it and how to run its checks."
+
+**Scope for the seed.** §1 (vision, mission) and §6–7 (platforms, toolchain) are still empty, so the README describes the product as it stands now: named, not yet defined, with no product code to build. When G1 fills those sections, Definition for G1 updates S1-2 and S1-3 here, and the README follows.
+
+### Done-check
+
+S1 is done when every criterion below holds on `main`.
+
+| ID | Criterion | How it's checked | Runs |
+| --- | --- | --- | --- |
+| S1-1 | `README.md` exists at the repository root, and its first line is a level-1 heading naming the product as the requirements file's title does: "voice-app example". | `head -n 1 README.md` prints `# voice-app example` (case-insensitive). | CI |
+| S1-2 | **What it is.** A `## What it is` section says, in at most three sentences: the product's name; that it is built by this repository's development system (links `blueprint.md`); and that its vision and requirements are still being defined, linking `project_requirements.md`. It claims no feature the requirements don't state. | The heading exists: `grep -c '^## What it is$' README.md` prints `1`. The wording is checked by reading it against `project_requirements.md` §1–2. | CI (heading); Reviewer, by reading (wording) |
+| S1-3 | **How to build.** A `## Build` section lists the prerequisites (git; Python 3, as on CI's `ubuntu-24.04`) and the commands to get a working copy, in one fenced `sh` block. The block starts with `git clone https://github.com/aray4702/auto_research.git` and then `cd auto_research`. While there is no product code, the section says so in one sentence. | The heading exists, as in S1-2. The block runs as described under "How the `sh` blocks run": in a new empty directory, with the clone URL redirected to CI's checkout. It passes when the script exits 0 and `git -C auto_research rev-parse HEAD` in that directory equals the commit under test. | CI |
+| S1-4 | **How to run the checks.** A `## Checks` section says that the gate (`.github/workflows/gate.yml`) is the one required check, and gives, in one fenced `sh` block, the command that runs its generic checks locally: `python3 -I system/gate/generic.py --base origin/main`. It says that the product's CI jobs live in `.github/workflows/product.yml`. | The heading exists, as in S1-2. `grep -F 'python3 -I system/gate/generic.py --base origin/main' README.md` matches. The block runs as described under "How the `sh` blocks run", from the root of CI's checkout, and exits 0. | CI |
+| S1-5 | Every relative link in `README.md` points to a file or directory that exists in the commit. | For each Markdown link target without a scheme (`http:`, `https:`, `mailto:`), `test -e <target>` from the repository root succeeds (an `#anchor` suffix stripped). | CI |
+
+**How the `sh` blocks run.** Each check runs the commit under test, never `main`, and needs no credentials or network.
+
+- **CI's checkout.** The `readme` job checks out the commit under test with `actions/checkout`, `fetch-depth: 0` (so `origin/main` exists) and `persist-credentials: false`, as the gate's `generic` job does.
+- **One script.** The whole block is extracted from `README.md` and run as one script with `sh -e`, so a `cd` carries over to the lines after it, and the first failing line fails the check.
+- **The clone line (S1-3).** The script runs in a new empty directory. Git is configured for that run only (`GIT_CONFIG_COUNT`, or `git config --global` in the job) with `url.<path of CI's checkout>.insteadOf https://github.com/aray4702/auto_research.git`. So the README's clone line, unchanged, clones CI's checkout, whose `HEAD` is the commit under test. The `HEAD` comparison in S1-3 confirms this. If it doesn't hold, the check fails rather than testing another commit.
+
+**Where CI runs it.** The item that writes `README.md` also adds a `readme` job to `.github/workflows/product.yml` that runs the CI checks of S1-1 to S1-5. The gate then fails any later change that breaks them, so the README stays true. The job's details are the Developer's, within this table.
+
+**Fresh evidence for closing S1:** a green `gate` run on `main` that includes the `readme` job, plus the Reviewer's reading for S1-2 on the PR that added the README.
+
+### Stages
+
+One stage, one phase, one Developer item: write `README.md` and add the `readme` job, in one PR. No architecture or public API is needed.
