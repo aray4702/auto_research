@@ -4,7 +4,7 @@
 | Version | Date       | By                                              | Change        |
 | ------- | ---------- | ----------------------------------------------- | ------------- |
 | 1.0     | 2026-10-26 | [aray4702@gmail.com](mailto:aray4702@gmail.com) | First version |
-| 1.1     | 2026-10-26 | builder, from the Owner's answers (17:43 PT)    | Project table completed (blueprint §8 step 1) |
+| 1.1     | 2026-10-26 | builder, from the Owner's answers (17:43 and 17:52 PT) | Project table completed (blueprint §8 step 1) |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -20,10 +20,10 @@ system turns each into a question with a recommended answer.
 | Owner's GitHub login | `aray4702` |
 | Repository (`owner/name`) | `aray4702/auto_research` |
 | Visibility and GitHub plan | public; GitHub Free (assumed: the plan isn't readable with the current token, and the Owner didn't object) |
-| Second GitHub account as code owner of protected paths (optional) | `sloan3165` ? (no GitHub account with this login was found on 2026-10-26). It must not be logged in where agents run |
+| Second GitHub account as code owner of protected paths (optional) | `sloan3165`. It must not be logged in where agents run |
 | Time zone for every time written for you | `America/Los_Angeles` (PT) |
 | Chat for escalations (required) | a Discord channel, through a webhook. The URL is a secret, kept in the macOS keychain on the Owner's Mac: service `auto_research.escalation-webhook`, account `aray4702` |
-| Claude plan, and where agents may run | Max, tier `25x` ? (the known tiers are 5x and 20x); local only, on the Owner's Mac |
+| Claude plan, and where agents may run | Max 20x; local only, on the Owner's Mac |
 | System limits: share of the Claude plan | 20 % of the weekly limit |
 | System limits: CI minutes and money per month | $0; GitHub-hosted standard runners only (free for public repos); 3,000 minutes, as an early-warning signal |
 | Decisions you hand down from the start (standing rules, optional) | none |
