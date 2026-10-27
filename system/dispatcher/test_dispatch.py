@@ -108,6 +108,14 @@ class CandidatesTest(unittest.TestCase):
         # The Coordinator resolves it and removes the label: nothing on the next pass.
         self.assertEqual(plan.candidates(snap([issue(21, "record:goal")]), set(), IDENTITY), [])
 
+    def test_an_owner_answer_starts_the_role_that_asked(self):
+        goal = issue(21, "record:goal", "needs-decision:owner")
+        got = plan.candidates(snap([goal]), set(), IDENTITY, answered={21: "coordinator"})
+        self.assertEqual([(r, i, w) for r, i, _, w in got], [("coordinator", 21, "answered")])
+        self.assertIn("remove needs-decision:owner", got[0][2])
+        claimed = issue(21, "record:goal", "needs-decision:owner", "state:claimed")
+        self.assertEqual(plan.candidates(snap([claimed]), set(), IDENTITY, answered={21: "coordinator"}), [])
+
     def test_claimed_running_and_records_are_never_offered(self):
         s = snap(issues=[issue(1, "type:fix", "sev:1", "state:claimed"), issue(2, "type:fix", "sev:1"), issue(13, "record:decision-log")])
         self.assertEqual(plan.candidates(s, {2}, IDENTITY), [])
@@ -227,6 +235,13 @@ class NotifyTest(unittest.TestCase):
         self.assertTrue(notify.owner_questions(item, outsider, IDENTITY, [], NOW, post.MARKER))
         answered = [comment(1, "aray4702", self.ASK, 0), comment(2, "aray4702", "1", 5)]
         self.assertEqual(notify.owner_questions(item, answered, IDENTITY, [], NOW, post.MARKER), [])
+
+    def test_latest_ask_names_the_asker_and_whether_the_owner_answered(self):
+        ask = comment(1, "aray4702", self.ASK, 0)
+        self.assertEqual(notify.latest_ask([ask], IDENTITY, post.MARKER)[1:], ("coordinator", False))
+        self.assertEqual(notify.latest_ask([ask, comment(2, "sloan3165", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", True))
+        self.assertEqual(notify.latest_ask([ask, comment(2, "stranger", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", False))
+        self.assertIsNone(notify.latest_ask([comment(3, "aray4702", "plain", 0)], IDENTITY, post.MARKER))
 
     def test_unsent_filters_by_key(self):
         self.assertEqual(notify.unsent([{"key": "a"}], [("a", "x"), ("b", "y")]), [("b", "y")])
