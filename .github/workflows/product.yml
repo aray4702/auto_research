@@ -1,0 +1,16 @@
+# The product's CI jobs, called by the gate. A product file: the first goal adds the
+# product's build, tests and harness here, on the platforms the requirements name.
+name: product
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  placeholder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo "No product jobs yet. The first goal adds the build, tests and harness."
