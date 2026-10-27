@@ -8,6 +8,7 @@ start. Merging is one PR at a time, by auto-merge (blueprint §4.4).
 from system.dispatcher import usage
 
 CLAIMED = "state:claimed"
+UP_TO_DATE = ("CLEAN", "BLOCKED", "HAS_HOOKS", "UNSTABLE")
 TYPE_ROLE = {
     "type:fix": "developer", "type:feature": "developer", "type:investigation": "developer",
     "type:definition": "architect", "type:release": "coordinator",
@@ -140,8 +141,9 @@ def merge_plan(snap, identity):
         app, owner = latest_review(pr, bot), latest_review(pr, second)
         if app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
             actions.append(("renew", pr["number"], app["commit"]))
-        if pr["protected"] and pr["merge_state"] != "BEHIND":
-            # Never ask the Owner to approve a PR that's behind main: its refresh would dismiss the approval.
+        if pr["protected"] and pr["merge_state"] in UP_TO_DATE:
+            # Ask the Owner only about a PR GitHub reports as up to date: one behind main would be refreshed,
+            # and GitHub reports UNKNOWN for a moment after main moves.
             if owner and owner["state"] == "APPROVED" and owner["commit"] != pr["head"]:
                 actions.append(("ask-owner-to-reapprove", pr["number"], pr["head"]))
             elif app and app["state"] == "APPROVED" and app["commit"] == pr["head"] and not owner:
