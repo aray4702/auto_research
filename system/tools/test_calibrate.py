@@ -32,6 +32,20 @@ class CostTest(unittest.TestCase):
                  "cache_read_input_tokens": 1_000_000, "output_tokens": 1_000_000}
         self.assertAlmostEqual(calibrate.message_cost(usage, PRICES["claude-opus-5-5"]), 4 + 8 + 0.2 + 20)
 
+    def test_without_a_breakdown_cache_writes_are_priced_at_the_cheaper_rate(self):
+        # Unknown split: 5-minute rate (1.25x input), so the check can't overstate cost and call the caps safe.
+        self.assertAlmostEqual(calibrate.message_cost({"cache_creation_input_tokens": 1_000_000}, PRICES["claude-opus-5-5"]), 5.0)
+
+    def test_session_content_is_never_kept(self):
+        line = json.dumps({"type": "assistant", "timestamp": "2026-10-27T07:00:00Z", "cwd": "/secret/path",
+                           "message": {"model": "claude-opus-5-5", "role": "assistant",
+                                       "content": [{"type": "text", "text": "the Owner's private words"}],
+                                       "usage": {"output_tokens": 10, "server_tool_use": {"web_search_requests": 1}}}})
+        entry = calibrate.usage_entry(line)
+        self.assertEqual(entry, {"type": "assistant", "timestamp": "2026-10-27T07:00:00Z",
+                                 "message": {"model": "claude-opus-5-5", "usage": {"output_tokens": 10}}})
+        self.assertNotIn("private", json.dumps(entry))
+
     def test_only_the_window_counts_and_unknown_models_are_named(self):
         start, end = NOW - timedelta(days=5), NOW
         lines = [msg("claude-opus-5-5", NOW - timedelta(hours=1), output_tokens=1_000_000),

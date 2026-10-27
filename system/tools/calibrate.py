@@ -24,13 +24,27 @@ from system.dispatcher import state, usage  # noqa: E402
 from system.tools import runner  # noqa: E402
 
 PROJECTS = Path("~/.claude/projects").expanduser()
+# The only fields calibration keeps from a session log; everything else (content included) is dropped
+# as each line is parsed, never stored or used (the Owner's decision 2 on #3: usage numbers only).
+KEEP = {"type", "timestamp", "message", "model", "usage", "input_tokens", "output_tokens", "cache_read_input_tokens",
+        "cache_creation_input_tokens", "cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens"}
+
+
+def usage_entry(line):
+    """A session-log line reduced to the usage fields, or None."""
+    try:
+        return json.loads(line, object_pairs_hook=lambda pairs: {k: v for k, v in pairs if k in KEEP})
+    except json.JSONDecodeError:
+        return None
 
 
 def message_cost(usage_fields, price):
     """API-equivalent USD of one assistant message's usage."""
-    cache = usage_fields.get("cache_creation") or {}
-    write_5m = cache.get("ephemeral_5m_input_tokens", 0)
-    write_1h = cache.get("ephemeral_1h_input_tokens", usage_fields.get("cache_creation_input_tokens", 0) if not cache else 0)
+    cache = usage_fields.get("cache_creation")
+    if cache:
+        write_5m, write_1h = cache.get("ephemeral_5m_input_tokens", 0), cache.get("ephemeral_1h_input_tokens", 0)
+    else:  # no breakdown: price at the cheaper 5-minute rate, so the check errs toward "the caps undercount"
+        write_5m, write_1h = usage_fields.get("cache_creation_input_tokens", 0), 0
     tokens = (
         usage_fields.get("input_tokens", 0) * price["input"]
         + write_5m * 1.25 * price["input"]
@@ -47,9 +61,8 @@ def local_cost(lines, prices, start, end):
     for line in lines:
         if '"usage"' not in line:
             continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
+        entry = usage_entry(line)
+        if not isinstance(entry, dict):
             continue
         message = entry.get("message") or {}
         if entry.get("type") != "assistant" or not message.get("usage") or not entry.get("timestamp"):
