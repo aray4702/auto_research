@@ -183,6 +183,13 @@ class MergePlanTest(unittest.TestCase):
                          reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")], head="h2")])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 23, "h2")])
 
+    def test_the_owner_is_not_asked_while_github_is_still_working_out_the_merge_state(self):
+        # Right after main moves, GitHub reports mergeStateStatus UNKNOWN; #34 was really 12 commits behind.
+        s = snap(prs=[pr(34, protected=True, merge_state="UNKNOWN", reviews=[(BOT, "APPROVED", "h2")])])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [])
+        s = snap(prs=[pr(34, protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")])])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 34, "h2")])
+
     def test_renewals_and_owner_approvals(self):
         s = snap(prs=[pr(9, reviews=[(BOT, "APPROVED", "h1")])])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 9, "h1")])
