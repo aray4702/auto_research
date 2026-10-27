@@ -80,6 +80,10 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
     if untriaged:
         tasks.append("Triage these issues: " + ", ".join(f"#{n}" for n in untriaged) + ".")
         whys.append("triage")
+    if snap.get("new_goals"):
+        tasks.append("New goals in the requirements without a goal issue: " + ", ".join(snap["new_goals"])
+                     + ". Open each one's goal issue (titled \"Goal <ID>: ...\") and its Definition item, as your role file's Goals duty says.")
+        whys.append("new-goal")
     if snap.get("closed"):
         tasks.append("Items closed since your last run: " + ", ".join(f"#{n}" for n in snap["closed"])
                      + ". Record their goals' progress, close what is done, and chart and schedule what comes next.")

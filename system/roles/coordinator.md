@@ -5,7 +5,7 @@ You turn goals into ordered, atomic work and keep the records that steer it.
 ## Duties
 
 - **Triage.** Give each new issue one `type:` label and a `sev:` label, set `state:ready` or close it as explained, and link duplicates.
-- **Goals.** Each goal in the requirements gets a goal issue (`record:goal`) holding its stages (as milestones), phases and progress. It links to its done-check in `spec/acceptance.md` and to its items. Open a `type:definition` item for the Architect first.
+- **Goals.** Each goal in the requirements gets a goal issue (`record:goal`, titled `Goal <ID>: <short name>`) holding its stages (as milestones), phases and progress. It links to its done-check in `spec/acceptance.md` and to its items. Open a `type:definition` item for the Architect first.
 - **Plans.** Chart the plan inside the goal's deadline. Put first what the product needs before anything else: harness scenarios and benchmarks wired to the public interface, CI platforms and toolchain.
   - **Stages** each leave the product stable and verifiable.
   - **Phases** are small enough to plan in detail.

@@ -1,5 +1,6 @@
 """Tests for the Dispatcher: its snapshot parsing, its plan, its notices and one dry-run pass."""
 
+import base64
 import tomllib
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -116,6 +117,23 @@ class CandidatesTest(unittest.TestCase):
         self.assertIn("remove needs-decision:owner", got[0][2])
         claimed = issue(21, "record:goal", "needs-decision:owner", "state:claimed")
         self.assertEqual(plan.candidates(snap([claimed]), set(), IDENTITY, answered={21: "coordinator"}), [])
+
+    def test_a_new_goal_in_the_requirements_starts_the_coordinator(self):
+        text = ("## 2. Goals\n\n| ID  | Goal | Outcome | Deadline |\n| --- | --- | --- | --- |\n"
+                "| G0  | the starting point (§0) | its done-check |  |\n| ~~S1~~ | ~~seed~~ | ~~x~~ | none |\n"
+                "| G1  | Transcribe calls | WER < 10 % | 2026-12-01 |\n| G2  |  |  |  |\n\n## 3. Use cases\n| U1 | x |\n")
+        self.assertEqual(github_state.requirement_goals(text), ["G1"])
+        s = snap()
+        s["new_goals"] = ["G1"]
+        got = plan.candidates(s, set(), IDENTITY)
+        self.assertEqual([(r, i, w) for r, i, _, w in got], [("coordinator", None, "new-goal")])
+        self.assertIn("New goals in the requirements without a goal issue: G1.", got[0][2])
+
+    def test_the_snapshot_offers_only_goals_on_main_without_a_goal_issue(self):
+        gh = FakeGitHub()
+        gh.requirements += "| G1 | Transcribe calls | WER < 10 % | 2026-12-01 |\n"
+        self.assertEqual(github_state.snapshot(gh, IDENTITY)["new_goals"], ["G1"])
+        self.assertEqual(github_state.snapshot(FakeGitHub(), IDENTITY)["new_goals"], [])
 
     def test_claimed_running_and_records_are_never_offered(self):
         s = snap(issues=[issue(1, "type:fix", "sev:1", "state:claimed"), issue(2, "type:fix", "sev:1"), issue(13, "record:decision-log")])
@@ -250,6 +268,7 @@ class NotifyTest(unittest.TestCase):
 
 class FakeGitHub:
     repo = "aray4702/auto_research"
+    requirements = "## 2. Goals\n\n| ID | Goal | Outcome | Deadline |\n| --- | --- | --- | --- |\n| S1 | seed | x | none |\n"
 
     def __init__(self, repo=None):
         self.writes = []
@@ -259,6 +278,10 @@ class FakeGitHub:
             self.writes.append((method, path))
         if path.endswith("actions/variables/AGENTS_PAUSED"):
             raise SystemExit("failed: Not Found (HTTP 404)")
+        if path == f"repos/{self.repo}/contents/project_requirements.md?ref=main":
+            return {"encoding": "base64", "content": base64.b64encode(self.requirements.encode()).decode()}
+        if "labels=record%3Agoal" in path:
+            return [{"number": 21, "title": "Goal S1: seed goal (README)", "labels": [{"name": "record:goal"}]}]
         if path.startswith(f"repos/{self.repo}/issues?state=closed"):
             assert "since=" in path, path
             return [{"number": 20, "title": "Def", "labels": [{"name": "type:definition"}], "closed_at": "2026-10-27T02:30:00Z"},
