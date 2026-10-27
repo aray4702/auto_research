@@ -34,12 +34,23 @@ def summarize(lines):
             "cost_usd": round(result.get("total_cost_usd") or 0, 6),
             "turns": result.get("num_turns"),
             "denials": len(result.get("permission_denials") or []),
+            # What was denied, as the tool and the command's first two words (#44): enough to spot a
+            # recurring permission gap, nothing more of the command.
+            "denied": sorted({denial_signature(d) for d in result.get("permission_denials") or []}),
         }
     if reading:
         out["five_hour"] = reading.get("five_hour", {}).get("utilization")
         out["seven_day"] = reading.get("seven_day", {}).get("utilization")
         out["seven_day_resets_at"] = reading.get("seven_day", {}).get("resetsAt")
     return out
+
+
+def denial_signature(denial):
+    tool = denial.get("tool_name", "?")
+    command = (denial.get("tool_input") or {}).get("command")
+    if tool == "Bash" and command:
+        return "Bash: " + " ".join(command.split()[:2])
+    return tool
 
 
 def parse_time(iso):
