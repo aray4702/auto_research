@@ -70,7 +70,7 @@ def spawn(config, role, item, task, logs):
 def relay_answers(gh, store, identity, dry_run, now):
     try:
         return relay.run(gh, store, identity, dry_run, now)
-    except Exception as e:  # the chat must never stop a pass; the error names no secret
+    except (Exception, SystemExit) as e:  # the chat must never stop a pass (GitHub errors are SystemExit); no secret named
         return [f"relay failed: {type(e).__name__}: {e}"]
 
 
@@ -83,13 +83,11 @@ def dispatch_pass(command, dry_run, now=None):
     lines = []
     say = lambda text: lines.append(("would " if dry_run else "") + text)
 
-    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
-    # The Owner's Discord answers are relayed even while paused: they're the Owner's own words, and
-    # resuming after a rule breach waits on one.
-    lines += relay_answers(gh, store, identity, dry_run, now)
     thrown, why = killswitch.paused(gh)
-    if thrown:
-        return lines + [f"paused: {why}"]
+    if thrown:  # the relay too: nothing posts as the Owner while paused; answers wait at the relay's cursor
+        return [f"paused: {why}"]
+    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    lines += relay_answers(gh, store, identity, dry_run, now)
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.
