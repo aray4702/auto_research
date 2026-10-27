@@ -23,6 +23,10 @@ from system.dispatcher import github_state, killswitch, notify, plan, state, usa
 from system.tools import post, runner  # noqa: E402
 
 
+def article(word):
+    return "an" if word[0] in "aeiou" else "a"
+
+
 def alive(pid):
     try:
         os.kill(pid, 0)
@@ -119,11 +123,11 @@ def dispatch_pass(command, dry_run, now=None):
     starts, skipped = plan.choose(snap, runs, caps, identity, now, skip_review=renewed)
     logs = Path(config["runner"]["runner"]["logs"]).expanduser() / "runs"
     for role, item, task, why in starts:
-        say(f"start a {role} run" + (f" on #{item}" if item else "") + f" ({why}): {task}")
+        say(f"start {article(role)} {role} run" + (f" on #{item}" if item else "") + f" ({why}): {task}")
         if not dry_run:
             spawn(config, role, item, task, logs)
     for role, item, why, reasons in skipped:
-        lines.append(f"held: a {role} run" + (f" on #{item}" if item else "") + f" ({why}): {reasons}")
+        lines.append(f"held: {article(role)} {role} run" + (f" on #{item}" if item else "") + f" ({why}): {reasons}")
     ok, reasons, warnings = usage.may_start(caps, runs, "coordinator", now, identity["time_zone"])
     window = usage.window_start(runs, now).date().isoformat()
     for w in warnings:

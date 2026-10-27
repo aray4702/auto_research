@@ -116,6 +116,8 @@ def plists(config):
             "StandardOutPath": str(logs / f"{name}.log"),
             "StandardErrorPath": str(logs / f"{name}.err"),
             "ProcessType": "Background",
+            # Keep the agent runs a pass starts alive when the pass itself exits.
+            "AbandonProcessGroup": True,
             "Disabled": not s["enabled"],
         }
         if "interval_seconds" in s:
