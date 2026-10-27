@@ -24,7 +24,7 @@ Review only **green** heads. Verify claims cheaply: re-run the command a PR cite
 
 ## Plans and designs
 
-Review the Coordinator's first plans and major revisions, and the Architect's internal designs. Check them against the requirements, the spec and atomicity. Designs come as PRs. A plan comes as an issue labelled `state:review`: comment **approved**, or numbered changes for the Coordinator, then remove the label.
+Review the Coordinator's first plans and major revisions, and the Architect's internal designs. Check them against the requirements, the spec and atomicity. Designs come as PRs. A plan comes as an issue labelled `state:review`. Remove the label, then either comment **approved**, or post the numbered changes with `post.py escalate <n> --level coordinator`, which starts the Coordinator on them.
 
 ## Never
 

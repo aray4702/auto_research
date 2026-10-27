@@ -13,6 +13,8 @@ it is still held. With --claim, the item is claimed first, as the Dispatcher doe
 """
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import signal
@@ -79,13 +81,26 @@ def execute(cmd, cwd, env, log_path, timeout_s, on_start=lambda pid: None):
             return "timeout"
 
 
+@contextlib.contextmanager
+def locked(checkout):
+    """Serialize git operations on the shared checkout: two launchers fetching at once collide on refs."""
+    with open(checkout.parent / f"{checkout.name}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
 def worktree(checkout, path):
-    subprocess.run(["git", "fetch", "--quiet", "origin"], cwd=checkout, check=True)
-    subprocess.run(["git", "worktree", "add", "--quiet", "--detach", str(path), "origin/main"], cwd=checkout, check=True)
+    with locked(checkout):
+        subprocess.run(["git", "fetch", "--quiet", "origin", "main"], cwd=checkout, check=True)
+        subprocess.run(["git", "worktree", "add", "--quiet", "--detach", str(path), "origin/main"], cwd=checkout, check=True)
 
 
 def remove_worktree(checkout, path):
-    subprocess.run(["git", "worktree", "remove", "--force", str(path)], cwd=checkout, capture_output=True)
+    with locked(checkout):
+        subprocess.run(["git", "worktree", "remove", "--force", str(path)], cwd=checkout, capture_output=True)
 
 
 def main(argv=None):
@@ -132,6 +147,21 @@ def main(argv=None):
     if args.claim and args.item:
         minutes = caps["roles"][args.role]["timeout_minutes"] + caps["wip"]["claim_expiry_after_timeout_minutes"]
         print(post.cmd_claim(gh, identity, dispatcher, args.item, minutes))
+    ended = {"recorded": False}
+    try:
+        return launch(args, config, gh, store, p, run_id, cmd, dispatcher, ended)
+    except BaseException as e:
+        # A launcher that fails must not strand its claim or leave a run that looks active.
+        if not ended["recorded"]:
+            store.append("runs", {"run_id": run_id, "role": args.role, "item": args.item, "event": "end",
+                                  "at": now_utc().isoformat(), "status": f"failed: launcher: {type(e).__name__}"})
+        if args.claim and args.item:
+            post.cmd_release(gh, dispatcher, args.item)
+        raise
+
+
+def launch(args, config, gh, store, p, run_id, cmd, dispatcher, ended):
+    caps = config["caps"]
     p["settings"].parent.mkdir(parents=True, exist_ok=True)
     p["settings"].write_text(json.dumps(runner.role_settings(config, args.role), indent=2))
     worktree(p["checkout"], p["worktree"])
@@ -139,11 +169,12 @@ def main(argv=None):
     try:
         timeout_s = caps["roles"][args.role]["timeout_minutes"] * 60
         on_start = lambda pid: store.append("runs", {**base, "event": "start", "at": now_utc().isoformat(), "pid": pid, "task": args.task})
-        ended = execute(cmd, p["worktree"], environment(config, args.role, run_id), p["log"], timeout_s, on_start)
+        outcome = execute(cmd, p["worktree"], environment(config, args.role, run_id), p["log"], timeout_s, on_start)
         summary = usage.summarize(p["log"].read_text(errors="replace").splitlines())
-        if ended == "timeout":
+        if outcome == "timeout":
             summary["status"] = "timeout"
         store.append("runs", {**base, "event": "end", "at": now_utc().isoformat(), **summary})
+        ended["recorded"] = True
     finally:
         remove_worktree(p["checkout"], p["worktree"])
         p["settings"].unlink(missing_ok=True)

@@ -56,7 +56,9 @@ def candidates(snap, active_items, identity, skip_review=()):
         reviewed_head = review is not None and review["commit"] == pr["head"]
         if pr["gate"] == "SUCCESS" and not reviewed_head and pr["number"] not in skip_review and free(pr["number"], pr["labels"]):
             out.append(("reviewer", pr["number"], f"Review PR #{pr['number']}.", "review"))
-    for i in issues:
+    # Decisions are dispatched on records too: a plan review's changes reach the Coordinator as
+    # needs-decision:coordinator on the goal issue (a record:goal). Triage and the work order skip records.
+    for i in snap["issues"]:
         for label, role in DECISION_ROLE.items():
             if label in i["labels"] and free(i["number"], i["labels"]):
                 out.append((role, i["number"], f"Item #{i['number']} needs your decision ({label}).", "decision"))
