@@ -49,7 +49,8 @@ class DecideTest(unittest.TestCase):
         self.assertIsNotNone(CFG)
         for key in relay.SETTINGS:
             self.assertIsNone(relay.settings({"escalation": {**IDENTITY["escalation"], key: ""}}), key)
-        self.assertIsNone(relay.settings(post.load_identity()), "the repo's identity ships with the relay off")
+        self.assertEqual(relay.settings(post.load_identity())["owner_discord_user_id"], "1334397293616562197",
+                         "the relay is on, for the Owner's Discord user (#71)")
 
     def test_the_post_is_unmarked_and_links_back(self):
         text = relay.body("1", CFG, "42")
