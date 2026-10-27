@@ -6,7 +6,7 @@ query($owner: String!, $name: String!) {
         author { login }
         autoMergeRequest { enabledAt }
         files(first: 100) { nodes { path } }
-        reviews(last: 30) { nodes { author { login } state submittedAt commit { oid } } }
+        reviews(last: 30) { nodes { author { login __typename } state submittedAt commit { oid } } }
         commits(last: 1) { nodes { commit { checkSuites(first: 20) { nodes { app { databaseId } checkRuns(first: 10, filterBy: {checkName: "gate"}) { nodes { name status conclusion } } } } } } }
       }
     }

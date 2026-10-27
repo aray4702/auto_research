@@ -55,10 +55,26 @@ class SnapshotParsingTest(unittest.TestCase):
         def node(*suites):
             return {"commits": {"nodes": [{"commit": {"checkSuites": {"nodes": list(suites)}}}]}}
         suite = lambda app, status, conclusion: {"app": {"databaseId": app}, "checkRuns": {"nodes": [{"status": status, "conclusion": conclusion}]}}
-        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "SUCCESS"))), "SUCCESS")
-        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "CANCELLED"))), "FAILURE")
-        self.assertIsNone(github_state.gate_of(node(suite(15368, "IN_PROGRESS", None))))
-        self.assertIsNone(github_state.gate_of(node(suite(999, "COMPLETED", "SUCCESS"))))
+        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "SUCCESS")), 15368), "SUCCESS")
+        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "CANCELLED")), 15368), "FAILURE")
+        self.assertIsNone(github_state.gate_of(node(suite(15368, "IN_PROGRESS", None)), 15368))
+        self.assertIsNone(github_state.gate_of(node(suite(999, "COMPLETED", "SUCCESS")), 15368))
+
+    def test_app_reviews_are_matched_by_the_bot_login_identity_uses(self):
+        # GraphQL reports the App's review author as login "aray4702-reviewer-app", __typename "Bot";
+        # REST and identity.toml say "aray4702-reviewer-app[bot]". Missing this made every App review invisible.
+        node = {"number": 23, "title": "t", "body": "<!-- role:architect run:a -->\nx", "isDraft": False,
+                "headRefOid": "h", "headRefName": "b", "mergeStateStatus": "BLOCKED", "reviewDecision": "CHANGES_REQUESTED",
+                "author": {"login": "aray4702"}, "autoMergeRequest": None, "files": {"nodes": []},
+                "commits": {"nodes": []},
+                "reviews": {"nodes": [
+                    {"author": {"login": "aray4702-reviewer-app", "__typename": "Bot"}, "state": "CHANGES_REQUESTED", "commit": {"oid": "h"}},
+                    {"author": {"login": "sloan3165", "__typename": "User"}, "state": "APPROVED", "commit": {"oid": "h"}},
+                ]}}
+        p = github_state.pull_request(node, set(), IDENTITY, [])
+        self.assertEqual([r["login"] for r in p["reviews"]], [BOT, SECOND])
+        got = plan.candidates({"issues": [], "prs": [p], "work_order": []}, set(), IDENTITY)
+        self.assertEqual([(c[0], c[1], c[3]) for c in got], [("architect", 23, "pr-work")])
 
 
 class CandidatesTest(unittest.TestCase):
