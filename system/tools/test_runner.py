@@ -45,6 +45,9 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("Bash(security:*)", settings["permissions"]["deny"])
         self.assertFalse(settings["autoMemoryEnabled"])
         self.assertIn("Edit", runner.role_settings(CONFIG, "developer")["permissions"]["allow"])
+        for role in ("architect", "developer", "builder"):
+            self.assertIn("Bash(mkdir -p:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+        self.assertNotIn("Bash(mkdir -p:*)", settings["permissions"]["allow"])
 
     def test_product_tools_reach_only_the_roles_that_take_them(self):
         config = with_toolchain(["Bash(make test:*)"])
@@ -106,6 +109,7 @@ class LaunchdTest(unittest.TestCase):
             "builder-daily", "dispatcher-daily", "dispatcher-poll", "dispatcher-reconcile",
         ])
         self.assertTrue(all(job["Disabled"] for job in jobs.values()))
+        self.assertTrue(all(job["AbandonProcessGroup"] for job in jobs.values()))
         poll = jobs["com.aray4702.auto-research.dispatcher-poll"]
         self.assertEqual(poll["StartInterval"], 120)
         self.assertEqual(poll["ProgramArguments"][:2], [CONFIG["runner"]["runner"]["python"], "-I"])

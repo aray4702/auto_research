@@ -21,8 +21,9 @@ def issue(n, *labels, title="t"):
 
 
 def pr(n, role="developer", gate="SUCCESS", head="h2", merge_state="BLOCKED", decision="REVIEW_REQUIRED",
-       reviews=(), labels=(), protected=False, auto_merge=False, draft=False):
+       reviews=(), labels=(), protected=False, auto_merge=False, draft=False, resolves=()):
     return {"number": n, "title": "p", "draft": draft, "head": head, "branch": "b", "merge_state": merge_state,
+            "resolves": list(resolves),
             "review_decision": decision, "auto_merge": auto_merge, "author_role": role, "labels": set(labels),
             "files": [], "protected": protected, "gate": gate,
             "reviews": [{"login": login, "state": s, "commit": c, "at": None} for login, s, c in reviews]}
@@ -55,10 +56,26 @@ class SnapshotParsingTest(unittest.TestCase):
         def node(*suites):
             return {"commits": {"nodes": [{"commit": {"checkSuites": {"nodes": list(suites)}}}]}}
         suite = lambda app, status, conclusion: {"app": {"databaseId": app}, "checkRuns": {"nodes": [{"status": status, "conclusion": conclusion}]}}
-        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "SUCCESS"))), "SUCCESS")
-        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "CANCELLED"))), "FAILURE")
-        self.assertIsNone(github_state.gate_of(node(suite(15368, "IN_PROGRESS", None))))
-        self.assertIsNone(github_state.gate_of(node(suite(999, "COMPLETED", "SUCCESS"))))
+        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "SUCCESS")), 15368), "SUCCESS")
+        self.assertEqual(github_state.gate_of(node(suite(15368, "COMPLETED", "CANCELLED")), 15368), "FAILURE")
+        self.assertIsNone(github_state.gate_of(node(suite(15368, "IN_PROGRESS", None)), 15368))
+        self.assertIsNone(github_state.gate_of(node(suite(999, "COMPLETED", "SUCCESS")), 15368))
+
+    def test_app_reviews_are_matched_by_the_bot_login_identity_uses(self):
+        # GraphQL reports the App's review author as login "aray4702-reviewer-app", __typename "Bot";
+        # REST and identity.toml say "aray4702-reviewer-app[bot]". Missing this made every App review invisible.
+        node = {"number": 23, "title": "t", "body": "<!-- role:architect run:a -->\nx", "isDraft": False,
+                "headRefOid": "h", "headRefName": "b", "mergeStateStatus": "BLOCKED", "reviewDecision": "CHANGES_REQUESTED",
+                "author": {"login": "aray4702"}, "autoMergeRequest": None, "files": {"nodes": []},
+                "commits": {"nodes": []},
+                "reviews": {"nodes": [
+                    {"author": {"login": "aray4702-reviewer-app", "__typename": "Bot"}, "state": "CHANGES_REQUESTED", "commit": {"oid": "h"}},
+                    {"author": {"login": "sloan3165", "__typename": "User"}, "state": "APPROVED", "commit": {"oid": "h"}},
+                ]}}
+        p = github_state.pull_request(node, set(), IDENTITY, [])
+        self.assertEqual([r["login"] for r in p["reviews"]], [BOT, SECOND])
+        got = plan.candidates({"issues": [], "prs": [p], "work_order": []}, set(), IDENTITY)
+        self.assertEqual([(c[0], c[1], c[3]) for c in got], [("architect", 23, "pr-work")])
 
 
 class CandidatesTest(unittest.TestCase):
@@ -94,6 +111,18 @@ class CandidatesTest(unittest.TestCase):
         s = snap(prs=[pr(5, role=None, gate="FAILURE"), pr(6, draft=True, gate="FAILURE")])
         self.assertEqual(plan.candidates(s, set(), IDENTITY), [])
 
+    def test_an_item_whose_pr_is_open_is_in_review_not_dispatched_again(self):
+        items = [issue(20, "type:definition", "state:ready"), issue(30, "type:fix", "state:ready")]
+        prs = [pr(23, role="architect", resolves=[20], reviews=[(BOT, "APPROVED", "h2")])]
+        got = plan.candidates(snap(items, prs, order=[(20, True), (30, False)]), set(), IDENTITY)
+        self.assertEqual(got, [], "#20 is in review, and while it is, only parallel-safe items may start")
+        got = plan.candidates(snap(items, prs, order=[(20, True), (30, True)]), set(), IDENTITY)
+        self.assertEqual([c[1] for c in got], [30])
+
+    def test_resolves_is_read_from_the_pr_body(self):
+        node_body = "<!-- role:architect run:a -->\nResolves #20. Also fixes #7; closes #7."
+        self.assertEqual(sorted({int(n) for n in github_state.RESOLVES.findall(node_body)}), [7, 20])
+
     def test_only_parallel_safe_items_start_while_one_is_busy(self):
         items = [issue(4, "type:fix", "state:ready", "state:claimed"), issue(5, "type:fix", "state:ready"),
                  issue(6, "type:fix", "state:ready")]
@@ -122,6 +151,21 @@ class MergePlanTest(unittest.TestCase):
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 9, "h2")])
         s = snap(prs=[pr(7, merge_state="CLEAN", decision="APPROVED", auto_merge=True), pr(9, merge_state="CLEAN", decision="APPROVED")])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [])
+
+    def test_a_protected_pr_is_refreshed_before_the_owner_is_asked_once(self):
+        # Behind main and waiting only on the Owner: refresh first, ask nothing yet.
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BEHIND", reviews=[(BOT, "APPROVED", "h1")], head="h1")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("refresh", 23, "behind main")])
+        # Refreshed: the App's approval is on the old head, so renew it, and still don't ask the Owner.
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h1")], head="h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 23, "h1")])
+        # Renewed on the new head and up to date: now ask the Owner, once.
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")], head="h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 23, "h2")])
+        # The Owner approved: ask them to merge (protected PRs are theirs to merge).
+        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="CLEAN", decision="APPROVED",
+                         reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")], head="h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 23, "h2")])
 
     def test_renewals_and_owner_approvals(self):
         s = snap(prs=[pr(9, reviews=[(BOT, "APPROVED", "h1")])])
@@ -196,6 +240,11 @@ class FakeStore:
 
     def append(self, kind, record):
         self.appended.append((kind, record))
+
+
+class WordingTest(unittest.TestCase):
+    def test_articles(self):
+        self.assertEqual([dispatch.article(r) for r in ("architect", "developer", "reviewer")], ["an", "a", "a"])
 
 
 class DryRunTest(unittest.TestCase):

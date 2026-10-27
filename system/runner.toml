@@ -42,7 +42,7 @@ deny = [
 model = "claude-opus-5-5"
 effort = "high"
 tools = ["Read", "Glob", "Grep", "Bash", "Edit", "Write"]
-allow = ["Edit", "Write"]
+allow = ["Bash(mkdir -p:*)", "Edit", "Write"]
 product_tools = false
 
 [roles.coordinator]
@@ -56,7 +56,7 @@ product_tools = false
 model = "claude-opus-5-5"
 effort = "high"
 tools = ["Read", "Glob", "Grep", "Bash", "Edit", "Write"]
-allow = ["Edit", "Write"]
+allow = ["Bash(mkdir -p:*)", "Edit", "Write"]
 product_tools = true
 
 [roles.reviewer]
@@ -78,6 +78,7 @@ model = "claude-opus-5-5"
 effort = "high"
 tools = ["Read", "Glob", "Grep", "Bash", "Edit", "Write"]
 allow = [
+  "Bash(mkdir -p:*)",
   "Edit", "Write",
   "Bash(python3 -I system/tools/:*)", "Bash(python3 -I system/dispatcher/:*)",
   "Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)", "Bash(gh run list:*)",

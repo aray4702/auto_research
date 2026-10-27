@@ -18,7 +18,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 
 ## Posting
 
-- **Every write to GitHub goes through `python3 -I system/tools/post.py`.** It adds your role marker, `<!-- role:<role> run:<run-id> -->`. Never post with `gh` or the API directly.
+- **Every write to GitHub goes through `python3 -I system/tools/post.py`.** Pass a long body on stdin with a heredoc straight into the tool, `python3 -I system/tools/post.py comment <n> --body-file - <<'EOF'`, rather than in a file (a `cat … |` pipe is denied). It adds your role marker, `<!-- role:<role> run:<run-id> -->`. Never post with `gh` or the API directly.
 - **Living records** are issue bodies edited in place. Each one has a single writer role, which adds a dated note at the top of what it changed.
 - **Times:** read the clock (`date`); never guess it. Write every time in the Owner's time zone, America/Los_Angeles (PT).
 
