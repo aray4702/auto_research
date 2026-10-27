@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import daily, flow, github_state, killswitch, notify, plan, state, usage  # noqa: E402
+from system.dispatcher import daily, flow, github_state, killswitch, notify, plan, relay, state, usage  # noqa: E402
 from system.tools import post, runner  # noqa: E402
 
 
@@ -67,6 +67,13 @@ def spawn(config, role, item, task, logs):
         subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
 
+def relay_answers(gh, store, identity, dry_run, now):
+    try:
+        return relay.run(gh, store, identity, dry_run, now)
+    except Exception as e:  # the chat must never stop a pass; the error names no secret
+        return [f"relay failed: {type(e).__name__}: {e}"]
+
+
 def dispatch_pass(command, dry_run, now=None):
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
     config = runner.load_all()
@@ -76,10 +83,13 @@ def dispatch_pass(command, dry_run, now=None):
     lines = []
     say = lambda text: lines.append(("would " if dry_run else "") + text)
 
+    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    # The Owner's Discord answers are relayed even while paused: they're the Owner's own words, and
+    # resuming after a rule breach waits on one.
+    lines += relay_answers(gh, store, identity, dry_run, now)
     thrown, why = killswitch.paused(gh)
     if thrown:
-        return [f"paused: {why}"]
-    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+        return lines + [f"paused: {why}"]
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.
@@ -126,7 +136,8 @@ def dispatch_pass(command, dry_run, now=None):
     for item in snap["issues"] + [{"number": p["number"], "title": p["title"], "labels": p["labels"]} for p in snap["prs"]]:
         if "needs-decision:owner" in item["labels"]:
             comments = gh.api("GET", f"repos/{gh.repo}/issues/{item['number']}/comments?per_page=100", paginate=True)
-            wanted += notify.owner_questions(item, comments, identity, notices, now, post.MARKER)
+            wanted += notify.owner_questions(item, comments, identity, notices, now, post.MARKER,
+                                             reply=bool(relay.settings(identity)))
             found = notify.latest_ask(comments, identity, post.MARKER)
             if found and found[2] and found[1] in config["runner"]["roles"]:
                 answered[item["number"]] = found[1]
