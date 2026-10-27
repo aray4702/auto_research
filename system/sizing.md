@@ -94,9 +94,9 @@ The numbers are in [caps.toml](caps.toml).
 - **Work in progress:** at most 3 open agent PRs and 2 items in progress, and review rounds per PR are capped. A claim expires 15 minutes after its run's timeout.
 - **CI:** $0. 3,000 minutes/month is the signal, with a warning at 2,400.
 
-## Decisions for the Owner
+## Owner decisions
 
-The Owner approves this sizing by merging its PR. These two choices go beyond the Project table:
+The Owner approves this sizing by merging its PR. The Owner decided two choices that go beyond the Project table, answering "1 yes 2 yes" in the local session on 2026-10-26 at 18:36 PT:
 
-1. **Owner headroom limits:** hold new starts at 50 % of the 5-hour window, and pause at 90 % of the 7-day window. **Recommended: yes.**
-2. **Calibration reads usage numbers from all local Claude Code transcripts,** in every project. **Recommended: yes.** The alternative counts only the system's own runs and keeps the conservative factor, which may pause the system far below its real share.
+1. **Owner headroom limits:** yes. New starts are held at 50 % of the 5-hour window, and the system pauses at 90 % of the 7-day window.
+2. **Calibration from all local Claude Code transcripts:** yes. It reads usage numbers only, from every project.
