@@ -4,7 +4,8 @@ supervised runs. Standard library only.
 
   run.py ROLE --task TEXT [--item N] [--claim] [--dry-run]
 
-Before it starts: the kill switch, then the caps (concurrency, runs per day, the weekly points and
+Before it starts: the kill switch, that Claude Code signs in with the subscription (never an API
+login that could spend money), then the caps (concurrency, runs per day, the weekly points and
 the Owner's headroom). The run gets a fresh worktree of origin/main under <home>/runs/, its role's
 settings and caps, and a wall-clock timeout; its stream is logged under <logs>/runs/. Afterwards its
 outcome and usage are appended to the dispatcher/state branch, and its item's claim is released if
@@ -108,6 +109,10 @@ def main(argv=None):
     if thrown:
         print(f"not started: {why}")
         return 3
+    refused = runner.login_problem(config, runner.claude_login(config))
+    if refused:
+        print(f"not started: {refused}")
+        return 5
     store = state.Store(p["state"], f"https://github.com/{identity['repo']}.git")
     ok, reasons, warnings = usage.may_start(caps, store.read("runs"), args.role, at, identity["time_zone"])
     for w in warnings:
