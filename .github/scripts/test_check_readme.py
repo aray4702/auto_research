@@ -142,6 +142,14 @@ class ReadmeTest(unittest.TestCase):
         out = self.assertFails(readme, "S1-3")
         self.assertIn("not the commit under test", out)
 
+    def test_build_clones_a_detached_checkout(self):
+        # CI checks out a PR's merge commit with a detached HEAD.
+        self.commit(GOOD)
+        self.commit(GOOD + "\nLater.\n")
+        self.git("checkout", "-q", "--detach", "HEAD~1")
+        code, out = self.run_checks()
+        self.assertEqual(code, 0, out)
+
     def test_two_build_blocks_fail(self):
         readme = GOOD.replace("## Checks", "```sh\ntrue\n```\n\n## Checks")
         self.assertFails(readme, "S1-3")
