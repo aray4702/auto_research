@@ -5,6 +5,7 @@ Every write carries the caller's role marker, <!-- role:<role> run:<run-id> -->.
 comes from AGENT_ROLE and the run ID from AGENT_RUN_ID, both set by whoever starts the run.
 
   post.py read <n>
+  post.py list [--state open|closed|all] [--kind issue|pr|all] [--label L]...
   post.py comment <n> BODY
   post.py issue-create --title T [--label L]... BODY
   post.py edit-body <n> BODY
@@ -141,6 +142,21 @@ def cmd_read(gh, identity, n):
         lines += ["", f"--- {kind} by {who}, {local_time(at, identity) if at else 'unknown time'} ---"]
         lines.append(MARKER.sub("", p.get("body") or "", count=1).rstrip() or "(empty)")
     return "\n".join(lines)
+
+
+def cmd_list(gh, identity, state="open", kind="all", labels=()):
+    """One line per issue or PR, newest first. Labels are matched here: GitHub's label filter lags."""
+    items = gh.api("GET", f"repos/{gh.repo}/issues?state={state}&per_page=100", paginate=True)
+    lines = [BANNER, ""]
+    for i in items:
+        is_pr = "pull_request" in i
+        names = [label["name"] for label in i["labels"]]
+        if (kind == "issue" and is_pr) or (kind == "pr" and not is_pr) or not set(labels) <= set(names):
+            continue
+        who = author(i["user"]["login"], i.get("body"), identity)
+        lines.append(f"#{i['number']} {'PR' if is_pr else 'issue'} [{i['state']}] {i['title']} "
+                     f"(by {who}; labels: {', '.join(names) or 'none'})")
+    return "\n".join(lines if len(lines) > 2 else lines + ["(none)"])
 
 
 # --- writing ---------------------------------------------------------------------------
@@ -333,6 +349,10 @@ def parser():
         return c
 
     command("read")
+    c = command("list", number=False)
+    c.add_argument("--state", choices=["open", "closed", "all"], default="open")
+    c.add_argument("--kind", choices=["issue", "pr", "all"], default="all")
+    c.add_argument("--label", action="append", default=[])
     command("comment", body=True)
     c = command("issue-create", number=False, body=True)
     c.add_argument("--title", required=True)
@@ -361,6 +381,9 @@ def main(argv=None):
     gh = GitHub(identity["repo"])
     if args.command == "read":
         print(cmd_read(gh, identity, args.n))
+        return 0
+    if args.command == "list":
+        print(cmd_list(gh, identity, args.state, args.kind, args.label))
         return 0
     caller = caller_from_env(identity)
     c = args.command
