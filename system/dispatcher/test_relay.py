@@ -9,7 +9,7 @@ from system.tools import post
 
 NOW = datetime(2026, 10, 28, 1, 0, tzinfo=timezone.utc)
 OWNER, STRANGER = "111", "999"
-IDENTITY = {"repo": "aray4702/auto_research", "escalation": {
+IDENTITY = {"repo": "aray4702/auto_research", "owner_login": "aray4702", "escalation": {
     "keychain_account": "aray4702", "keychain_service": "auto_research.escalation-webhook",
     "discord_bot_keychain_service": "auto_research_relay.discord-bot", "discord_guild_id": "5",
     "discord_channel_id": "6", "owner_discord_user_id": OWNER}}
@@ -127,11 +127,23 @@ class RunTest(unittest.TestCase):
 
     def test_an_answer_already_on_its_item_is_recorded_not_posted_again(self):
         # A pass that posted and then died before recording (#77, finding 2).
-        posted = {"html_url": "c/old", "body": relay.body("1", CFG, "101")}
+        posted = {"html_url": "c/old", "user": {"login": "aray4702"}, "body": relay.body("1", CFG, "101")}
         lines, store, gh, fetch, replies = self.run_relay([{"message_id": "100"}], [msg(101, "1", ref=NOTICE)], comments=[posted])
         self.assertEqual([c.args[0] for c in gh.api.call_args_list], ["GET", "GET"], "no POST")
         self.assertEqual(store.append.call_args.args[1]["comment"], "c/old")
         self.assertIn("c/old", replies.call_args.args[3])
+
+    def test_only_the_relays_own_post_counts_as_posted(self):
+        # The Reviewer's finding on #78: a comment by anyone else quoting the link must not stop a real answer.
+        own = relay.body("1", CFG, "101")
+        for near_miss in [{"user": {"login": "stranger"}, "body": own},
+                          {"user": {"login": "aray4702"}, "body": "<!-- role:coordinator run:c -->\n" + own},
+                          {"user": {"login": "aray4702"}, "body": "see " + relay.link(CFG, "101") + " above"},
+                          {"user": {"login": "aray4702"}, "body": relay.body("1", CFG, "1010")}]:
+            lines, store, gh, fetch, replies = self.run_relay([{"message_id": "100"}], [msg(101, "1", ref=NOTICE)],
+                                                              comments=[dict(near_miss, html_url="c/other")])
+            self.assertEqual([c.args[0] for c in gh.api.call_args_list], ["GET", "GET", "POST"], near_miss)
+            self.assertEqual(store.append.call_args.args[1]["comment"], "c/67")
 
     def test_a_failing_relay_never_stops_the_pass(self):
         for error in (OSError("network down"), SystemExit("gh api GET x failed: HTTP 502")):  # GitHub errors are SystemExit (#77)
