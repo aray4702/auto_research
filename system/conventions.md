@@ -17,7 +17,7 @@ These are the names and formats the builder chose where the blueprint leaves the
 ## Identities
 
 - **`aray4702`** (the Owner's account) carries every agent post and push. Each non-Owner post starts with the role marker `<!-- role:<role> -->`, where `<role>` is one of `builder`, `dispatcher`, `architect`, `coordinator`, `developer`, `reviewer` or `tester`.
-- **The Reviewer GitHub App** (owned by `aray4702` and installed on this repo only) gives the Reviewer's approvals. GitHub ignores approvals from a PR's author, which is `aray4702`.
+- **The Reviewer GitHub App** gives the Reviewer's approvals, because GitHub ignores approvals from a PR's author, which is `aray4702`. It is `aray4702-reviewer-app`, App ID 5320656, owned by `aray4702` and installed on this repo only. Its approval satisfies the review requirement on unprotected paths only.
 - **`sloan3165`** is the Owner's alone, and no agent ever uses it. It gives the code-owner approval that a protected PR needs.
 
 ## Names
@@ -39,3 +39,17 @@ The generic checks are in `system/gate/generic.py`, standard library only:
 - the system's own tests pass.
 
 There is no baseline yet. Until the harness first measures, the gate's pass/fail checks alone guard `main` (blueprint §1).
+
+## Branch protection on `main`
+
+These are the settings as applied on 2026-10-26. The Dispatcher's daily audit (step 4) compares the live settings with this list and treats any difference as a rule breach.
+
+- **Merging:** only by pull request, with 1 approval. Stale approvals are dismissed, and code-owner review is required.
+- **Required check:** `gate`, accepted only from GitHub Actions (app ID 15368), so a commit status posted by anyone else can't satisfy it. The branch must be up to date with `main`.
+- **Administrators are included.** Agents act as the admin `aray4702`, so an admin bypass would be their bypass too.
+- **No force pushes and no deletions.**
+- **Repo settings:** auto-merge is allowed, and head branches are deleted after merge.
+
+**Emergency bypass, for the Owner only:** turn off administrator enforcement under Settings → Branches → `main`, merge, then turn it back on. Record the merge and its reason on its item.
+
+**Until the Reviewer runs (step 5),** the Owner merges the builder's PRs by approving them from `sloan3165`.
