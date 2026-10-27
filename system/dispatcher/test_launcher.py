@@ -10,6 +10,7 @@ import tomllib
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 from system.dispatcher import killswitch, run, state, usage
 
@@ -157,6 +158,44 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(set(env), {"PATH", "HOME", "USER", "AGENT_ROLE", "AGENT_RUN_ID", "GH_PROMPT_DISABLED", "GIT_TERMINAL_PROMPT"})
         self.assertNotIn("LOGNAME", env)
         self.assertEqual((env["AGENT_ROLE"], env["AGENT_RUN_ID"]), ("reviewer", "reviewer-1"))
+
+    def test_the_shared_checkout_lock_serializes_launchers(self):
+        import threading
+        with tempfile.TemporaryDirectory() as d:
+            checkout, spans = Path(d, "system"), []
+            checkout.mkdir()
+
+            def hold():
+                with run.locked(checkout):
+                    began = time.monotonic()
+                    time.sleep(0.2)
+                    spans.append((began, time.monotonic()))
+            threads = [threading.Thread(target=hold) for _ in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+            (a0, a1), (b0, b1) = sorted(spans)
+            self.assertGreaterEqual(b0, a1 - 0.01, "the two holders overlapped")
+
+    def test_a_launcher_that_fails_after_claiming_releases_and_records_it(self):
+        store = mock.Mock()
+        store.read.return_value = []
+        with mock.patch.object(run.killswitch, "paused", return_value=(False, "")), \
+             mock.patch.object(run.runner, "claude_login", return_value=("claude.ai", "max")), \
+             mock.patch.object(run.state, "Store", return_value=store), \
+             mock.patch.object(run.post, "GitHub"), \
+             mock.patch.object(run.post, "cmd_claim", return_value="claimed") as claim, \
+             mock.patch.object(run.post, "cmd_release") as release, \
+             mock.patch.object(run, "worktree", side_effect=subprocess.CalledProcessError(1, "git fetch")), \
+             mock.patch("builtins.print"):
+            with self.assertRaises(subprocess.CalledProcessError):
+                run.main(["reviewer", "--task", "Review PR #32.", "--item", "32", "--claim"])
+        claim.assert_called_once()
+        release.assert_called_once()
+        self.assertEqual(release.call_args.args[2], 32)
+        kind, record = store.append.call_args.args
+        self.assertEqual((kind, record["event"], record["status"]), ("runs", "end", "failed: launcher: CalledProcessError"))
 
     def test_ids_and_task(self):
         self.assertEqual(run.new_run_id("reviewer", NOW), "reviewer-20261027T030000Z")
