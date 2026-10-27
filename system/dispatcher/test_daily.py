@@ -109,7 +109,7 @@ class DailyPassTest(unittest.TestCase):
         from unittest import mock
         from system.dispatcher import dispatch
         store = mock.Mock()
-        store.read.side_effect = lambda kind: list(runs) if kind == "runs" else [{"key": k} for k in raised]
+        store.read.side_effect = lambda kind: {"runs": list(runs), "anomalies": [{"key": k} for k in raised]}.get(kind, [])
         gh = mock.Mock(repo="aray4702/auto_research")
         gh.api.side_effect = lambda method, path, body=None, paginate=False: (
             live_protection if path.endswith("/protection") else [] if paginate else {})

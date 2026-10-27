@@ -84,7 +84,7 @@ allow = [
   "Edit", "Write",
   # A :* rule matches whole words only, so each script is named. The Dispatcher only as a dry run.
   "Bash(python3 -I system/tools/runner.py:*)", "Bash(python3 -I system/tools/tracker.py:*)",
-  "Bash(python3 -I system/tools/calibrate.py:*)",
+  "Bash(python3 -I system/tools/calibrate.py:*)", "Bash(python3 -I system/dispatcher/flow.py:*)",
   "Bash(python3 -I system/dispatcher/dispatch.py poll --dry-run:*)",
   "Bash(python3 -I system/dispatcher/dispatch.py reconcile --dry-run:*)",
   "Bash(gh pr view:*)", "Bash(gh pr list:*)", "Bash(gh pr checks:*)", "Bash(gh run list:*)",
