@@ -98,6 +98,11 @@ def login_problem(config, login):
 # --- launchd ----------------------------------------------------------------------------------
 
 
+def cli_link(config):
+    """(where the Owner's CLI is linked, what it links to in the applied checkout)."""
+    return Path(config["runner"]["runner"]["cli"]).expanduser(), home(config) / "system" / "system" / "cli" / "arsys.py"
+
+
 def label(config, name):
     return f"{config['runner']['runner']['launchd_prefix']}.{name}"
 
@@ -137,7 +142,7 @@ def git(*args, cwd=None):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def problems(config, agents_dir=LAUNCH_AGENTS, is_loaded=loaded, applied_commit=None, main_commit=None, login=None):
+def problems(config, agents_dir=LAUNCH_AGENTS, is_loaded=loaded, applied_commit=None, main_commit=None, login=None, cli=None):
     out = []
     if login is not None and login_problem(config, login):
         out.append(login_problem(config, login))
@@ -151,6 +156,10 @@ def problems(config, agents_dir=LAUNCH_AGENTS, is_loaded=loaded, applied_commit=
         enabled = not plistlib.loads(data)["Disabled"]
         if is_loaded(job_label) != enabled:
             out.append(f"{job_label} is {'not ' if enabled else ''}loaded, but runner.toml has it {'enabled' if enabled else 'disabled'}")
+    if cli is not None:
+        link, target = cli
+        if not (link.is_symlink() and Path(os.readlink(link)) == target):
+            out.append(f"{link} doesn't link to {target}")
     prefix = config["runner"]["runner"]["launchd_prefix"] + "."
     for path in sorted(agents_dir.glob(prefix + "*.plist")):
         if path.stem not in wanted:
@@ -178,6 +187,12 @@ def apply(config):
     git("checkout", "--quiet", "--detach", "origin/main", cwd=checkout)
     done.append(f"applied checkout at {git('rev-parse', '--short', 'HEAD', cwd=checkout)}")
     Path(config["runner"]["runner"]["logs"]).expanduser().mkdir(parents=True, exist_ok=True)
+    link, target = cli_link(config)
+    link.parent.mkdir(parents=True, exist_ok=True)
+    if link.is_symlink() or link.exists():
+        link.unlink()
+    link.symlink_to(target)
+    done.append(f"linked {link} -> {target}")
     LAUNCH_AGENTS.mkdir(parents=True, exist_ok=True)
     for job_label, data in plists(config).items():
         path = LAUNCH_AGENTS / f"{job_label}.plist"
@@ -208,7 +223,7 @@ def main(argv=None):
             print(line)
     git("fetch", "--quiet", "origin", cwd=ROOT)
     applied, main_commit = commits(config)
-    found = problems(config, applied_commit=applied, main_commit=main_commit, login=claude_login(config))
+    found = problems(config, applied_commit=applied, main_commit=main_commit, login=claude_login(config), cli=cli_link(config))
     print("FAIL runner" if found else "PASS runner: runs sign in with the subscription; installed jobs and the applied checkout match main")
     for p in found:
         print(f"  - {p}")

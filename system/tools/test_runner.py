@@ -118,6 +118,20 @@ class LoginTest(unittest.TestCase):
             self.assertIn("not the max subscription", bad[0])
 
 
+class CliLinkTest(unittest.TestCase):
+    def test_check_reports_a_missing_or_wrong_cli_link(self):
+        with tempfile.TemporaryDirectory() as d:
+            agents, link, target = Path(d, "agents"), Path(d, "bin", "arsys"), Path(d, "system", "arsys.py")
+            agents.mkdir()
+            for job_label, data in runner.plists(CONFIG).items():
+                (agents / f"{job_label}.plist").write_bytes(data)
+            off = lambda job_label: False
+            self.assertEqual(runner.problems(CONFIG, agents, off, "a", "a", cli=(link, target)), [f"{link} doesn't link to {target}"])
+            link.parent.mkdir()
+            link.symlink_to(target)
+            self.assertEqual(runner.problems(CONFIG, agents, off, "a", "a", cli=(link, target)), [])
+
+
 class LaunchdTest(unittest.TestCase):
     def test_jobs_render_deterministically_and_disabled(self):
         first, second = runner.plists(CONFIG), runner.plists(CONFIG)
