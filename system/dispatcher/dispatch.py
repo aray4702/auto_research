@@ -121,8 +121,18 @@ def dispatch_pass(command, dry_run, now=None):
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 
+    # Questions for the Owner: forwarded once and reminded once; once answered, the asker is started.
+    answered = {}
+    for item in snap["issues"] + [{"number": p["number"], "title": p["title"], "labels": p["labels"]} for p in snap["prs"]]:
+        if "needs-decision:owner" in item["labels"]:
+            comments = gh.api("GET", f"repos/{gh.repo}/issues/{item['number']}/comments?per_page=100", paginate=True)
+            wanted += notify.owner_questions(item, comments, identity, notices, now, post.MARKER)
+            found = notify.latest_ask(comments, identity, post.MARKER)
+            if found and found[2] and found[1] in config["runner"]["roles"]:
+                answered[item["number"]] = found[1]
+
     # New runs, in dispatch order, within the caps.
-    starts, skipped = plan.choose(snap, runs, caps, identity, now, skip_review=renewed)
+    starts, skipped = plan.choose(snap, runs, caps, identity, now, skip_review=renewed, answered=answered)
     logs = Path(config["runner"]["runner"]["logs"]).expanduser() / "runs"
     for role, item, task, why in starts:
         say(f"start {article(role)} {role} run" + (f" on #{item}" if item else "") + f" ({why}): {task}")
@@ -137,11 +147,6 @@ def dispatch_pass(command, dry_run, now=None):
     if any("weekly points" in r for r in reasons):
         wanted.append((f"usage-cap:{window}", f"The system has reached its weekly cap and is paused: {reasons[0]}."))
 
-    # Questions for the Owner, forwarded once, reminded once.
-    for item in snap["issues"] + [{"number": p["number"], "title": p["title"], "labels": p["labels"]} for p in snap["prs"]]:
-        if "needs-decision:owner" in item["labels"]:
-            comments = gh.api("GET", f"repos/{gh.repo}/issues/{item['number']}/comments?per_page=100", paginate=True)
-            wanted += notify.owner_questions(item, comments, identity, notices, now, post.MARKER)
 
     if command == "reconcile":
         claimed = [i["number"] for i in snap["issues"] if plan.CLAIMED in i["labels"]]
