@@ -89,7 +89,7 @@ class SummarizeTest(unittest.TestCase):
         result = {"type": "result", "subtype": "success", "is_error": False, "total_cost_usd": 1.2345678,
                   "num_turns": 9, "permission_denials": [{"tool_name": "Bash"}]}
         out = usage.summarize(self.lines({"type": "system"}, self.READING, result))
-        self.assertEqual(out, {"status": "finished", "cost_usd": 1.234568, "turns": 9, "denials": 1,
+        self.assertEqual(out, {"status": "finished", "cost_usd": 1.234568, "turns": 9, "denials": 1, "denied": ["Bash"],
                                "five_hour": 0.05, "seven_day": 0.04, "seven_day_resets_at": 1793289600})
 
     def test_caps_errors_and_cut_offs(self):
