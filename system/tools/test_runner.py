@@ -170,6 +170,18 @@ class LaunchdTest(unittest.TestCase):
             found = runner.problems(CONFIG, agents, not_loaded, "abc", "def")
             self.assertTrue(any("is not loaded, but runner.toml has it enabled" in p for p in found), found)
 
+    def test_check_finds_a_disabled_job_still_loaded(self):
+        config = copy.deepcopy(CONFIG)
+        config["runner"]["schedules"]["builder-daily"]["enabled"] = False
+        with tempfile.TemporaryDirectory() as d:
+            agents = Path(d)
+            for job_label, data in runner.plists(config).items():
+                (agents / f"{job_label}.plist").write_bytes(data)
+            loaded = lambda job_label: True
+            self.assertEqual(runner.problems(config, agents, loaded, "abc", "abc"), [
+                "com.aray4702.auto-research.builder-daily is loaded, but runner.toml has it disabled",
+            ])
+
 
 if __name__ == "__main__":
     unittest.main()
