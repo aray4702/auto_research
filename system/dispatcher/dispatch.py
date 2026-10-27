@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import daily, github_state, killswitch, notify, plan, state, usage  # noqa: E402
+from system.dispatcher import daily, flow, github_state, killswitch, notify, plan, state, usage  # noqa: E402
 from system.tools import post, runner  # noqa: E402
 
 
@@ -182,11 +182,20 @@ def daily_pass(dry_run, now=None):
     history = [r for r in runs if datetime.fromisoformat(r["at"]) < week]
     snap = github_state.snapshot(gh, identity)
 
-    closed_at = []
+    closed_at, finished = [], []
     since = (now - timedelta(days=8)).isoformat().replace("+00:00", "Z")
     for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&since={since}&per_page=100", paginate=True):
         if "pull_request" not in i and i.get("closed_at") and not any(x["name"].startswith("record:") for x in i["labels"]):
             closed_at.append(datetime.fromisoformat(i["closed_at"].replace("Z", "+00:00")))
+            if i.get("state_reason") == "completed":
+                finished.append(i)
+    flows = store.read("flow")
+    have = {r["item"] for r in flows}
+    new = [flow.fetch(gh, i, runs, identity["reviewer_app"]["bot_login"], identity["second_login"])
+           for i in finished if i["number"] not in have]
+    if new and not dry_run:
+        store.extend("flow", new)
+    flows += new
     waits = [0.0]
     for item in snap["issues"] + [{"number": p["number"], "labels": p["labels"]} for p in snap["prs"]]:
         if "needs-decision:owner" in item["labels"]:
@@ -200,8 +209,8 @@ def daily_pass(dry_run, now=None):
     open_items = {i["number"] for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])}
     found = (daily.denials(runs, now) + daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
-             + daily.cost_per_item(runs, now, closed_at)
-             + daily.watch_list(watch["body"] if watch else "", daily.metrics(runs, now, max(waits))))
+             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now)
+             + daily.watch_list(watch["body"] if watch else "", {**daily.metrics(runs, now, max(waits)), **flow.metrics(flows, now)}))
     live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
     found += daily.protection_breaches(live, identity["branch_protection"])
     applied, main_commit = runner.commits(config)

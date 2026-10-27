@@ -71,16 +71,20 @@ class Store:
             return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
     def append(self, kind, record, attempts=3):
-        with self.locked():
-            self._append(kind, record, attempts)
+        self.extend(kind, [record], attempts)
 
-    def _append(self, kind, record, attempts):
+    def extend(self, kind, records, attempts=3):
+        """Several records in one commit."""
+        with self.locked():
+            self._append(kind, records, attempts)
+
+    def _append(self, kind, records, attempts):
         for attempt in range(attempts):
             self.sync(create=True)
             with open(self.path / f"{kind}.jsonl", "a") as f:
-                f.write(json.dumps(record, sort_keys=True) + "\n")
+                f.writelines(json.dumps(r, sort_keys=True) + "\n" for r in records)
             self.git("add", f"{kind}.jsonl")
-            summary = " ".join(str(record.get(k, "")) for k in ("event", "run_id")).strip()
+            summary = " ".join(str(records[0].get(k, "")) for k in ("event", "run_id")).strip() if len(records) == 1 else f"{len(records)} records"
             self.git("commit", "--quiet", "-m", f"{kind}: {summary or 'record'}")
             if self.git("push", "--quiet", "origin", BRANCH, check=False).returncode == 0:
                 return
