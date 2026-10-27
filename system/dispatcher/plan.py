@@ -34,9 +34,11 @@ def candidates(snap, active_items, identity, skip_review=()):
     issues = [i for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])]
     by_number = {i["number"]: i for i in issues}
     agent_prs = [pr for pr in snap["prs"] if pr["author_role"] and not pr["draft"]]
+    # An item whose work is in an open PR is in review: the PR is dispatched, not the item again.
+    in_review = {n for pr in snap["prs"] for n in pr.get("resolves", [])}
     out = []
     for i in issues:
-        if "sev:1" in i["labels"] and free(i["number"], i["labels"]) and not held(i["labels"]):
+        if "sev:1" in i["labels"] and free(i["number"], i["labels"]) and not held(i["labels"]) and i["number"] not in in_review:
             out.append(("developer", i["number"], f"Item #{i['number']} is sev:1: revert first (blueprint §3), then fix the cause.", "sev:1"))
     for pr in agent_prs:
         why = []
@@ -64,10 +66,11 @@ def candidates(snap, active_items, identity, skip_review=()):
     ]
     if untriaged:
         out.append(("coordinator", None, "Triage these issues: " + ", ".join(f"#{n}" for n in untriaged) + ".", "triage"))
-    busy = any(n in active_items or CLAIMED in by_number.get(n, {}).get("labels", set()) for n, _ in snap["work_order"])
+    busy = any(n in active_items or n in in_review or CLAIMED in by_number.get(n, {}).get("labels", set())
+               for n, _ in snap["work_order"])
     for n, parallel_safe in snap["work_order"]:
         issue = by_number.get(n)
-        if not issue or "state:ready" not in issue["labels"] or held(issue["labels"]) or n in active_items:
+        if not issue or "state:ready" not in issue["labels"] or held(issue["labels"]) or n in active_items or n in in_review:
             continue
         if busy and not parallel_safe:
             continue
