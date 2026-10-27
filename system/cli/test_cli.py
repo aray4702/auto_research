@@ -134,6 +134,14 @@ class ViewsTest(unittest.TestCase):
 
 class DashboardServerTest(unittest.TestCase):
     def test_serves_the_page_and_favicon_on_localhost_and_refuses_writes(self):
+        self.check_server()
+
+    def test_the_first_page_is_full_on_a_machine_booted_seconds_ago(self):
+        # time.monotonic() counts from boot on Linux, so a fresh CI runner reads it below 30 s
+        with mock.patch.object(arsys.time, "monotonic", return_value=5.0):
+            self.check_server()
+
+    def check_server(self):
         started = threading.Event()
         servers = []
         real = arsys.http.server.ThreadingHTTPServer

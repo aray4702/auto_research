@@ -111,14 +111,14 @@ def propose_requirements_change(config, edit, title, branch, body):
 
 
 def serve(config, port):
-    cache = {"at": 0.0, "page": ""}
+    cache = {"at": None, "page": ""}  # None, not 0.0: monotonic time starts near zero on a freshly booted machine
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/favicon.svg":
                 body, kind = views.ICON_SVG.encode(), "image/svg+xml"
             elif self.path in ("/", "/index.html"):
-                if time.monotonic() - cache["at"] > 30:  # reading never slows the agents: at most one refresh per 30 s
+                if cache["at"] is None or time.monotonic() - cache["at"] > 30:  # reading never slows the agents: at most one refresh per 30 s
                     cache["page"], cache["at"] = views.html_page(data.collect(config)), time.monotonic()
                 body, kind = cache["page"].encode(), "text/html; charset=utf-8"
             else:
