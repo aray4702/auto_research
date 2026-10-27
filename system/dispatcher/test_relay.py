@@ -11,7 +11,7 @@ NOW = datetime(2026, 10, 28, 1, 0, tzinfo=timezone.utc)
 OWNER, STRANGER = "111", "999"
 IDENTITY = {"repo": "aray4702/auto_research", "escalation": {
     "keychain_account": "aray4702", "keychain_service": "auto_research.escalation-webhook",
-    "discord_bot_keychain_service": "auto_research.discord-bot", "discord_guild_id": "5",
+    "discord_bot_keychain_service": "auto_research_relay.discord-bot", "discord_guild_id": "5",
     "discord_channel_id": "6", "owner_discord_user_id": OWNER}}
 CFG = relay.settings(IDENTITY)
 NOTICE = {"id": "100", "webhook_id": "w", "author": {"id": "w", "bot": True},
