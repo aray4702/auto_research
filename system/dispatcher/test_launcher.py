@@ -94,6 +94,15 @@ class StateStoreTest(unittest.TestCase):
         log = subprocess.run(["git", "log", "--oneline", state.BRANCH], cwd=self.remote, capture_output=True, text=True).stdout
         self.assertEqual(len(log.splitlines()), 4)  # the start commit plus three appends: nothing rewritten
 
+    def test_extend_writes_several_records_in_one_commit(self):
+        a = self.store("a")
+        a.append("flow", {"item": 1})
+        a.extend("flow", [{"item": 2}, {"item": 3}])
+        self.assertEqual([r["item"] for r in self.store("b").read("flow")], [1, 2, 3])
+        log = subprocess.run(["git", "log", "--oneline", state.BRANCH], cwd=self.remote, capture_output=True, text=True).stdout
+        self.assertEqual(len(log.splitlines()), 3)
+        self.assertIn("flow: 2 records", log)
+
 
 class SummarizeTest(unittest.TestCase):
     READING = {"type": "rate_limit_event", "rate_limit_info": {"unifiedWindows": {
