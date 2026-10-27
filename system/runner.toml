@@ -10,6 +10,8 @@ path = "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 home = "~/auto_research-runs"
 logs = "~/Library/Logs/auto_research"
 launchd_prefix = "com.aray4702.auto-research"
+# Runs must sign in with this Claude subscription; a run that would sign in any other way is refused.
+subscription = "max"
 prompt = "You are the {role} of the development system in this repository. Read system/rules.md, then system/roles/{role}.md, and follow them. {task}"
 # Every run: settings only from --settings, nothing prompts (anything not allowed is denied), no MCP servers.
 flags = [

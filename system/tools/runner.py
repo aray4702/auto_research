@@ -67,6 +67,27 @@ def claude_command(config, role, task, settings_path):
     ]
 
 
+def claude_login(config):
+    """(authMethod, subscriptionType) that a run's bare environment signs Claude Code in with."""
+    r = config["runner"]["runner"]
+    out = subprocess.run([r["claude"], "auth", "status"], env={"PATH": r["path"], "HOME": str(Path.home())},
+                         capture_output=True, text=True)
+    try:
+        status = json.loads(out.stdout)
+    except json.JSONDecodeError:
+        return None, None
+    return status.get("authMethod"), status.get("subscriptionType")
+
+
+def login_problem(config, login):
+    """Why runs mustn't start with this login, or None. Anything but the subscription could spend money."""
+    want, (method, subscription) = config["runner"]["runner"]["subscription"], login
+    if method == "claude.ai" and subscription == want:
+        return None
+    return (f"runs would sign Claude Code in with {method or 'nothing'} ({subscription or 'no subscription'}), "
+            f"not the {want} subscription: the Owner runs `claude auth login` in Terminal")
+
+
 # --- launchd ----------------------------------------------------------------------------------
 
 
@@ -107,8 +128,10 @@ def git(*args, cwd=None):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
-def problems(config, agents_dir=LAUNCH_AGENTS, is_loaded=loaded, applied_commit=None, main_commit=None):
+def problems(config, agents_dir=LAUNCH_AGENTS, is_loaded=loaded, applied_commit=None, main_commit=None, login=None):
     out = []
+    if login is not None and login_problem(config, login):
+        out.append(login_problem(config, login))
     wanted = plists(config)
     for job_label, data in wanted.items():
         path = agents_dir / f"{job_label}.plist"
@@ -176,8 +199,8 @@ def main(argv=None):
             print(line)
     git("fetch", "--quiet", "origin", cwd=ROOT)
     applied, main_commit = commits(config)
-    found = problems(config, applied_commit=applied, main_commit=main_commit)
-    print("FAIL runner" if found else "PASS runner: installed jobs and the applied checkout match main")
+    found = problems(config, applied_commit=applied, main_commit=main_commit, login=claude_login(config))
+    print("FAIL runner" if found else "PASS runner: runs sign in with the subscription; installed jobs and the applied checkout match main")
     for p in found:
         print(f"  - {p}")
     return 1 if found else 0

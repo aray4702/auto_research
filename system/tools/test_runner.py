@@ -80,6 +80,23 @@ class CommandTest(unittest.TestCase):
         self.assertEqual(pairs["--settings"], "/tmp/s.json")
 
 
+class LoginTest(unittest.TestCase):
+    def test_only_the_subscription_login_may_run(self):
+        self.assertIsNone(runner.login_problem(CONFIG, ("claude.ai", "max")))
+        for login in [("oauth_token", None), ("apiKey", None), ("claude.ai", "pro"), (None, None)]:
+            self.assertIn("claude auth login", runner.login_problem(CONFIG, login), login)
+
+    def test_check_reports_a_wrong_login(self):
+        with tempfile.TemporaryDirectory() as d:
+            for job_label, data in runner.plists(CONFIG).items():
+                (Path(d) / f"{job_label}.plist").write_bytes(data)
+            ok = runner.problems(CONFIG, Path(d), lambda job_label: False, "abc", "abc", login=("claude.ai", "max"))
+            self.assertEqual(ok, [])
+            bad = runner.problems(CONFIG, Path(d), lambda job_label: False, "abc", "abc", login=("oauth_token", None))
+            self.assertEqual(len(bad), 1)
+            self.assertIn("not the max subscription", bad[0])
+
+
 class LaunchdTest(unittest.TestCase):
     def test_jobs_render_deterministically_and_disabled(self):
         first, second = runner.plists(CONFIG), runner.plists(CONFIG)
