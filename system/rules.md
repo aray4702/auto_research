@@ -29,6 +29,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 | `type:fix`, `type:feature`, `type:definition`, `type:investigation`, `type:release`, `type:system` | Item type, one each (blueprint §3) |
 | `state:triage` → `state:ready` → `state:claimed` | New, then scheduled in the work order, then a run holds it |
 | `state:blocked` | Waiting on the item it names (`Blocked by #<n>`) |
+| `state:review` | A plan or design on this issue waits for the Reviewer |
 | `needs-decision:coordinator`, `…:architect`, `…:builder`, `…:owner` | Overlay: held for a decision at that level |
 | `sev:1`, `sev:2`, `sev:3` | Severity. sev:1 = a crash, data loss or broken `main`: revert first, as the next Developer item, then fix the cause |
 | `record:goal`, `record:work-order`, `record:watch-list`, `record:decision-log` | Records. Work selection skips them |
