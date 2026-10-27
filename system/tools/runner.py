@@ -11,6 +11,8 @@ has one, the product's toolchain.toml. Standard library only.
 """
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import plistlib
@@ -142,6 +144,23 @@ def git(*args, cwd=None):
     return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
+@contextlib.contextmanager
+def locked(checkout):
+    """Serialize git operations on the shared checkout: two launchers fetching at once collide on refs."""
+    with open(checkout.parent / f"{checkout.name}.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def fetch_main(config, timeout=30):
+    """Fetch origin/main here, under the applied checkout's lock: an unlocked fetch can fail a launcher's."""
+    with locked(home(config) / "system"):
+        subprocess.run(["git", "fetch", "--quiet", "origin", "main"], cwd=ROOT, check=True, capture_output=True, timeout=timeout)
+
+
 def problems(config, agents_dir=LAUNCH_AGENTS, is_loaded=loaded, applied_commit=None, main_commit=None, login=None, cli=None):
     out = []
     if login is not None and login_problem(config, login):
@@ -221,7 +240,7 @@ def main(argv=None):
     if args.command == "apply":
         for line in apply(config):
             print(line)
-    git("fetch", "--quiet", "origin", cwd=ROOT)
+    fetch_main(config)
     applied, main_commit = commits(config)
     found = problems(config, applied_commit=applied, main_commit=main_commit, login=claude_login(config), cli=cli_link(config))
     print("FAIL runner" if found else "PASS runner: runs sign in with the subscription; installed jobs and the applied checkout match main")

@@ -1,5 +1,7 @@
 """Tests for the Owner's CLI and dashboard. Nothing here touches GitHub."""
 
+import fcntl
+import tempfile
 import threading
 import tomllib
 import unittest
@@ -10,10 +12,12 @@ from pathlib import Path
 from unittest import mock
 
 from system.cli import arsys, data, views
-from system.tools import post
+from system.dispatcher import run
+from system.tools import post, runner
 
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY = post.load_identity()
+CONFIG = runner.load_all()
 CAPS = tomllib.loads((ROOT / "system" / "caps.toml").read_text())
 BOT, SECOND = IDENTITY["reviewer_app"]["bot_login"], IDENTITY["second_login"]
 NOW = datetime(2026, 10, 27, 6, 0, tzinfo=timezone.utc)  # 23:00 PDT: no PT-midnight edge in the runs below
@@ -39,7 +43,7 @@ REQUIREMENTS = """# Requirements
 
 def pr(**over):
     base = {"number": 9, "title": "t", "draft": False, "head": "h2", "merge_state": "BLOCKED", "review_decision": "REVIEW_REQUIRED",
-            "auto_merge": False, "author_role": "developer", "labels": set(), "protected": False, "gate": "SUCCESS", "reviews": []}
+            "auto_merge": False, "author": IDENTITY["owner_login"], "author_role": "developer", "labels": set(), "protected": False, "gate": "SUCCESS", "reviews": []}
     base.update(over)
     return base
 
@@ -78,6 +82,51 @@ class WaitingOnTest(unittest.TestCase):
         self.assertEqual(w(reviews=app, protected=True, review_decision="APPROVED", merge_state="CLEAN"), "you: merge")
         self.assertEqual(w(reviews=app, review_decision="APPROVED", merge_state="CLEAN"), "Dispatcher: auto-merge")
         self.assertEqual(w(author_role=None), "you: approve (second account), then merge")
+
+    def test_an_outsiders_pr_is_theirs_and_waits_on_triage_never_approval(self):
+        # github_state gives no role to the Owner's own PRs or to outsiders'; anyone can open a PR on a public repo
+        app = [{"login": BOT, "state": "APPROVED", "commit": "h2"}]
+        for p in (pr(author="stranger", author_role=None), pr(author="stranger", author_role=None, reviews=app, gate=None),
+                  pr(author=None, author_role=None)):
+            self.assertEqual(data.waiting_on(p, IDENTITY), "you: triage (outside contributor)")
+        self.assertEqual(data.author(pr(author="stranger", author_role=None), IDENTITY), "outsider stranger")
+        self.assertEqual(data.author(pr(author_role=None), IDENTITY), "owner")
+        self.assertEqual(data.author(pr(), IDENTITY), "developer")
+
+
+class RunnerViewTest(unittest.TestCase):
+    def test_the_fetch_holds_the_shared_checkout_lock_a_launcher_takes(self):
+        # an unlocked fetch beside a launcher's makes the launcher's fail, and its run doesn't start
+        with tempfile.TemporaryDirectory() as d:
+            config = {**CONFIG, "runner": {**CONFIG["runner"], "runner": {**CONFIG["runner"]["runner"], "home": d}}}
+            held = []
+
+            def fake_run(cmd, **kw):
+                with open(Path(d, "system.lock"), "w") as probe:
+                    try:
+                        fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        held.append(False)
+                    except BlockingIOError:
+                        held.append(True)
+                return mock.Mock(returncode=0)
+            with mock.patch.object(data.runner.subprocess, "run", side_effect=fake_run), \
+                 mock.patch.object(data.runner, "commits", return_value=("a", "a")), \
+                 mock.patch.object(data.runner, "claude_login", return_value=("claude.ai", "max")), \
+                 mock.patch.object(data.runner, "problems", return_value=[]):
+                view = data.runner_view(config)
+            self.assertEqual(held, [True])
+            self.assertTrue(view["ok"], view)
+            self.assertIs(run.locked, data.runner.locked, "the launcher and the CLI must take the same lock")
+
+    def test_a_failed_fetch_is_reported_and_the_rest_still_checked(self):
+        with mock.patch.object(data.runner, "fetch_main", side_effect=OSError("offline")), \
+             mock.patch.object(data.runner, "commits", return_value=("a", "b")), \
+             mock.patch.object(data.runner, "claude_login", return_value=("claude.ai", "max")), \
+             mock.patch.object(data.runner, "problems", return_value=["the applied checkout is at a, main is at b"]):
+            view = data.runner_view(CONFIG)
+        self.assertFalse(view["ok"])
+        self.assertEqual(len(view["problems"]), 2)
+        self.assertIn("offline", view["problems"][0])
 
 
 def sample():
