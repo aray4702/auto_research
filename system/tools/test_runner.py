@@ -170,6 +170,47 @@ class LaunchdTest(unittest.TestCase):
             found = runner.problems(CONFIG, agents, not_loaded, "abc", "def")
             self.assertTrue(any("is not loaded, but runner.toml has it enabled" in p for p in found), found)
 
+    def test_apply_installs_from_the_updated_checkout(self):
+        # The first apply after a runner.toml change installed the jobs from the file loaded before the update (#65).
+        calls, real = [], (runner.update_checkout, runner.os.execv)
+        runner.update_checkout = lambda config: calls.append("update") or []
+        runner.os.execv = lambda path, argv: calls.append(argv) or (_ for _ in ()).throw(SystemExit(0))
+        try:
+            with self.assertRaises(SystemExit):
+                runner.main(["apply"])
+        finally:
+            runner.update_checkout, runner.os.execv = real
+        script = str(runner.home(CONFIG) / "system" / "system" / "tools" / "runner.py")
+        self.assertEqual(calls, ["update", [CONFIG["runner"]["runner"]["python"], "-I", script, "install"]])
+
+    def test_install_runs_only_from_the_applied_checkout(self):
+        real = (runner.ROOT, runner.install)
+        runner.ROOT = Path(tempfile.gettempdir(), "not-the-applied-checkout")
+        runner.install = lambda config: self.fail("installed from outside the applied checkout")
+        try:
+            with self.assertRaises(SystemExit):
+                runner.main(["install"])
+        finally:
+            runner.ROOT, runner.install = real
+
+    def test_the_checkout_update_holds_the_shared_lock(self):
+        held, real = [], (runner.locked, runner.git)
+        @runner.contextlib.contextmanager
+        def recording(checkout):
+            held.append(True)
+            yield
+            held.pop()
+        runner.locked = recording
+        runner.git = lambda *args, cwd=None: "abc" if args[0] == "rev-parse" else self.assertTrue(held, args)
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                config = copy.deepcopy(CONFIG)
+                config["runner"]["runner"]["home"] = d
+                Path(d, "system", ".git").mkdir(parents=True)
+                self.assertEqual(runner.update_checkout(config), ["applied checkout at abc"])
+        finally:
+            runner.locked, runner.git = real
+
     def test_check_finds_a_disabled_job_still_loaded(self):
         config = copy.deepcopy(CONFIG)
         config["runner"]["schedules"]["builder-daily"]["enabled"] = False
