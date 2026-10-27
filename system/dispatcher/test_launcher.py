@@ -142,6 +142,16 @@ class MayStartTest(unittest.TestCase):
         before_window = [end("x", "developer", NOW - timedelta(days=6), cost=CAPS["claude"]["weekly_points"] / ppu, resets=resets)]
         self.assertTrue(usage.may_start(CAPS, before_window, "coordinator", NOW)[0])
 
+    def test_weekly_points_stop_at_about_1000_dollars(self):
+        # 20 points at 1 point per $50: a coordinator run ($5 at most) may start at $990, not at $1,000.
+        resets = int((NOW + timedelta(days=2)).timestamp())
+        below = [end("x", "developer", NOW - timedelta(days=1), cost=990, resets=resets)]
+        self.assertTrue(usage.may_start(CAPS, below, "coordinator", NOW)[0])
+        at = [end("x", "developer", NOW - timedelta(days=1), cost=1000, resets=resets)]
+        ok, reasons, _ = usage.may_start(CAPS, at, "coordinator", NOW)
+        self.assertFalse(ok)
+        self.assertIn("weekly points", reasons[0])
+
     def test_owner_headroom_holds_and_pauses(self):
         busy = [end("x", "developer", NOW, five_hour=0.6)]
         ok, reasons, _ = usage.may_start(CAPS, busy, "coordinator", NOW)
