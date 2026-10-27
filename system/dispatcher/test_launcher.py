@@ -66,6 +66,24 @@ class StateStoreTest(unittest.TestCase):
         a.append("runs", {"event": "start", "run_id": "r1"})
         self.assertEqual(self.store("b").read("runs"), [{"event": "start", "run_id": "r1"}])
 
+    def test_writers_sharing_one_clone_at_once_both_land(self):
+        import threading
+        shared, errors = self.store("shared"), []
+        shared.append("runs", {"event": "start", "run_id": "seed"})
+
+        def write(n):
+            try:
+                self.store("shared").append("runs", {"event": "start", "run_id": f"w{n}"})
+            except Exception as e:  # what the unlocked clone did: a git command failed
+                errors.append(e)
+        threads = [threading.Thread(target=write, args=(n,)) for n in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertEqual(errors, [])
+        self.assertEqual(sorted(r["run_id"] for r in self.store("reader").read("runs")), ["seed", "w0", "w1", "w2", "w3"])
+
     def test_two_writers_both_land_in_order_of_pushing(self):
         a, b = self.store("a"), self.store("b")
         a.append("runs", {"event": "start", "run_id": "r1"})

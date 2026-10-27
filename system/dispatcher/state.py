@@ -4,6 +4,8 @@ Each kind of record is a JSON-lines file on that branch (runs.jsonl, ...). Appen
 pushes, so the history is append-only and anyone can read it. Standard library only.
 """
 
+import contextlib
+import fcntl
 import json
 import subprocess
 from pathlib import Path
@@ -16,6 +18,18 @@ README = "The Dispatcher's state (blueprint §3): one JSON-lines file per kind o
 class Store:
     def __init__(self, path, remote):
         self.path, self.remote = Path(path), remote
+
+    @contextlib.contextmanager
+    def locked(self):
+        """One user of the local clone at a time: launchers, the Dispatcher and arsys share it, and two
+        at once collided on git's own files (a launcher's checkout failed, 2026-10-27 00:43 PT)."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path.parent / f"{self.path.name}.lock", "w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
 
     def git(self, *args, check=True):
         return subprocess.run(
@@ -48,14 +62,19 @@ class Store:
         return True
 
     def read(self, kind):
-        if not self.sync():
-            return []
-        path = self.path / f"{kind}.jsonl"
-        if not path.exists():
-            return []
-        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        with self.locked():
+            if not self.sync():
+                return []
+            path = self.path / f"{kind}.jsonl"
+            if not path.exists():
+                return []
+            return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
     def append(self, kind, record, attempts=3):
+        with self.locked():
+            self._append(kind, record, attempts)
+
+    def _append(self, kind, record, attempts):
         for attempt in range(attempts):
             self.sync(create=True)
             with open(self.path / f"{kind}.jsonl", "a") as f:
