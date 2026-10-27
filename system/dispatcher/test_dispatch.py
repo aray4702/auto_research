@@ -100,6 +100,14 @@ class CandidatesTest(unittest.TestCase):
         self.assertEqual(got[1][2], "Triage these issues: #3. Items closed since your last run: #20. "
                                     "Record their goals' progress, close what is done, and chart and schedule what comes next.")
 
+    def test_a_plan_reviews_changes_on_a_goal_issue_start_the_coordinator(self):
+        # #30: the Reviewer escalates a plan's changes with needs-decision:coordinator on the goal issue.
+        goal = issue(21, "record:goal", "needs-decision:coordinator")
+        got = plan.candidates(snap([goal]), set(), IDENTITY)
+        self.assertEqual([(r, i, w) for r, i, _, w in got], [("coordinator", 21, "decision")])
+        # The Coordinator resolves it and removes the label: nothing on the next pass.
+        self.assertEqual(plan.candidates(snap([issue(21, "record:goal")]), set(), IDENTITY), [])
+
     def test_claimed_running_and_records_are_never_offered(self):
         s = snap(issues=[issue(1, "type:fix", "sev:1", "state:claimed"), issue(2, "type:fix", "sev:1"), issue(13, "record:decision-log")])
         self.assertEqual(plan.candidates(s, {2}, IDENTITY), [])
