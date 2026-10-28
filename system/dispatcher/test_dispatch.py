@@ -267,18 +267,29 @@ class MergePlanTest(unittest.TestCase):
         refreshed["fresh"] = {BOT: False}
         self.assertIn("reviewer", [c[0] for c in plan.candidates(snap(prs=[refreshed]), set(), IDENTITY)])
 
-    def test_same_changes_compares_the_prs_own_lines_not_its_commits(self):
+    def test_same_changes_compares_the_prs_own_diff_not_its_commits(self):
         def gh_for(files_by_ref):
             gh = mock.Mock(repo="o/r")
             gh.api.side_effect = lambda method, path, body=None, paginate=False: {"files": files_by_ref[path.rsplit("...", 1)[1]]}
             return gh
-        at_approval = [{"filename": "a.py", "status": "modified", "patch": "@@ -1,3 +1,3 @@\n ctx\n-old\n+new"}]
-        refreshed = [{"filename": "a.py", "status": "modified", "patch": "@@ -9,3 +9,3 @@\n other ctx\n-old\n+new"}]
-        changed = [{"filename": "a.py", "status": "modified", "patch": "@@ -1,3 +1,3 @@\n ctx\n-old\n+newer"}]
-        binary = [{"filename": "m.bin", "status": "modified", "sha": "s1"}]
-        gh = gh_for({"A": at_approval, "B": refreshed, "C": changed, "D": binary, "E": binary})
-        self.assertTrue(dispatch.same_changes(gh, "A", "B"), "main moved the context: same changes")
+
+        def patch(text):
+            return [{"filename": "a.py", "status": "modified", "patch": text}]
+        gh = gh_for({
+            "A": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+new\n+    return True\n     check()"),
+            "B": patch("@@ -9,4 +9,4 @@ def f():\n ctx\n-old\n+new\n+    return True\n     check()"),
+            "C": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+newer\n+    return True\n     check()"),
+            "M": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+new\n     check()\n+    return True"),
+            "S": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+    return True\n+new\n     check()"),
+            "X": patch("@@ -1,4 +1,4 @@ def f():\n other ctx\n-old\n+new\n+    return True\n     check()"),
+        })
+        self.assertTrue(dispatch.same_changes(gh, "A", "B"), "main added lines above: the hunk only shifted")
         self.assertFalse(dispatch.same_changes(gh, "A", "C"), "a changed line")
+        self.assertFalse(dispatch.same_changes(gh, "A", "M"), "a line moved below its context")
+        self.assertFalse(dispatch.same_changes(gh, "A", "S"), "two added lines swapped")
+        self.assertFalse(dispatch.same_changes(gh, "A", "X"), "main edited the context: ask again, the safe way")
+        binary = [{"filename": "m.bin", "status": "modified", "sha": "s1"}]
+        gh = gh_for({"D": binary, "E": binary})
         self.assertTrue(dispatch.same_changes(gh, "D", "E"))
         self.assertFalse(dispatch.same_changes(gh_for({"D": binary, "F": [dict(binary[0], sha="s2")]}), "D", "F"))
 

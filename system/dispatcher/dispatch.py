@@ -12,6 +12,7 @@ nothing. Standard library only.
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -37,17 +38,22 @@ def alive(pid):
     return True
 
 
+HUNK_LINE_NUMBERS = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.M)
+
+
 def own_changes(gh, ref):
-    """The lines a commit adds and removes against its merge base with main, file by file: a PR's own changes.
-    A file without a patch (binary, or too large to show) is compared by its blob."""
+    """A commit's diff against its merge base with main, file by file: a PR's own changes. Each patch is kept whole
+    and in order, context included, less the line numbers in its hunk headers, so main adding or removing lines
+    elsewhere only shifts it. A file without a patch (binary, or too large to show) is compared by its blob."""
     files = gh.api("GET", f"repos/{gh.repo}/compare/main...{ref}")["files"]
-    return {f["filename"]: (f["status"], sorted(line for line in f["patch"].splitlines() if line[:1] in "+-"))
+    return {f["filename"]: (f["status"], HUNK_LINE_NUMBERS.sub("@@", f["patch"]))
             if f.get("patch") is not None else (f["status"], f.get("sha")) for f in files}
 
 
 def same_changes(gh, approved, head):
     """True when the PR's own changes at head are what they were at the approved commit: everything since came from
-    main. A merge that resolved a conflict by hand, or any commit of the PR's own, changes them (#118, #127).
+    main. A merge that resolved a conflict by hand, or any commit of the PR's own, changes them (#118, #127). So
+    does main editing a line next to one of them: that errs toward asking for a re-approval.
     (Comparing commits instead fails: the commits merged in from main include other PRs' own commits.)"""
     return own_changes(gh, approved) == own_changes(gh, head)
 
@@ -143,7 +149,7 @@ def dispatch_pass(command, dry_run, now=None):
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
             if same_changes(gh, detail, pr["head"]):
-                say(f"renew the Reviewer App's approval of PR #{n} (only merges from main since {detail[:7]})")
+                say(f"renew the Reviewer App's approval of PR #{n} (its own changes are as they were at {detail[:7]})")
                 renewed.add(n)
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
