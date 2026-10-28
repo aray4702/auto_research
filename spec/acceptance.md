@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-27 | architect, #82 | G2's done-check, G2-1 to G2-8, with G2-5m and G2-6c. Rests on the recommended answers on #82 |
 | 2026-10-27 | architect, #81 | Reviewer's findings on #89: G1-15 checks every distribution's licence and every bundled native library against an allow list, on both platforms. G1-11 fuzzes decode in-process, with a few end-to-end cases. G1-14's drift check has its own exit code (6). G1-4 names an ffmpeg command for subtitles. CI runs in tiers by what a change touches |
 | 2026-10-27 | architect, #81 | G1's done-check, G1-1 to G1-15. S1-1 to S1-4 revised now that §1, §6 and §7 are filled in. Rests on the recommended answers on #81 |
 | 2026-10-26 | architect, #20 | S1-3 and S1-4: the README's `sh` blocks run as one `sh -e` script against the commit under test, with the clone URL redirected to CI's checkout (Reviewer's finding on #23) |
@@ -116,3 +117,64 @@ These are the Architect's proposal. The Coordinator charts the plan.
 3. **Full evaluation and the results table:** the Owner's `lmt eval --set full`, the README's results table, and the Owner's readings (G1-8 to G1-10, G1-12, G1-14, G1-4m, G1-13).
 
 **The deadline, 2026-10-28.** Stages 1 and 2 are about a dozen items, most of them on protected paths that the Owner merges. Fitting them into the day is possible but tight. Stage 3 then needs about 6–8 hours of the Mac's time for the full sets and the baselines, after stage 2 lands. G1 can meet its CI-checked criteria on 2026-10-28. Its Mac criteria will most likely land on 2026-10-29 (#81, question 1).
+
+## G2: live transcription
+
+**Goal:** `project_requirements.md` §2, G2. **Measurable outcome:** "F6; Q10." **Deadline:** 2026-10-28 in requirements v1.6. It can't be met: G2 runs on G1's pipeline, which G1's stage 2 builds (#82, question 1).
+
+G2 builds on G1's pipeline and public API. The names below (`lmt live`, its options, the event stream, `results/live.json`) are the ones `design/public-api.md` and `design/architecture.md`, "Live mode (G2)", propose. If the Owner picks other options on #82, this section follows.
+
+### Terms
+
+- **The live run:** `lmt live` with default options, with the default models already downloaded and verified. No speaker count is given.
+- **The file source:** `lmt live --from-file FILE`. It decodes the file as `lmt transcribe` does, then hands it to the pipeline in blocks at real-time pace, as a microphone would. From the source on, the code path is the microphone's.
+- **Lockstep:** a test mode of the file source, reached in process and not from the CLI. It hands over each block only once the streaming stages have finished with the one before. So the stages see what they would see on a machine fast enough to keep up, and the output doesn't depend on the machine's speed. CI's live checks run in lockstep, except where a criterion says real time.
+- **Committed word:** a word the live run has written, with its speaker label. It never changes afterwards. Provisional text, if the display shows any, doesn't count.
+- **Matched words:** the reference words that `jiwer`'s alignment marks as hits against the committed words. Both sides are compared after lowercasing and stripping punctuation, without Whisper's normalizer, so that each word keeps its own time.
+- **Delay of a word (Q10):** the time at which the event carrying the committed word reaches the reader, minus the time at which the word's speech ended. The reader is the harness, reading `lmt live --jsonl` through a pipe. Both times are measured from the arrival of the stream's `start` event, which marks the start of playback. The speech ends at the matched reference word's end time. Only matched words have a delay. "Speech to its text" is measured from the end of the word, since a word can't be recognised before it has been said (#82, question 8).
+- **Stream delay** (the CI proxy for Q10): in lockstep, how much audio had been handed over when the word was committed, minus the matched reference word's end time. It is the delay the streaming method itself adds, with the machine's compute time taken out.
+- **p95:** the 95th percentile of the matched words' delays, by the nearest-rank method, pooled over every run in the measurement.
+- **The Q10 clip:** AMI-ci (G1's "Terms": the first 300 s of ES2004a's Mix-Headset recording, four speakers). Its reference word times come from the AMI manual annotations (v1.6.2) that G1's harness already pins.
+- **Offline word times:** the reference clip and the two-speaker clip have no reference word times. For them, the reference times are the word times of the product run (`lmt transcribe`) on the same clip.
+
+### Done-check
+
+G2 is done when every criterion below holds on `main`. **Where it runs** is as for G1:
+- **CI:** the gate's product jobs on `ubuntu-24.04`, which has no microphone.
+- **Mac:** a check the Owner runs before release on the Owner's Mac (A1). It is one command, `lmt eval --set live`, whose results file goes into `results/` by PR, plus one reading by eye. As for G1, there is no self-hosted runner (#81, question 5).
+
+**What CI checks without a microphone:** every stage from the source on, through the file source, and the microphone source through a stand-in for the audio library's input stream (G2-5). Only the real microphone, and the real-time delay on the target machine, are left to the Mac (G2-5m, G2-6).
+
+| ID | Requirement | Criterion | How it's checked | Runs |
+| --- | --- | --- | --- | --- |
+| G2-1 | F6 | **Segments as they're recognised.** In lockstep on the two-speaker clip, words are committed while the audio is still arriving: every word whose offline end time is at least 5 s before the end of the clip is committed before the source's last block is handed over. The event stream validates against the event schema in `design/public-api.md`. Every committed word carries a speaker id, words come in order of `start`, and no committed word is repeated or changed. | A test runs the live pipeline in process, records the stream position at each event, and checks the events. | CI |
+| G2-2 | F6 | **The live text is right.** In lockstep on the reference clip, the committed words' WER is ≤ 10.0 %, scored as in G1-1 (#82, question 7). | A test scores the live transcript against the clip's reference. | CI |
+| G2-3 | F6, U2 | **Speaker labels, live.** In lockstep on the two-speaker clip, with no speaker count given, the live transcript has exactly two speaker labels. For each reference speaker, at least 90 % of their words carry the label most of their words have, and the two speakers' majority labels differ (G1-3's rule; #82, question 7). | A test counts the committed words' labels per reference speaker, by word time. | CI |
+| G2-4 | F6, U2 | **Start, stop and save.** `lmt live --from-file` runs in a subprocess at real-time pace on the two-speaker clip. Each of these ends with exit code 0: the end of the file; `--duration 20`; SIGINT (Ctrl-C) at 20 s; and SIGTERM at 20 s. Each then writes the requested formats. The JSON validates against `schema/transcript.schema.json`, and its segments hold exactly the event stream's committed words, in order, with the same speakers. After a stop at 20 s, no segment ends after 21 s. While the session runs, `<stem>.txt` holds every segment completed so far. A second SIGINT while it saves exits 130 and writes none of the final formats. | A test runs each case and checks the exit code, the files and the event stream. The real-time run to the end of the file also writes its p95 delay to the job's log; CI records that figure and never fails on it. | CI |
+| G2-5 | F6 | **The microphone source, without a microphone.**<br>(i) A stand-in for the audio library's input stream delivers the reference clip at 48 kHz in stereo, in device-sized blocks. The samples the pipeline receives match decode's 16 kHz mono resampling of the same audio, with no sample differing by more than 1 × 10⁻⁴.<br>(ii) With no input device, `lmt live` exits 3 with one `lmt: error:` line saying so, and `lmt live --list-devices` exits 0 and says there are none.<br>(iii) An input that delivers exact zeros for its first 3 s ends with exit 3. The error line says the microphone may be blocked, and names the macOS setting (Privacy & Security, Microphone). | Unit tests with the stand-in. Case (ii) also runs for real on the CI runner, which has no input device. | CI |
+| G2-5m | F6, U2 | **The real microphone.** On the Mac, the Owner runs `lmt live` with the built-in microphone for about two minutes of speech from two people (or from one person and a recording played on another device), then stops it with Ctrl-C. Text with speaker labels appears within a few seconds of the speech. The two voices get different labels. The four outputs are written and open. | The Owner runs it and records the result on G2's release item. | Mac (Owner, by eye) |
+| G2-6 | Q10 | **Live delay on the target machine.** The p95 delay is ≤ 3.0 s on the Q10 clip, over three runs played back in real time, with no other evaluation running. `results/live.json` also holds each run's p95, the pooled p50 and maximum, the number of matched words, the live transcript's WER and DER on the clip (scored as in G1's "Terms"), and how far behind real time the pipeline was at the end of each run. | `lmt eval --set live`. It plays the clip through `lmt live --from-file … --jsonl` in a subprocess, and timestamps each event as it arrives. | Mac |
+| G2-6c | Q10 | **Live delay, CI proxy.** In lockstep on the two-speaker clip, the p95 stream delay is ≤ 2.0 s, against the offline word times. That leaves 1 s of Q10's 3 s for compute on the Mac. If the first measurement shows the proxy failing while G2-6 holds, the Architect proposes a new bound to the Owner. Nobody else changes it. | G2-1's test computes it. | CI |
+| G2-7 | F5, F6 | **The CLI.** G1-6 covers `lmt live` too: its `--help` lists exactly the options in `public-api.md`, each option has a test, and bad input exits with the documented code and one `lmt: error:` line. Every error that can be found before capture starts is found before it: an unknown device or a missing `--from-file` input (3), an existing output without `--overwrite` (2), and an unwritable output directory (3). | G1-6's tests, extended to `lmt live`. The live cases also check that no audio was captured. | CI |
+| G2-8 | Q4, Q8 | **Bad input, the network and files, in live mode.** `lmt live --from-file` with G1-11's empty file, random bytes named `.wav`, and an unsupported `.txt` ends with exit 3, as `lmt transcribe` does. G1-13's test passes for `lmt live --from-file` on the two-speaker clip in lockstep: no network connection is made, and the only new files are the requested outputs, plus `<stem>.wav` with `--save-audio`. | G1-11's and G1-13's tests, run once more through `lmt live`. | CI |
+
+Q7 isn't in G2's outcome, so G2 doesn't require two live runs to be identical. Lockstep makes CI's live checks reproducible all the same, so they don't flake.
+
+**Fresh evidence for closing G2:**
+- a green `gate` run on `main` started by `workflow_dispatch`, so that every product job ran, the live tests included;
+- `results/live.json` from the Owner's run of `lmt eval --set live`, at a commit whose gate passed, merged by PR, and meeting G2-6;
+- the Owner's reading for G2-5m, recorded on G2's release item.
+
+### Stages
+
+These are the Architect's proposal. The Coordinator charts the plan. G2 needs two stages, because its one target-machine measurement picks the live model, and the Owner's run then confirms it.
+
+1. **The live pipeline, checked in CI.** It needs G1's stage 2: decode, ASR, diarization, alignment, the exports and the schema. Five items:
+   - streaming ASR, with the file source and lockstep (G2-2, and G2-6c's stream delay);
+   - incremental diarization (G2-3);
+   - `lmt live`: the join, the event stream, the outputs, stopping, and transcript schema 1.1 (G2-1, G2-4, G2-7, G2-8);
+   - the microphone source, with the lock and the licence inventory updated for the audio library (G2-5);
+   - the harness's `--set live` and `results/live.json`, tested on fixed event logs, so it needs no model. This one can start as soon as G1's harness lands.
+2. **On the Mac.** An investigation measures the candidate live models and the update interval on the Mac against Q10 (`design/architecture.md`, "Live mode (G2)"), and the default is pinned. Then the Owner runs `lmt eval --set live` and makes the G2-5m reading.
+
+**The deadline, 2026-10-28.** It can't be met. G2's stage 1 starts only when G1's stage 2 has landed, which is planned for 2026-10-28 at the earliest, and most of G2's items are on protected paths that the Owner merges. On 2026-10-28, G2 can have this definition, its internal design, and perhaps the harness item. #82's question 1 proposes 2026-10-30 for the criteria CI checks, and 2026-10-31 for the Mac checks (G2-5m, G2-6).
