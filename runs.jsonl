@@ -160,3 +160,4 @@
 {"at": "2026-10-28T02:49:22+00:00", "event": "start", "item": 92, "pid": 61799, "role": "reviewer", "run_id": "reviewer-20261028T024915Z", "task": "Review PR #92."}
 {"at": "2026-10-28T02:49:29+00:00", "cost_usd": 0.556472, "denials": 1, "denied": ["Bash: python3"], "event": "end", "five_hour": 0.18, "item": 81, "role": "architect", "run_id": "architect-20261028T024705Z", "seven_day": 0.21, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 24}
 {"at": "2026-10-28T02:52:23+00:00", "cost_usd": 0.509853, "denials": 1, "denied": ["Bash: git ls-files"], "event": "end", "five_hour": 0.18, "item": 92, "role": "reviewer", "run_id": "reviewer-20261028T024915Z", "seven_day": 0.21, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 27}
+{"at": "2026-10-28T02:53:52+00:00", "event": "start", "item": 89, "pid": 64058, "role": "reviewer", "run_id": "reviewer-20261028T025346Z", "task": "Review PR #89."}
