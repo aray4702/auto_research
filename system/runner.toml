@@ -45,6 +45,7 @@ deny = [
 [denials]
 explained = [
   "Bash: cat << |",  # cat <<'EOF' | post.py: denied though both are allowed; rules.md, Posting, gives the heredoc form
+  "Bash: sed",  # sed can write files (-i, w), so a role without Edit could; rules.md, How a run works, 2, pages with Read (#184)
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
