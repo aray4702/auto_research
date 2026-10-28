@@ -73,12 +73,18 @@ def denial_signature(denial):
 
 
 OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
+# A second command on a later line (#178): `git fetch` then a line that isn't allowed is denied, and
+# without this mark it read as a `git fetch` gap. Not one of OPERATORS, as no command line contains it.
+NEWLINE = "⏎"
+COMPOUND = OPERATORS + (NEWLINE,)
 
 
 def shell_operators(command):
     """The shell operators on the command's first line, outside quotes, in order and once each (#138):
-    `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept."""
-    line, out, quote, i = command.split("\n", 1)[0], [], None, 0
+    `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept.
+    Then NEWLINE if a later line holds another command: not a heredoc's body or a `\\` continuation."""
+    first, _, rest = command.strip().partition("\n")
+    line, out, quote, i = first, [], None, 0
     while i < len(line):
         c = line[i]
         if quote:
@@ -94,6 +100,8 @@ def shell_operators(command):
                 i += len(op)
                 continue
         i += 1
+    if rest and "<<" not in out and not first.endswith("\\"):
+        out.append(NEWLINE)
     return out
 
 
