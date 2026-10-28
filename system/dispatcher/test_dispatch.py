@@ -205,10 +205,27 @@ class MergePlanTest(unittest.TestCase):
         # Renewed on the new head and up to date: now ask the Owner, once.
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")], head="h2")])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 23, "h2")])
-        # The Owner approved: ask them to merge (protected PRs are theirs to merge).
+        # The Owner approved the same head: SR1 merges it (#116).
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="CLEAN", decision="APPROVED",
                          reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")], head="h2")])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 23, "h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("auto-merge", 23, "h2")])
+
+    def test_sr1_merges_a_protected_pr_only_with_both_approvals_on_its_head(self):
+        both = [(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")]
+        ready = lambda **kw: snap(prs=[pr(40, protected=True, merge_state="CLEAN", decision="APPROVED", **kw)])
+        self.assertEqual(plan.merge_plan(ready(reviews=both), IDENTITY), [("auto-merge", 40, "h2")])
+        owner_only = [(SECOND, "APPROVED", "h2")]
+        self.assertEqual(plan.merge_plan(ready(reviews=owner_only), IDENTITY), [("ask-owner-to-merge", 40, "h2")],
+                         "the Owner approved before the Reviewer: nothing merges without the Reviewer")
+        asked_again = [(BOT, "APPROVED", "h2"), (BOT, "CHANGES_REQUESTED", "h2"), (SECOND, "APPROVED", "h2")]
+        self.assertEqual(plan.merge_plan(ready(reviews=asked_again), IDENTITY)[0][0], "ask-owner-to-merge", "latest review counts")
+        old_head = [(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h2")]
+        self.assertNotIn(("auto-merge", 40, "h2"), plan.merge_plan(ready(reviews=old_head), IDENTITY))
+        rules = ready(reviews=both)
+        rules["prs"][0]["files"] = ["system/standing-rules.md"]
+        self.assertEqual(plan.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")], "SR1 never merges a change to itself")
+        rules["prs"][0]["files"] = ["system/dispatcher/plan.py"]
+        self.assertEqual(plan.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")])
 
     def test_the_owner_is_not_asked_while_github_is_still_working_out_the_merge_state(self):
         # Right after main moves, GitHub reports mergeStateStatus UNKNOWN; #34 was really 12 commits behind.
