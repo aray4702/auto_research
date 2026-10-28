@@ -334,3 +334,4 @@
 {"at": "2026-10-28T18:57:23+00:00", "cost_usd": 0.32413, "denials": 0, "denied": [], "event": "end", "five_hour": 0.11, "item": 136, "role": "architect", "run_id": "architect-20261028T185536Z", "seven_day": 0.34, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 17}
 {"at": "2026-10-28T18:58:06+00:00", "event": "start", "item": 134, "pid": 72581, "role": "reviewer", "run_id": "reviewer-20261028T185757Z", "task": "Review PR #134."}
 {"at": "2026-10-28T18:58:07+00:00", "event": "start", "item": 106, "pid": 72604, "role": "builder", "run_id": "builder-20261028T185757Z", "task": "Item #106 needs your decision (needs-decision:builder)."}
+{"at": "2026-10-28T18:58:54+00:00", "cost_usd": 0.194517, "denials": 1, "denied": ["Bash: git diff"], "event": "end", "five_hour": 0.11, "item": 134, "role": "reviewer", "run_id": "reviewer-20261028T185757Z", "seven_day": 0.34, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 12}
