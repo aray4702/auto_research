@@ -42,6 +42,7 @@ These are the names and formats the builder chose where the blueprint leaves the
 - **Secrets,** recorded by location only:
   - Escalation webhook: macOS keychain, service `auto_research.escalation-webhook`, account `aray4702`.
   - Discord bot token, for the answer relay: macOS keychain, service `auto_research_relay.discord-bot`, account `aray4702`.
+  - Hugging Face read token, for gated models (pyannote): macOS keychain, service `auto_research.huggingface`, account `aray4702`; and the GitHub Actions secret `HF_TOKEN`, which `gate.yml` passes to `product.yml` alone.
   - Reviewer App private key, base64-encoded: macOS keychain, service `auto_research.reviewer-app-key`, account `aray4702`.
 
 ## The gate
