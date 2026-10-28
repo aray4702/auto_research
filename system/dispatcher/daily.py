@@ -27,14 +27,24 @@ def ends(runs):
 
 def denials(runs, now):
     """The same denial (tool and first words) in three or more runs this week: a permission gap (#44).
-    A compound command's denial isn't one (#140): the rules say to run one command at a time."""
+    A compound command's denial isn't one (#140) but a breach of the one-command rule, raised as its own."""
     seen = {}
     for r in ends(recent(runs, now)):
-        for signature in {s for s in r.get("denied") or [] if not s.endswith(usage.COMPOUND)}:
+        for signature in set(r.get("denied") or []):
             seen.setdefault(signature, set()).add(r["run_id"])
-    return [(f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
-             f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}. Grant it by rule, or say in the rules why not.", None)
-            for sig, ids in sorted(seen.items()) if len(ids) >= 3]
+    out = []
+    for sig, ids in sorted(seen.items()):
+        if len(ids) < 3:
+            continue
+        where = f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}."
+        if sig.endswith(usage.COMPOUND):
+            sig = sig.removesuffix(usage.COMPOUND)
+            out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
+                        f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
+        else:
+            out.append((f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
+                        f"{where} Grant it by rule, or say in the rules why not.", None))
+    return out
 
 
 def bumpy(runs, now, open_items):

@@ -23,9 +23,12 @@ class DenialsTest(unittest.TestCase):
         self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("denial:Bash: gh pr", "builder")], "3 runs, as #44 sets")
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
-    def test_a_compound_command_denied_in_three_runs_is_not_a_gap(self):
+    def test_a_compound_command_denied_in_three_runs_is_raised_as_compound_not_a_gap(self):
         runs = [end(x, denied=["Bash: git show (compound)"]) for x in "abc"]
-        self.assertEqual(daily.denials(runs, NOW), [], "the one-command rule, not a permission gap (#140)")
+        got = daily.denials(runs, NOW)
+        self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("compound:Bash: git show", "builder")], "the one-command rule (#140)")
+        self.assertIn("one command at a time", got[0][2])
+        self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
     def test_compound_commands_are_marked_and_plain_ones_are_not(self):
         for command, want in [("git show HEAD:a.py | sed -n '1,80p'", "Bash: git show (compound)"),
