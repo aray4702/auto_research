@@ -13,3 +13,4 @@
 {"at": "2026-10-28T00:04:00+00:00", "message_id": "1564791294994153603", "result": "seen"}
 {"at": "2026-10-28T01:56:56+00:00", "message_id": "1564819716164427778", "result": "seen"}
 {"at": "2026-10-28T02:16:19+00:00", "message_id": "1564824592898465825", "result": "seen"}
+{"at": "2026-10-28T02:40:16+00:00", "message_id": "1564830633811775571", "result": "refused", "why": "reply to a forwarded question, or start with its item number, as in `#67 1`."}
