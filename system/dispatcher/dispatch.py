@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import daily, flow, github_state, killswitch, notify, plan, relay, state, usage  # noqa: E402
+from system.dispatcher import daily, flow, github_state, killswitch, merge_rules, notify, plan, relay, state, usage  # noqa: E402
 from system.tools import post, runner  # noqa: E402
 
 
@@ -37,10 +37,27 @@ def alive(pid):
     return True
 
 
-def only_merges_since(gh, base, head):
-    """True when every commit from base to head is a merge, so the PR's own changes are unchanged."""
-    compare = gh.api("GET", f"repos/{gh.repo}/compare/{base}...{head}")
-    return compare["status"] == "ahead" and all(len(c["parents"]) > 1 for c in compare["commits"])
+def sign_off_question(pr, approved):
+    """The SR2 question (#150), asked once on the PR. Own lines unchanged: the Coordinator judges, then the builder,
+    then the Owner. Own lines changed (on a PR the builder didn't write): the builder, then the Owner."""
+    n, head = pr["number"], pr["head"]
+    if pr.get("same_lines"):
+        what = (f"Since then only main changed: the PR's own added and removed lines are the same, in order, but main "
+                f"edited code next to them, so that approval no longer counts by itself.\n\n"
+                f"Judge whether main's changes around those lines change what the Owner approved: compare "
+                f"`compare/{approved}...{head}` and read main's commits that touched the same places.\n")
+    else:
+        what = (f"Since then the PR's own lines changed, and the Reviewer approved the new head.\n\n"
+                f"Judge whether the changes stay within what the Owner approved (for example, fixes the Reviewer asked "
+                f"for) or change what it does in a way the Owner should see: compare `compare/{approved}...{head}`.\n")
+    return (f"**SR2.** The Owner approved this PR at `{approved}`. {what}"
+            f"- **Within it:** `post.py sign-off {n} --approved {approved} --head {head}` with your reasons as the "
+            f"body. SR1 then merges it in its turn.\n"
+            f"- **You can't tell** (Coordinator): `post.py escalate {n} --level builder` with what you found.\n"
+            f"- **You can't tell** (builder): `post.py escalate {n} --level owner`, asking whether to sign off. On "
+            f"the Owner's yes, sign off quoting it; otherwise the Owner approves the PR again on GitHub.\n\n"
+            f"Only a sign-off from a run on this PR, by a role SR2 lets judge this kind of change, counts "
+            f"(`system/standing-rules.md`).")
 
 
 def expired_claims(gh, items, active_items, now):
@@ -74,6 +91,42 @@ def relay_answers(gh, store, identity, dry_run, now):
         return [f"relay failed: {type(e).__name__}: {e}"]
 
 
+def orphaned_asks(gh, identity, now, days=2):
+    """Items closed while held for the Owner, their latest question unanswered: closing (often a PR's
+    `Resolves`) would otherwise hide the question, since only open items are forwarded (#114)."""
+    since = (now - timedelta(days=days)).isoformat().replace("+00:00", "Z")
+    out = []
+    for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&labels=needs-decision%3Aowner&since={since}&per_page=100",
+                    paginate=True):
+        if "pull_request" in i or "needs-decision:owner" not in {x["name"] for x in i["labels"]}:
+            continue
+        comments = gh.api("GET", f"repos/{gh.repo}/issues/{i['number']}/comments?per_page=100", paginate=True)
+        found = notify.latest_ask(comments, identity, post.MARKER)
+        if found and not found[2]:
+            out.append((i["number"], found[0]["id"]))
+    return out
+
+
+def reopen_orphans(gh, store, me, identity, notices, dry_run, now):
+    """Reopen each orphaned question's item once per question (`reopen:<ask id>`): closed again, it stays closed."""
+    done = {n["key"] for n in notices}
+    lines = []
+    try:
+        for n, ask_id in orphaned_asks(gh, identity, now):
+            if f"reopen:{ask_id}" in done:
+                continue
+            lines.append(("would " if dry_run else "") + f"reopen #{n}: it closed while its question to the Owner was unanswered")
+            if not dry_run:
+                gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"state": "open"})
+                post.cmd_comment(gh, me, n, "Reopened: this item closed while its question to the Owner was still unanswered, and "
+                                 "only open items' questions are forwarded (#114). The next pass forwards it; close it again once "
+                                 "it's answered.")
+                store.append("notices", {"key": f"reopen:{ask_id}", "at": now.isoformat()})
+    except (Exception, SystemExit) as e:  # best-effort, like the relay: never stops a pass (GitHub errors are SystemExit)
+        lines.append(f"reopen check failed: {type(e).__name__}: {e}")
+    return lines
+
+
 def dispatch_pass(command, dry_run, now=None):
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
     config = runner.load_all()
@@ -88,6 +141,7 @@ def dispatch_pass(command, dry_run, now=None):
         return [f"paused: {why}"]
     store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
     lines += relay_answers(gh, store, identity, dry_run, now)
+    lines += reopen_orphans(gh, store, me, identity, store.read("notices"), dry_run, now)
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.
@@ -108,17 +162,10 @@ def dispatch_pass(command, dry_run, now=None):
     url = lambda n: f"https://github.com/{identity['repo']}/pull/{n}"
     wanted, renewed = [], set()
 
-    # An approval followed only by merges from main still counts (#118): GitHub no longer dismisses it.
-    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
-    for pr in snap["prs"]:
-        pr["fresh"] = {}
-        for login in (bot, second):
-            r = plan.latest_review(pr, login)
-            if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
-                pr["fresh"][login] = only_merges_since(gh, r["commit"], pr["head"])
+    merge_rules.annotate(gh, snap, runs, identity, post.MARKER)
 
     # The merge queue: one PR at a time.
-    for action, n, detail in plan.merge_plan(snap, identity):
+    for action, n, detail in merge_rules.merge_plan(snap, identity):
         if action == "refresh":
             say(f"refresh PR #{n} from main ({detail})")
             if not dry_run:
@@ -133,12 +180,17 @@ def dispatch_pass(command, dry_run, now=None):
                 subprocess.run(["gh", "pr", "merge", str(n), "--disable-auto", "--repo", gh.repo], check=True, capture_output=True)
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
-            if only_merges_since(gh, detail, pr["head"]):
-                say(f"renew the Reviewer App's approval of PR #{n} (only merges from main since {detail[:7]})")
+            if merge_rules.same_changes(gh, detail, pr["head"]):
+                say(f"renew the Reviewer App's approval of PR #{n} (its own changes are as they were at {detail[:7]})")
                 renewed.add(n)
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
                                     f"Renewed after a refresh from main: the PR's own changes are unchanged since the approval of {detail[:7]}.")
+        elif action in ("ask-coordinator-to-sign-off", "ask-builder-to-sign-off"):
+            level = action.split("-")[1]
+            say(f"ask the {'Coordinator' if level == 'coordinator' else level} to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
+            if not dry_run:
+                post.cmd_escalate(gh, me, n, level, sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 
@@ -229,9 +281,10 @@ def daily_pass(dry_run, now=None):
     watch = next((i for i in snap["issues"] if "record:watch-list" in i["labels"]), None)
 
     open_items = {i["number"] for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])}
-    found = (daily.denials(runs, now) + daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
+    explained = config["runner"].get("denials", {}).get("explained", [])
+    found = (daily.denials(runs, now, explained) +daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
-             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now)
+             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now, identity["time_zone"])
              + daily.watch_list(watch["body"] if watch else "", {**daily.metrics(runs, now, max(waits)), **flow.metrics(flows, now)}))
     live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
     found += daily.protection_breaches(live, identity["branch_protection"])
