@@ -65,7 +65,32 @@ def denial_signature(denial):
         words.append(word)
         if len(words) == 2:
             break
-    return "Bash: " + (" ".join(words) or "?")
+    return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command)])
+
+
+OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
+
+
+def shell_operators(command):
+    """The shell operators on the command's first line, outside quotes, in order and once each (#138):
+    `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept."""
+    line, out, quote, i = command.split("\n", 1)[0], [], None, 0
+    while i < len(line):
+        c = line[i]
+        if quote:
+            quote = None if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif c == "\\":
+            i += 1
+        else:
+            op = next((o for o in OPERATORS if line.startswith(o, i)), None)
+            if op:
+                out += [op] if op not in out else []
+                i += len(op)
+                continue
+        i += 1
+    return out
 
 
 def parse_time(iso):
