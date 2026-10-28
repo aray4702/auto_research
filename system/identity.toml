@@ -40,7 +40,9 @@ required_check_app_id = 15368
 strict = true
 enforce_admins = true
 required_approvals = 1
-dismiss_stale_reviews = true
+# false: a conflict-free refresh from main keeps an approval; the Dispatcher checks that nothing else
+# changed since (plan.current, #118), as GitHub's dismissal did.
+dismiss_stale_reviews = false
 require_code_owner_reviews = true
 allow_force_pushes = false
 allow_deletions = false
