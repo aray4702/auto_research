@@ -352,6 +352,22 @@ class NotifyTest(unittest.TestCase):
         self.assertEqual(notify.latest_ask([ask, comment(2, "stranger", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", False))
         self.assertIsNone(notify.latest_ask([comment(3, "aray4702", "plain", 0)], IDENTITY, post.MARKER))
 
+    def test_an_item_closed_while_held_for_the_owner_is_reopened_until_answered(self):
+        ask = comment(1, "aray4702", self.ASK, 0)
+        def gh_with(labels, comments):
+            responses = {"closed": [{"number": 81, "labels": [{"name": n} for n in labels]},
+                                    {"number": 89, "pull_request": {}, "labels": [{"name": "needs-decision:owner"}]}],
+                         "comments": comments}
+            gh = mock.Mock(repo="o/r")
+            gh.api.side_effect = lambda method, path, body=None, paginate=False: (
+                responses["closed"] if "state=closed" in path else responses["comments"])
+            return gh
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], [ask]), IDENTITY, NOW), [(81, 1)])
+        answered = [ask, comment(2, "aray4702", "13a 14a", 5)]
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], answered), IDENTITY, NOW), [], "answered")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["type:definition"], [ask]), IDENTITY, NOW), [], "no longer held")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], []), IDENTITY, NOW), [], "no question asked")
+
     def test_unsent_filters_by_key(self):
         self.assertEqual(notify.unsent([{"key": "a"}], [("a", "x"), ("b", "y")]), [("b", "y")])
 
@@ -393,7 +409,7 @@ class FakeStore:
         self.appended = []
 
     def read(self, kind):
-        return []
+        return [r for k, r in self.appended if k == kind]
 
     def append(self, kind, record):
         self.appended.append((kind, record))
@@ -419,6 +435,52 @@ class DryRunTest(unittest.TestCase):
         ])
         spawn.assert_not_called()
         self.assertEqual(stores[0].appended, [])
+
+
+class HeldForTheOwner(FakeGitHub):
+    """#81 closed while its question to the Owner was unanswered (#114)."""
+    def api(self, method, path, body=None, paginate=False):
+        if path.startswith(f"repos/{self.repo}/issues?state=closed&labels=needs-decision%3Aowner"):
+            return [{"number": 81, "title": "Def", "labels": [{"name": "needs-decision:owner"}]}]
+        if path == f"repos/{self.repo}/issues/81/comments?per_page=100":
+            return [comment(1, "aray4702", NotifyTest.ASK, 0)]
+        got = super().api(method, path, body, paginate)
+        return {"html_url": "c/2"} if method == "POST" else got
+
+
+class ReopenTest(unittest.TestCase):
+    def passes(self, *dry_runs, gh=HeldForTheOwner):
+        store, github = FakeStore(), gh()
+        with mock.patch.object(post, "GitHub", lambda repo: github), \
+             mock.patch("system.dispatcher.state.Store", return_value=store), \
+             mock.patch.object(dispatch, "spawn"), \
+             mock.patch.object(dispatch.relay, "run", return_value=[]):
+            lines = [dispatch.dispatch_pass("poll", dry_run=d, now=NOW) for d in dry_runs]
+        return lines, github.writes, store.appended
+
+    def test_a_dry_run_says_it_would_reopen_and_changes_nothing(self):
+        (lines,), writes, appended = self.passes(True)
+        self.assertIn("would reopen #81: it closed while its question to the Owner was unanswered", lines)
+        self.assertEqual((writes, appended), ([], []))
+
+    def test_an_item_is_reopened_once_per_question_and_stays_closed_after(self):
+        # The second pass still finds #81 closed (closed again), its question unchanged and unanswered.
+        (first, second), writes, appended = self.passes(False, False)
+        self.assertIn("reopen #81: it closed while its question to the Owner was unanswered", first)
+        self.assertFalse([line for line in second if "reopen" in line], second)
+        self.assertEqual(writes, [("PATCH", "repos/aray4702/auto_research/issues/81"),
+                                  ("POST", "repos/aray4702/auto_research/issues/81/comments")])
+        self.assertEqual(appended, [("notices", {"key": "reopen:1", "at": NOW.isoformat()})])
+
+    def test_a_failed_check_never_stops_the_pass(self):
+        class Down(HeldForTheOwner):
+            def api(self, method, path, body=None, paginate=False):
+                if "labels=needs-decision%3Aowner" in path:
+                    raise SystemExit("failed: Bad Gateway (HTTP 502)")
+                return super().api(method, path, body, paginate)
+        (lines,), _, _ = self.passes(True, gh=Down)
+        self.assertEqual(lines[0], "reopen check failed: SystemExit: failed: Bad Gateway (HTTP 502)")
+        self.assertTrue(any(line.startswith("would start a developer run on #1") for line in lines), lines)
 
 
 if __name__ == "__main__":
