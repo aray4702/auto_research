@@ -22,11 +22,11 @@ def issue(n, *labels, title="t"):
 
 
 def pr(n, role="developer", gate="SUCCESS", head="h2", merge_state="BLOCKED", decision="REVIEW_REQUIRED",
-       reviews=(), labels=(), protected=False, auto_merge=False, draft=False, resolves=()):
+       reviews=(), labels=(), protected=False, auto_merge=False, draft=False, resolves=(), files=()):
     return {"number": n, "title": "p", "draft": draft, "head": head, "branch": "b", "merge_state": merge_state,
             "resolves": list(resolves),
             "review_decision": decision, "auto_merge": auto_merge, "author_role": role, "labels": set(labels),
-            "files": [], "protected": protected, "gate": gate,
+            "files": list(files), "protected": protected, "gate": gate,
             "reviews": [{"login": login, "state": s, "commit": c, "at": None} for login, s, c in reviews]}
 
 
@@ -192,7 +192,10 @@ class MergePlanTest(unittest.TestCase):
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("auto-merge", 9, "h2")])
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, reviews=app)])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 9, "h2")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 9, "h2")], "protected, no Owner approval yet (#127)")
+        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, files=["system/standing-rules.md"],
+                         reviews=app + [(SECOND, "APPROVED", "h2")])])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 9, "h2")], "both current, but SR1 leaves it to the Owner")
         s = snap(prs=[pr(7, merge_state="CLEAN", decision="APPROVED", auto_merge=True, reviews=app),
                       pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [])
@@ -246,6 +249,49 @@ class MergePlanTest(unittest.TestCase):
         self.assertEqual(plan.merge_plan(snap(prs=[unprotected]), IDENTITY), [], "unprotected too: the Reviewer must see the new code")
         unprotected["fresh"] = {BOT: True}
         self.assertEqual(plan.merge_plan(snap(prs=[unprotected]), IDENTITY), [("auto-merge", 51, "h2")])
+
+    def test_an_owner_held_pr_goes_behind_one_sr1_can_merge_and_is_asked_to_reapprove(self):
+        # #113 waited on the Owner's re-approval and held #115, which SR1 could merge (#127).
+        held = pr(113, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h1")])
+        held["fresh"] = {SECOND: False}
+        ready = pr(115, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")])
+        acts = plan.merge_plan(snap(prs=[held, ready]), IDENTITY)
+        self.assertEqual(acts, [("auto-merge", 115, "h2"), ("ask-owner-to-reapprove", 113, "h2")])
+        acts = plan.merge_plan(snap(prs=[held]), IDENTITY)
+        self.assertEqual(acts, [("ask-owner-to-reapprove", 113, "h2")], "re-approve, never merge, while the approval isn't current")
+
+    def test_no_new_review_while_the_reviewers_approval_still_covers_the_pr(self):
+        refreshed = pr(60, reviews=[(BOT, "APPROVED", "h1")])
+        refreshed["fresh"] = {BOT: True}
+        self.assertNotIn("reviewer", [c[0] for c in plan.candidates(snap(prs=[refreshed]), set(), IDENTITY)])
+        refreshed["fresh"] = {BOT: False}
+        self.assertIn("reviewer", [c[0] for c in plan.candidates(snap(prs=[refreshed]), set(), IDENTITY)])
+
+    def test_same_changes_compares_the_prs_own_diff_not_its_commits(self):
+        def gh_for(files_by_ref):
+            gh = mock.Mock(repo="o/r")
+            gh.api.side_effect = lambda method, path, body=None, paginate=False: {"files": files_by_ref[path.rsplit("...", 1)[1]]}
+            return gh
+
+        def patch(text):
+            return [{"filename": "a.py", "status": "modified", "patch": text}]
+        gh = gh_for({
+            "A": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+new\n+    return True\n     check()"),
+            "B": patch("@@ -9,4 +9,4 @@ def f():\n ctx\n-old\n+new\n+    return True\n     check()"),
+            "C": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+newer\n+    return True\n     check()"),
+            "M": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+new\n     check()\n+    return True"),
+            "S": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+    return True\n+new\n     check()"),
+            "X": patch("@@ -1,4 +1,4 @@ def f():\n other ctx\n-old\n+new\n+    return True\n     check()"),
+        })
+        self.assertTrue(dispatch.same_changes(gh, "A", "B"), "main added lines above: the hunk only shifted")
+        self.assertFalse(dispatch.same_changes(gh, "A", "C"), "a changed line")
+        self.assertFalse(dispatch.same_changes(gh, "A", "M"), "a line moved below its context")
+        self.assertFalse(dispatch.same_changes(gh, "A", "S"), "two added lines swapped")
+        self.assertFalse(dispatch.same_changes(gh, "A", "X"), "main edited the context: ask again, the safe way")
+        binary = [{"filename": "m.bin", "status": "modified", "sha": "s1"}]
+        gh = gh_for({"D": binary, "E": binary})
+        self.assertTrue(dispatch.same_changes(gh, "D", "E"))
+        self.assertFalse(dispatch.same_changes(gh_for({"D": binary, "F": [dict(binary[0], sha="s2")]}), "D", "F"))
 
     def test_auto_merge_is_turned_off_when_the_approvals_stop_covering_the_pr(self):
         stale = pr(52, merge_state="CLEAN", decision="APPROVED", auto_merge=True, reviews=[(BOT, "APPROVED", "h1")])
@@ -306,6 +352,22 @@ class NotifyTest(unittest.TestCase):
         self.assertEqual(notify.latest_ask([ask, comment(2, "stranger", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", False))
         self.assertIsNone(notify.latest_ask([comment(3, "aray4702", "plain", 0)], IDENTITY, post.MARKER))
 
+    def test_an_item_closed_while_held_for_the_owner_is_reopened_until_answered(self):
+        ask = comment(1, "aray4702", self.ASK, 0)
+        def gh_with(labels, comments):
+            responses = {"closed": [{"number": 81, "labels": [{"name": n} for n in labels]},
+                                    {"number": 89, "pull_request": {}, "labels": [{"name": "needs-decision:owner"}]}],
+                         "comments": comments}
+            gh = mock.Mock(repo="o/r")
+            gh.api.side_effect = lambda method, path, body=None, paginate=False: (
+                responses["closed"] if "state=closed" in path else responses["comments"])
+            return gh
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], [ask]), IDENTITY, NOW), [(81, 1)])
+        answered = [ask, comment(2, "aray4702", "13a 14a", 5)]
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], answered), IDENTITY, NOW), [], "answered")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["type:definition"], [ask]), IDENTITY, NOW), [], "no longer held")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], []), IDENTITY, NOW), [], "no question asked")
+
     def test_unsent_filters_by_key(self):
         self.assertEqual(notify.unsent([{"key": "a"}], [("a", "x"), ("b", "y")]), [("b", "y")])
 
@@ -347,7 +409,7 @@ class FakeStore:
         self.appended = []
 
     def read(self, kind):
-        return []
+        return [r for k, r in self.appended if k == kind]
 
     def append(self, kind, record):
         self.appended.append((kind, record))
@@ -373,6 +435,52 @@ class DryRunTest(unittest.TestCase):
         ])
         spawn.assert_not_called()
         self.assertEqual(stores[0].appended, [])
+
+
+class HeldForTheOwner(FakeGitHub):
+    """#81 closed while its question to the Owner was unanswered (#114)."""
+    def api(self, method, path, body=None, paginate=False):
+        if path.startswith(f"repos/{self.repo}/issues?state=closed&labels=needs-decision%3Aowner"):
+            return [{"number": 81, "title": "Def", "labels": [{"name": "needs-decision:owner"}]}]
+        if path == f"repos/{self.repo}/issues/81/comments?per_page=100":
+            return [comment(1, "aray4702", NotifyTest.ASK, 0)]
+        got = super().api(method, path, body, paginate)
+        return {"html_url": "c/2"} if method == "POST" else got
+
+
+class ReopenTest(unittest.TestCase):
+    def passes(self, *dry_runs, gh=HeldForTheOwner):
+        store, github = FakeStore(), gh()
+        with mock.patch.object(post, "GitHub", lambda repo: github), \
+             mock.patch("system.dispatcher.state.Store", return_value=store), \
+             mock.patch.object(dispatch, "spawn"), \
+             mock.patch.object(dispatch.relay, "run", return_value=[]):
+            lines = [dispatch.dispatch_pass("poll", dry_run=d, now=NOW) for d in dry_runs]
+        return lines, github.writes, store.appended
+
+    def test_a_dry_run_says_it_would_reopen_and_changes_nothing(self):
+        (lines,), writes, appended = self.passes(True)
+        self.assertIn("would reopen #81: it closed while its question to the Owner was unanswered", lines)
+        self.assertEqual((writes, appended), ([], []))
+
+    def test_an_item_is_reopened_once_per_question_and_stays_closed_after(self):
+        # The second pass still finds #81 closed (closed again), its question unchanged and unanswered.
+        (first, second), writes, appended = self.passes(False, False)
+        self.assertIn("reopen #81: it closed while its question to the Owner was unanswered", first)
+        self.assertFalse([line for line in second if "reopen" in line], second)
+        self.assertEqual(writes, [("PATCH", "repos/aray4702/auto_research/issues/81"),
+                                  ("POST", "repos/aray4702/auto_research/issues/81/comments")])
+        self.assertEqual(appended, [("notices", {"key": "reopen:1", "at": NOW.isoformat()})])
+
+    def test_a_failed_check_never_stops_the_pass(self):
+        class Down(HeldForTheOwner):
+            def api(self, method, path, body=None, paginate=False):
+                if "labels=needs-decision%3Aowner" in path:
+                    raise SystemExit("failed: Bad Gateway (HTTP 502)")
+                return super().api(method, path, body, paginate)
+        (lines,), _, _ = self.passes(True, gh=Down)
+        self.assertEqual(lines[0], "reopen check failed: SystemExit: failed: Bad Gateway (HTTP 502)")
+        self.assertTrue(any(line.startswith("would start a developer run on #1") for line in lines), lines)
 
 
 if __name__ == "__main__":
