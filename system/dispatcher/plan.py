@@ -121,6 +121,18 @@ def choose(snap, runs, caps, identity, now, skip_review=(), answered=None):
     return starts, skipped
 
 
+# Standing rule SR1 (system/standing-rules.md) never covers a change to the standing rules or to this check.
+SR1_EXCLUDED = ("system/standing-rules.md", "system/dispatcher/plan.py")
+
+
+def sr1(pr, bot, second):
+    """SR1: a protected PR merges on its own once the Reviewer App and the Owner's code-owner account have both
+    approved its current head (#116), unless it changes the standing rules or this check."""
+    reviews = (latest_review(pr, bot), latest_review(pr, second))
+    return (all(r is not None and r["state"] == "APPROVED" and r["commit"] == pr["head"] for r in reviews)
+            and not any(f in SR1_EXCLUDED for f in pr["files"]))
+
+
 def merge_plan(snap, identity):
     """Merge-queue actions: ('refresh'|'auto-merge'|'ask-owner-to-merge'|'ask-owner-to-approve'|
     'renew'|'ask-owner-to-reapprove', pr, detail)."""
@@ -144,7 +156,8 @@ def merge_plan(snap, identity):
         if nxt["merge_state"] == "BEHIND":
             actions.append(("refresh", nxt["number"], "behind main"))
         elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"] and nxt["review_decision"] == "APPROVED":
-            actions.append(("ask-owner-to-merge" if nxt["protected"] else "auto-merge", nxt["number"], nxt["head"]))
+            mine = nxt["protected"] and not sr1(nxt, bot, second)
+            actions.append(("ask-owner-to-merge" if mine else "auto-merge", nxt["number"], nxt["head"]))
     for pr in prs:
         if pr["gate"] != "SUCCESS" or pr["review_decision"] == "APPROVED":
             continue
