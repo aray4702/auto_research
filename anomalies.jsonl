@@ -4,3 +4,4 @@
 {"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: git show", "level": "builder", "title": "Recurring permission denial: Bash: git show"}
 {"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: python3", "level": "builder", "title": "Recurring permission denial: Bash: python3"}
 {"at": "2026-10-28T14:30:03+00:00", "key": "bumpy:104:3", "level": "coordinator", "title": "Bumpy item #104"}
+{"at": "2026-10-28T14:30:03+00:00", "key": "idle:2026-W44", "level": "builder", "title": "Items waited while nothing ran"}
