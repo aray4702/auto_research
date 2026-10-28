@@ -16,6 +16,7 @@ The runner is headless Claude Code (`claude -p`, version 2.1.303) on the Owner's
 - **Per-run hard caps work:** `--max-turns` and `--max-budget-usd`. A budget cap stops the run with `error_max_budget_usd` and overshoots by at most one model call. `--model` and `--effort` select the model and effort level.
 - **Calibration (an estimate, ±2–10×):** this 7-day window held about $990 of API-equivalent usage across all local sessions at a reading of 4 %, which puts 1 point at roughly $250. Until the supervised runs of step 5 calibrate it, the caps assume 1 point per $100.
 - **Step 5 update (2026-10-26 22:40 PT):** the window had $1,137 at 7 %. That's about $160 per point on average, but about $50 per point at the margin (from 4 % to 7 %). The readings are whole percents, so the margin is coarse: the 4 → 7 % change is 2–4 points, a range of about $37–$75 per point. The caps now assume **1 point per $50**, the marginal point estimate (not a bound), until the builder's calibration tool (#43) measures it. The system's own 18 supervised runs cost $7.53, which is 0.05–0.15 points.
+- **First calibration (2026-10-28 16:03 PT, #202):** `calibrate.py` read 41 % at $1,583 of local usage, an average of 0.0259 points/$ (1 point ≈ $39). The caps now assume 0.026.
 
 ## Roles and parallelism
 
