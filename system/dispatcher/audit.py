@@ -1,4 +1,4 @@
-"""The product and system audits (blueprint §4.5): reports for the Owner, twice daily (runner.toml) and on
+"""The product and system audits (blueprint §4.5): reports for the Owner, daily at 07:30 (runner.toml) and on
 demand (`arsys audit`, or `audit` in the Discord channel).
 
 Each report is a new comment on its record issue (`record:audit-product`, `record:audit-system`) and a Discord

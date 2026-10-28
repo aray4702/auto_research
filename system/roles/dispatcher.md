@@ -23,7 +23,7 @@ The Dispatcher is a script (`system/dispatcher/`), not an LLM run. It does every
 
 Full reconcile against GitHub, as the safety net for missed polls.
 
-## Audits (07:30 and 19:30 PT, and on demand)
+## Audits (07:30 PT, and on demand)
 
 The Owner asks for one with `arsys audit [product|system]` or `audit [product|system]` in the chat. Each run posts two reports (`audit.py`), each a comment on its record issue (`record:audit-product`, `record:audit-system`), and sends one notice with their headlines and links:
 - **Product:** each goal's deadline and items by milestone and state; what waits on the Owner; what merged since the last report; main's gate; the watch list's latest note.
