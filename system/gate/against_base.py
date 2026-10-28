@@ -5,9 +5,9 @@ without the change. Standard library only.
 Usage: python3 -I system/gate/against_base.py <head> [--base origin/main] [--root DIR]
 
 In a throwaway worktree of <head>, it runs each test file the PR changes, then reverts the PR's
-other files to their merge base with --base and runs them again. A run can't do this by hand:
-`git checkout` is denied in Reviewer runs (#139), and this leaves the run's own worktree alone.
-Exit 0 when every test passes at the head and at least one fails at the base, or when the PR
+other files to their merge base with --base and runs them again, leaving the run's own worktree
+alone. Only files named as tests run (test_*.py, *_test.py): a helper under tests/, such as
+conftest.py, holds no test of its own. Exit 0 when every test passes at the head and at least one fails at the base, or when the PR
 changes no test; 1 otherwise.
 """
 
@@ -24,6 +24,7 @@ from system.gate.generic import git, is_test  # noqa: E402
 
 # A path from the PR is data: only plain relative .py paths become arguments, never an option.
 SAFE_TEST = re.compile(r"[A-Za-z0-9_][\w./-]*\.py")
+TEST_FILE = re.compile(r"test_.*\.py|.+_test\.py")
 TIMEOUT_S = 600
 
 
@@ -66,7 +67,7 @@ def check(root, head, base):
     """(ok, report lines)."""
     merge_base = git(root, "merge-base", base, head).strip()
     changed = changes(root, merge_base, head)
-    tests = [p for s, p in changed if s != "D" and is_test(p) and p.endswith(".py")]
+    tests = [p for s, p in changed if s != "D" and is_test(p) and TEST_FILE.fullmatch(Path(p).name)]
     others = [(s, p) for s, p in changed if not is_test(p)]
     unsafe = [p for p in tests if not SAFE_TEST.fullmatch(p)]
     if unsafe:
