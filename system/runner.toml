@@ -29,6 +29,7 @@ allow = [
   "Bash(git switch:*)", "Bash(git checkout:*)", "Bash(git branch:*)", "Bash(git add:*)", "Bash(git commit:*)",
   "Bash(git push:*)", "Bash(git merge:*)", "Bash(git rev-parse:*)", "Bash(git ls-files:*)", "Bash(git grep:*)",
   "Bash(python3 -I system/tools/post.py:*)", "Bash(python3 -I system/gate/generic.py:*)",
+  "Bash(python3 -I system/gate/against_base.py:*)",  # a PR's tests at its head and its base (#139)
   "Bash(python3 -I -m unittest:*)",
   "Bash(date:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)",
   "Bash(sort:*)", "Bash(diff:*)",

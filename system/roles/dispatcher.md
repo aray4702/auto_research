@@ -34,7 +34,7 @@ The findings, each raised once:
   - watch-list risks past their thresholds. A row's Signal names a measured metric (`failed_runs_per_day`, `denials_per_day`, `cost_per_day_usd`, `owner_wait_hours`, `median_item_hours`), and its Threshold is a comparison, such as `> 3`. These go to the Coordinator.
   - bumpy items: two or more unfinished runs, or three or more runs, in a week. These go to the Coordinator, to re-plan.
   - failures of a new kind, a recurring permission denial, cost per finished item more than double its week, and runner drift. These go to the builder, as an item held at `needs-decision:builder`.
-  - flow (`flow.py`): a stage whose median hours per finished item this week is more than double its four weeks before and over an hour longer, and over 2 hours a week of items waiting while nothing ran. These go to the builder, the same way.
+  - flow (`flow.py`): a stage whose median hours per finished item this week is more than double its four weeks before and over an hour longer, and any stretch of 30 minutes or more in which a `state:ready` item of a work-order type, or a PR waiting for the Reviewer, waited with no run going. These go to the builder, the same way.
 - **Flow:** record each item closed as completed in `flow.jsonl`: its hours in each stage, from opening to close (`running`, `owner`, `decision`, `blocked`, `rework`, `review`, `merging`, `queued`, `triage`).
 - **Rule audit:** check every rule a script can check after the fact, including the branch protection recorded in `system/identity.toml`. A breach throws the kill switch and goes to the Owner (blueprint §4.5).
 - **Usage:** record it by role and item. Warn the Owner as a cap nears; pause at it.
