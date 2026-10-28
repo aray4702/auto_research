@@ -108,6 +108,15 @@ def dispatch_pass(command, dry_run, now=None):
     url = lambda n: f"https://github.com/{identity['repo']}/pull/{n}"
     wanted, renewed = [], set()
 
+    # An approval followed only by merges from main still counts (#118): GitHub no longer dismisses it.
+    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
+    for pr in snap["prs"]:
+        pr["fresh"] = {}
+        for login in (bot, second):
+            r = plan.latest_review(pr, login)
+            if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
+                pr["fresh"][login] = only_merges_since(gh, r["commit"], pr["head"])
+
     # The merge queue: one PR at a time.
     for action, n, detail in plan.merge_plan(snap, identity):
         if action == "refresh":
@@ -118,6 +127,10 @@ def dispatch_pass(command, dry_run, now=None):
             say(f"turn on auto-merge for PR #{n}")
             if not dry_run:
                 subprocess.run(["gh", "pr", "merge", str(n), "--auto", "--merge", "--repo", gh.repo], check=True, capture_output=True)
+        elif action == "cancel-auto-merge":
+            say(f"turn off auto-merge for PR #{n}: changes were pushed after its approval")
+            if not dry_run:
+                subprocess.run(["gh", "pr", "merge", str(n), "--disable-auto", "--repo", gh.repo], check=True, capture_output=True)
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
             if only_merges_since(gh, detail, pr["head"]):
