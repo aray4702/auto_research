@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-27 | architect, #83 | Reviewer's findings on #129: `rename` trims a name's outer white space; WebVTT escapes `&` in the voice tag too; `lmt demo` reads the transcript again on each load and needs no `.vtt`; only `lmt eval` needs the `eval` extra |
 | 2026-10-27 | architect, #83 | G3: `lmt rename` and `lmt demo`; speaker names' rules; the WebVTT cue shows the speaker as text as well as in the voice tag; the install command and version 1.0.0. Holds the recommended options on #83, waiting for the Owner's approval |
 | 2026-10-27 | architect, #81 | Reviewer's finding on #89: exit code 6 for `lmt eval --check-readme`'s mismatch, so drift and a bug can't look alike |
 | 2026-10-27 | architect, #81 | First version, for G1. It holds the recommended options on #81, waiting for the Owner's approval |
@@ -48,7 +49,7 @@ There is no language option: the product is English-only (F9).
 
 ### `lmt eval`
 
-Needs the `eval` extra (`lmt[eval]`).
+Needs the `eval` extra (`lmt[eval]`). No other command does: `lmt demo --sample` uses the dataset manifests, but not the extra.
 
 | Option | Effect |
 | --- | --- |
@@ -60,7 +61,7 @@ Needs the `eval` extra (`lmt[eval]`).
 
 ### `lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)
 
-Gives speakers names, then exports again (#83, question 5). `TRANSCRIPT` is a transcript JSON that `lmt` wrote. Each `KEY` is a speaker's id (`S1`) or its current label (`Speaker 1`), matched exactly, and an id is tried first. The text is split at the first `=`. `NAME` must be an allowed name ("Speaker names", below).
+Gives speakers names, then exports again (#83, question 5). `TRANSCRIPT` is a transcript JSON that `lmt` wrote. Each `KEY` is a speaker's id (`S1`) or its current label (`Speaker 1`), matched exactly, and an id is tried first. The text is split at the first `=`. Leading and trailing white space is removed from `NAME` (as Python's `str.strip()` does), and what remains must be an allowed name ("Speaker names", below). That trimmed name is the label written.
 
 | Option | Default | Effect |
 | --- | --- | --- |
@@ -89,7 +90,8 @@ Serves a page on this computer that shows a transcript, its speakers and its aud
 - **On start,** it prints the page's URL to stdout, `http://127.0.0.1:<port>/<token>/`, where the token is random for each run, then opens it in the default browser.
 - **It stops** on Ctrl-C or SIGTERM and exits 0, since stopping is how a server ends. This is the one command for which Ctrl-C isn't exit 130.
 - **Only this computer can reach it:** it listens on `127.0.0.1` only, and has no option to listen elsewhere (Q8). It answers only requests that carry the token and a `Host` of `127.0.0.1:<port>` or `localhost:<port>`, and only GET and HEAD.
-- **It writes nothing,** except `--sample`'s cache in `LMT_DATA_DIR`.
+- **It writes nothing,** except `--sample`'s cache in `LMT_DATA_DIR`. It needs no `.vtt` or other export beside the transcript.
+- **It reads the transcript again** each time the page loads, so after `lmt rename`, reloading the page shows the new names. If the file has become invalid, the page shows an error, stderr gets one `lmt: warning:` line, and the server keeps running.
 - **The page** needs nothing from the network: no fonts, scripts or styles from elsewhere. The routes it uses, and the page itself, are internal and may change in any version. Only the command and its options are public.
 - **Errors:** a missing or unreadable audio file is an input error (3), naming the file and `--audio`. So are an invalid transcript and a port in use. An audio file whose duration differs from `source.duration` by more than 1 s gets one `lmt: warning:` line, and the page is still served.
 
@@ -132,7 +134,7 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 
 - **Text (`.txt`):** one line per segment, `[HH:MM:SS] Speaker 1: text`.
 - **SRT (`.srt`):** one cue per segment, numbered from 1, with times as `HH:MM:SS,mmm`. The cue text is `Speaker 1: text`, wrapped at 42 characters to at most two lines. A longer segment is split into consecutive cues at word boundaries, using the word times.
-- **WebVTT (`.vtt`):** a `WEBVTT` header, then one cue per segment, with times as `HH:MM:SS.mmm`. The speaker is both a voice tag and visible text, `<v Speaker 1>Speaker 1: text`, since players don't show a voice tag (#83, question 6). `&`, `<` and `>` in text are escaped as `&amp;`, `&lt;` and `&gt;`. Long segments are split as in SRT, counting the visible prefix and not the tag.
+- **WebVTT (`.vtt`):** a `WEBVTT` header, then one cue per segment, with times as `HH:MM:SS.mmm`. The speaker is both a voice tag and visible text, `<v Speaker 1>Speaker 1: text`, since players don't show a voice tag (#83, question 6). `&`, `<` and `>` in text are escaped as `&amp;`, `&lt;` and `&gt;`, and `&` in the voice tag's annotation is escaped as `&amp;` too (a label can't hold `<` or `>`). So `José & Ana` is written `<v José &amp; Ana>José &amp; Ana: text`. Long segments are split as in SRT, counting the visible prefix and not the tag.
 - **JSON (`.json`):** valid against `schema/transcript.schema.json`, as follows.
 
 ### Transcript JSON, version 1.0
@@ -162,7 +164,7 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 - **Required:** `schema_version`, `source`, `models`, `speakers` and `segments`. Every segment has `start`, `end`, `speaker` and `text` (F3). `words` is optional.
 - **Rules:** segments are sorted by `start`, and 0 ≤ `start` < `end` ≤ `source.duration`. Each `speaker` is the `id` of an entry in `speakers`. Speaker ids are `S1`, `S2`, … in order of first appearance. `models.diarization` is `null` with `--no-diarize`.
 - **Labels:** `label` is what every export shows. It starts as "Speaker N", and renaming (F7, G3) changes only `label`.
-- **Speaker names** (G3): a `label` is 1 to 32 Unicode code points, with no leading or trailing space, no control characters, and none of `<`, `>`, `{`, `}` and `=`. These keep every subtitle format valid, and a name with its `: ` within an SRT line of 42 characters. The schema states the rule. Every label `lmt` has written meets it, so `schema_version` stays 1.0. Two speakers may share a label.
+- **Speaker names** (G3): a `label` is 1 to 32 Unicode code points, with no leading or trailing white space (`rename` trims it from what it's given), no control characters, and none of `<`, `>`, `{`, `}` and `=`. These keep every subtitle format valid, and a name with its `: ` within an SRT line of 42 characters. The schema states the rule. Every label `lmt` has written meets it, so `schema_version` stays 1.0. Two speakers may share a label.
 - **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13).
 - **Compatibility:** a minor version only adds optional fields, and readers ignore fields they don't know. A major version changes or removes fields.
 
