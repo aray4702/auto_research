@@ -45,5 +45,15 @@ jobs:
           version: "0.13.6"
           enable-cache: true
       - run: uv sync --locked --all-extras
+      # G1-15: every distribution and bundled library on both platforms against toolchain.toml's [licences].
+      - name: Licences (linux-x86_64)
+        run: python3 -I .github/scripts/check_licences.py --site .venv/lib/python3.11/site-packages --platform linux-x86_64
+      # The lock's macOS wheels, unpacked here without running them. macOS takes torch from PyPI, not the CPU index.
+      - name: Licences (macos-arm64)
+        run: |
+          uv export --frozen --all-extras --no-emit-project -o "$RUNNER_TEMP/requirements.txt"
+          uv pip install --target "$RUNNER_TEMP/macos" --python-platform aarch64-apple-darwin --python-version 3.11 \
+            --no-deps --require-hashes --index-url https://pypi.org/simple -r "$RUNNER_TEMP/requirements.txt"
+          python3 -I .github/scripts/check_licences.py --site "$RUNNER_TEMP/macos" --platform macos-arm64
       - run: uv run --frozen ruff check
       - run: uv run --frozen pytest
