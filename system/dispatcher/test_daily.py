@@ -44,6 +44,17 @@ class DenialsTest(unittest.TestCase):
         allowed = runner.load_all()["runner"]["common"]["allow"]
         self.assertFalse([a for a in allowed if a.startswith("Bash(sed")], "the explanation holds only while sed is denied")
 
+    def test_file_tools_are_explained_only_while_every_role_has_them_without_limit(self):
+        config = runner.load_all()["runner"]
+        for tool in ("Glob", "Grep", "Read"):
+            sig = usage.denial_signature({"tool_name": tool, "tool_input": {"pattern": "*", "path": "/elsewhere"}})
+            self.assertIn(sig, config["denials"]["explained"], "outside the worktree, --restricted denies it (#185)")
+            self.assertIn(tool, config["common"]["allow"], "else a denial could be a real gap")
+            self.assertFalse([d for d in config["common"]["deny"] if d.startswith(tool)], "else a denial could be a real gap")
+            for role in config["roles"].values():
+                self.assertIn(tool, role["tools"], "else a denial could be a real gap")
+        self.assertIn("--restricted", config["runner"]["flags"])
+
     def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
         for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
                               ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
