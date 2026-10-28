@@ -150,3 +150,4 @@
 {"at": "2026-10-28T02:34:00+00:00", "event": "start", "item": null, "pid": 54375, "role": "coordinator", "run_id": "coordinator-20261028T023357Z", "task": "Triage these issues: #90."}
 {"at": "2026-10-28T02:34:03+00:00", "cost_usd": 1.652674, "denials": 5, "denied": ["Bash: ffmpeg", "Bash: uv", "Bash: which uv", "Glob"], "event": "end", "five_hour": 0.16, "item": 89, "role": "architect", "run_id": "architect-20261028T022720Z", "seven_day": 0.21, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 50}
 {"at": "2026-10-28T02:35:17+00:00", "cost_usd": 0.330116, "denials": 0, "denied": [], "event": "end", "five_hour": 0.16, "item": null, "role": "coordinator", "run_id": "coordinator-20261028T023357Z", "seven_day": 0.21, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 20}
+{"at": "2026-10-28T02:38:21+00:00", "event": "start", "item": 89, "pid": 55477, "role": "reviewer", "run_id": "reviewer-20261028T023816Z", "task": "Review PR #89."}
