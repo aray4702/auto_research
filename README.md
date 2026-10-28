@@ -10,7 +10,7 @@ Prerequisites:
 
 - git;
 - Python 3.11 or later;
-- [uv](https://docs.astral.sh/uv/), the toolchain's installer, at version <uv version>, as [`toolchain.toml`](toolchain.toml) pins it.
+- [uv](https://docs.astral.sh/uv/), the toolchain's installer, at version 0.13.6, as [`toolchain.toml`](toolchain.toml) pins it.
 
 Get a working copy, install the product with its locked dependencies ([`uv.lock`](uv.lock)), and run it:
 

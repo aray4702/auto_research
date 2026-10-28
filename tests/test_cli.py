@@ -13,6 +13,8 @@ from unittest import mock
 from lmt import cli
 
 PUBLIC_API = Path(__file__).resolve().parents[1] / "design" / "public-api.md"
+# A later goal's command, "(G2)" or "(G3, …)": skipped until the item that adds the command removes its goal here.
+LATER_GOAL = re.compile(r"\((G2|G3)(, [^)]*)?\)$")
 
 
 def run(*argv):
@@ -27,14 +29,16 @@ def documented_options():
     text = PUBLIC_API.read_text()
     commands = text.split("\n## Commands\n", 1)[1].split("\n## ", 1)[0]
     options = {}
-    for block in re.split(r"^### ", commands, flags=re.M)[1:]:
+    for block in re.split(r"^### ", commands, flags=re.MULTILINE)[1:]:
         heading, _, body = block.partition("\n")
         if heading == "Global options":
             options[()] = set(re.findall(r"`lmt (--[\w-]+)`", body)) - {"--help"}
             continue
+        if LATER_GOAL.search(heading):
+            continue
         command = re.match(r"`lmt (\w+)", heading).group(1)
         if command == "models":  # one row per subcommand, its options in brackets
-            for action, rest in re.findall(r"^\| `lmt models (\w+)([^`]*)`", body, re.M):
+            for action, rest in re.findall(r"^\| `lmt models (\w+)([^`]*)`", body, re.MULTILINE):
                 options[("models", action)] = set(re.findall(r"--[\w-]+", rest))
             continue
         found = set()
@@ -70,14 +74,14 @@ class HelpAndVersionTest(unittest.TestCase):
                 self.assertIn("usage: lmt", out)
 
     def test_module_entry_point_help(self):
-        r = subprocess.run([sys.executable, "-m", "lmt", "--help"], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-m", "lmt", "--help"], capture_output=True, text=True, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("transcribe", r.stdout)
 
     def test_help_imports_no_handler_module(self):
         script = ("import sys; from lmt.cli import main; main(['--help']); "
                   "print([m for m in ('lmt.pipeline', 'lmt.models', 'lmt.eval.cli') if m in sys.modules])")
-        r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip().splitlines()[-1], "[]")
 
@@ -99,6 +103,15 @@ class OptionTableTest(unittest.TestCase):
         # Guards the reader: a table it failed to parse would compare empty with empty.
         self.assertIn("--output-dir", documented_options()[("transcribe",)])
         self.assertIn("-f", documented_options()[("transcribe",)])
+
+    def test_later_goals_sections_are_skipped(self):
+        for heading in ("`lmt live` (G2)", "`lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)",
+                        "`lmt demo [TRANSCRIPT]` (G3, F8)"):
+            with self.subTest(heading=heading):
+                self.assertTrue(LATER_GOAL.search(heading))
+        for heading in ("`lmt transcribe INPUT`", "`lmt models`", "`lmt eval`", "Global options"):
+            with self.subTest(heading=heading):
+                self.assertFalse(LATER_GOAL.search(heading))
 
 
 class UsageErrorTest(unittest.TestCase):

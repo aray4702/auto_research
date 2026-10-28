@@ -15,7 +15,7 @@ from lmt.errors import LmtError, UsageError
 FORMATS = ("txt", "srt", "vtt", "json")
 SPEAKERS_MIN, SPEAKERS_MAX = 1, 20
 
-_ARGUMENT = re.compile(r"^argument (\S+): (.*)$", re.S)
+_ARGUMENT = re.compile(r"^argument (\S+): (.*)$", re.DOTALL)
 _REQUIRED = re.compile(r"^the following arguments are required: ([^,\s]+)")
 _UNRECOGNIZED = re.compile(r"^unrecognized arguments: (\S+)")
 
@@ -155,7 +155,7 @@ def main(argv=None) -> int:
         return e.exit_code
     except KeyboardInterrupt:
         return 130
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 -- any bug is one line, never a traceback (design §1a)
         print(f"lmt: error: internal: {type(e).__name__}: {e}", file=sys.stderr)
         return 1
 
