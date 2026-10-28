@@ -8,7 +8,9 @@ comes from AGENT_ROLE and the run ID from AGENT_RUN_ID, both set by whoever star
   post.py list [--state open|closed|all] [--kind issue|pr|all] [--label L]...
   post.py gate [REF]          the gate's result on a commit, branch or tag (default: main)
   post.py comment <n> BODY
-  post.py issue-create --title T [--label L]... BODY
+  post.py issue-create --title T [--label L]... [--milestone M] BODY
+  post.py milestone-create --title M BODY    a goal stage; BODY is its description
+  post.py milestone <n> (--set M | --clear)  M is the milestone's title
   post.py edit-body <n> [--prepend | --replace-section H | --append-to-section H] BODY
                               the whole body, or only part of it: so a long record is never resent
   post.py label <n> [--add L]... [--remove L]...
@@ -128,6 +130,9 @@ def cmd_read(gh, identity, n):
         f"#{n} {'PR' if is_pr else 'issue'} [{issue['state']}] {issue['title']}",
         "labels: " + (", ".join(label["name"] for label in issue["labels"]) or "none"),
     ]
+    if issue.get("milestone"):
+        m = issue["milestone"]
+        lines.append(f"milestone: {m['title']} ({m['open_issues']} open, {m['closed_issues']} closed)")
     posts = [("body", issue)]
     posts += [("comment", c) for c in gh.api("GET", f"{base}/issues/{n}/comments?per_page=100", paginate=True)]
     if is_pr:
@@ -183,12 +188,33 @@ def cmd_comment(gh, caller, n, body):
     return gh.api("POST", f"repos/{gh.repo}/issues/{n}/comments", {"body": with_marker(body, *caller)})["html_url"]
 
 
-def cmd_issue_create(gh, caller, title, labels, body):
-    issue = gh.api(
-        "POST", f"repos/{gh.repo}/issues",
-        {"title": title, "labels": labels, "body": with_marker(body, *caller)},
-    )
+def cmd_issue_create(gh, caller, title, labels, body, milestone=None):
+    fields = {"title": title, "labels": labels, "body": with_marker(body, *caller)}
+    if milestone:
+        fields["milestone"] = milestone_number(gh, milestone)
+    issue = gh.api("POST", f"repos/{gh.repo}/issues", fields)
     return f"#{issue['number']} {issue['html_url']}"
+
+
+def milestone_number(gh, title):
+    """The number of the milestone with this title, open or closed."""
+    found = [m["number"] for m in gh.api("GET", f"repos/{gh.repo}/milestones?state=all&per_page=100", paginate=True)
+             if m["title"] == title]
+    if not found:
+        raise SystemExit(f"no milestone titled {title!r}; create it with milestone-create")
+    return found[0]
+
+
+def cmd_milestone_create(gh, caller, title, body):
+    m = gh.api("POST", f"repos/{gh.repo}/milestones", {"title": title, "description": with_marker(body, *caller)})
+    return f"milestone {m['number']} {m['html_url']}"
+
+
+def cmd_milestone(gh, n, title):
+    """Put the item in the milestone with this title, or take it out of its milestone (title None)."""
+    number = milestone_number(gh, title) if title else None
+    gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"milestone": number})
+    return f"#{n}: milestone {title!r}" if title else f"#{n}: no milestone"
 
 
 def section(lines, heading):
@@ -405,6 +431,11 @@ def parser():
     c = command("issue-create", number=False, body=True)
     c.add_argument("--title", required=True)
     c.add_argument("--label", action="append", default=[])
+    c.add_argument("--milestone", metavar="TITLE")
+    command("milestone-create", number=False, body=True).add_argument("--title", required=True)
+    g = command("milestone").add_mutually_exclusive_group(required=True)
+    g.add_argument("--set", metavar="TITLE")
+    g.add_argument("--clear", action="store_true")
     g = command("edit-body", body=True).add_mutually_exclusive_group()
     g.add_argument("--prepend", action="store_true", help="add BODY at the top, as the dated note")
     g.add_argument("--replace-section", metavar="HEADING", help="replace what's under this heading line with BODY")
@@ -444,7 +475,11 @@ def main(argv=None):
     if c == "comment":
         out = cmd_comment(gh, caller, args.n, read_body(args))
     elif c == "issue-create":
-        out = cmd_issue_create(gh, caller, args.title, args.label, read_body(args))
+        out = cmd_issue_create(gh, caller, args.title, args.label, read_body(args), args.milestone)
+    elif c == "milestone-create":
+        out = cmd_milestone_create(gh, caller, args.title, read_body(args))
+    elif c == "milestone":
+        out = cmd_milestone(gh, args.n, args.set)
     elif c == "edit-body":
         out = cmd_edit_body(gh, caller, args.n, read_body(args), args.prepend, args.replace_section, args.append_to_section)
     elif c == "label":
