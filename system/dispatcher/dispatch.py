@@ -12,7 +12,6 @@ nothing. Standard library only.
 
 import argparse
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -20,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import daily, flow, github_state, killswitch, notify, plan, relay, state, usage  # noqa: E402
+from system.dispatcher import daily, flow, github_state, killswitch, merge_rules, notify, plan, relay, state, usage  # noqa: E402
 from system.tools import post, runner  # noqa: E402
 
 
@@ -38,24 +37,27 @@ def alive(pid):
     return True
 
 
-HUNK_LINE_NUMBERS = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.M)
-
-
-def own_changes(gh, ref):
-    """A commit's diff against its merge base with main, file by file: a PR's own changes. Each patch is kept whole
-    and in order, context included, less the line numbers in its hunk headers, so main adding or removing lines
-    elsewhere only shifts it. A file without a patch (binary, or too large to show) is compared by its blob."""
-    files = gh.api("GET", f"repos/{gh.repo}/compare/main...{ref}")["files"]
-    return {f["filename"]: (f["status"], HUNK_LINE_NUMBERS.sub("@@", f["patch"]))
-            if f.get("patch") is not None else (f["status"], f.get("sha")) for f in files}
-
-
-def same_changes(gh, approved, head):
-    """True when the PR's own changes at head are what they were at the approved commit: everything since came from
-    main. A merge that resolved a conflict by hand, or any commit of the PR's own, changes them (#118, #127). So
-    does main editing a line next to one of them: that errs toward asking for a re-approval.
-    (Comparing commits instead fails: the commits merged in from main include other PRs' own commits.)"""
-    return own_changes(gh, approved) == own_changes(gh, head)
+def sign_off_question(pr, approved):
+    """The SR2 question (#150), asked once on the PR. Own lines unchanged: the Coordinator judges, then the builder,
+    then the Owner. Own lines changed (on a PR the builder didn't write): the builder, then the Owner."""
+    n, head = pr["number"], pr["head"]
+    if pr.get("same_lines"):
+        what = (f"Since then only main changed: the PR's own added and removed lines are the same, in order, but main "
+                f"edited code next to them, so that approval no longer counts by itself.\n\n"
+                f"Judge whether main's changes around those lines change what the Owner approved: compare "
+                f"`compare/{approved}...{head}` and read main's commits that touched the same places.\n")
+    else:
+        what = (f"Since then the PR's own lines changed, and the Reviewer approved the new head.\n\n"
+                f"Judge whether the changes stay within what the Owner approved (for example, fixes the Reviewer asked "
+                f"for) or change what it does in a way the Owner should see: compare `compare/{approved}...{head}`.\n")
+    return (f"**SR2.** The Owner approved this PR at `{approved}`. {what}"
+            f"- **Within it:** `post.py sign-off {n} --approved {approved} --head {head}` with your reasons as the "
+            f"body. SR1 then merges it in its turn.\n"
+            f"- **You can't tell** (Coordinator): `post.py escalate {n} --level builder` with what you found.\n"
+            f"- **You can't tell** (builder): `post.py escalate {n} --level owner`, asking whether to sign off. On "
+            f"the Owner's yes, sign off quoting it; otherwise the Owner approves the PR again on GitHub.\n\n"
+            f"Only a sign-off from a run on this PR, by a role SR2 lets judge this kind of change, counts "
+            f"(`system/standing-rules.md`).")
 
 
 def expired_claims(gh, items, active_items, now):
@@ -160,17 +162,10 @@ def dispatch_pass(command, dry_run, now=None):
     url = lambda n: f"https://github.com/{identity['repo']}/pull/{n}"
     wanted, renewed = [], set()
 
-    # An approval followed only by merges from main still counts (#118): GitHub no longer dismisses it.
-    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
-    for pr in snap["prs"]:
-        pr["fresh"] = {}
-        for login in (bot, second):
-            r = plan.latest_review(pr, login)
-            if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
-                pr["fresh"][login] = same_changes(gh, r["commit"], pr["head"])
+    merge_rules.annotate(gh, snap, runs, identity, post.MARKER)
 
     # The merge queue: one PR at a time.
-    for action, n, detail in plan.merge_plan(snap, identity):
+    for action, n, detail in merge_rules.merge_plan(snap, identity):
         if action == "refresh":
             say(f"refresh PR #{n} from main ({detail})")
             if not dry_run:
@@ -185,12 +180,17 @@ def dispatch_pass(command, dry_run, now=None):
                 subprocess.run(["gh", "pr", "merge", str(n), "--disable-auto", "--repo", gh.repo], check=True, capture_output=True)
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
-            if same_changes(gh, detail, pr["head"]):
+            if merge_rules.same_changes(gh, detail, pr["head"]):
                 say(f"renew the Reviewer App's approval of PR #{n} (its own changes are as they were at {detail[:7]})")
                 renewed.add(n)
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
                                     f"Renewed after a refresh from main: the PR's own changes are unchanged since the approval of {detail[:7]}.")
+        elif action in ("ask-coordinator-to-sign-off", "ask-builder-to-sign-off"):
+            level = action.split("-")[1]
+            say(f"ask the {'Coordinator' if level == 'coordinator' else level} to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
+            if not dry_run:
+                post.cmd_escalate(gh, me, n, level, sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 
