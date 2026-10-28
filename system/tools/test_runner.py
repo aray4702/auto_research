@@ -49,6 +49,11 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("Bash(mkdir -p:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
         self.assertNotIn("Bash(mkdir -p:*)", settings["permissions"]["allow"])
 
+    def test_every_role_may_check_a_merge_without_making_one(self):
+        # A :* rule matches whole words, so git merge doesn't cover git merge-tree (#180).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git merge-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
     def test_product_tools_reach_only_the_roles_that_take_them(self):
         config = with_toolchain(["Bash(make test:*)"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "developer")["permissions"]["allow"])
