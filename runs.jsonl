@@ -488,3 +488,4 @@
 {"at": "2026-10-28T21:49:02+00:00", "event": "start", "item": 188, "pid": 62806, "role": "reviewer", "run_id": "reviewer-20261028T214856Z", "task": "Review PR #188."}
 {"at": "2026-10-28T21:49:34+00:00", "cost_usd": 0.165076, "denials": 0, "denied": [], "event": "end", "five_hour": 0.23, "item": 188, "role": "reviewer", "run_id": "reviewer-20261028T214856Z", "seven_day": 0.39, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 11}
 {"at": "2026-10-28T21:51:16+00:00", "event": "start", "item": 188, "pid": 64107, "role": "reviewer", "run_id": "reviewer-20261028T215111Z", "task": "Review PR #188."}
+{"at": "2026-10-28T21:51:32+00:00", "cost_usd": 0.79953, "denials": 2, "denied": ["Bash: git stash", "Bash: git stash > && | ;"], "event": "end", "five_hour": 0.23, "item": 192, "role": "builder", "run_id": "builder-20261028T214643Z", "seven_day": 0.39, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 39}
