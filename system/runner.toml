@@ -45,6 +45,7 @@ deny = [
 [denials]
 explained = [
   "Bash: cat << |",  # cat <<'EOF' | post.py: denied though both are allowed; rules.md, Posting, gives the heredoc form
+  "Bash: ls",  # ls is allowed, so a plain ls denied went outside the worktree; rules.md, How a run works, step 3 (#182)
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
