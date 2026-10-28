@@ -146,6 +146,16 @@ class CandidatesTest(unittest.TestCase):
         self.assertEqual([c[3] for c in plan.candidates(s, set(), IDENTITY)], ["review"])
         self.assertEqual(plan.candidates(s, set(), IDENTITY, skip_review={5}), [])
 
+    def test_a_pr_held_for_a_decision_starts_the_decider_not_the_reviewer(self):
+        # #192: the Reviewer escalated #188 to the Architect; the review candidate came first on the same
+        # item, so each tick restarted the Reviewer and the Architect never started.
+        held = snap(prs=[pr(5, labels=["needs-decision:architect"])])
+        got = plan.choose(held, [], CAPS, IDENTITY, NOW)[0]
+        self.assertEqual([(r, i, w) for r, i, _, w in got], [("architect", 5, "decision")])
+        self.assertEqual(plan.candidates(snap(prs=[pr(5, labels=["needs-decision:owner"])]), set(), IDENTITY), [])
+        # The Architect answers and removes the label: the Reviewer picks it up again.
+        self.assertEqual([c[3] for c in plan.candidates(snap(prs=[pr(5)]), set(), IDENTITY)], ["review"])
+
     def test_changes_requested_on_the_head_sends_it_back_to_its_author(self):
         s = snap(prs=[pr(5, role="builder", reviews=[(BOT, "CHANGES_REQUESTED", "h2")])])
         self.assertEqual([(c[0], c[3]) for c in plan.candidates(s, set(), IDENTITY)], [("builder", "pr-work")])
