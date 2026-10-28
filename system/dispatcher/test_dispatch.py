@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from system.dispatcher import dispatch, github_state, notify, plan
+from system.dispatcher import dispatch, github_state, merge_rules, notify, plan
 from system.tools import post
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,11 +22,11 @@ def issue(n, *labels, title="t"):
 
 
 def pr(n, role="developer", gate="SUCCESS", head="h2", merge_state="BLOCKED", decision="REVIEW_REQUIRED",
-       reviews=(), labels=(), protected=False, auto_merge=False, draft=False, resolves=()):
+       reviews=(), labels=(), protected=False, auto_merge=False, draft=False, resolves=(), files=()):
     return {"number": n, "title": "p", "draft": draft, "head": head, "branch": "b", "merge_state": merge_state,
             "resolves": list(resolves),
             "review_decision": decision, "auto_merge": auto_merge, "author_role": role, "labels": set(labels),
-            "files": [], "protected": protected, "gate": gate,
+            "files": list(files), "protected": protected, "gate": gate,
             "reviews": [{"login": login, "state": s, "commit": c, "at": None} for login, s, c in reviews]}
 
 
@@ -188,86 +188,250 @@ class MergePlanTest(unittest.TestCase):
     def test_one_pr_at_a_time_refreshing_then_merging(self):
         app = [(BOT, "APPROVED", "h2")]
         s = snap(prs=[pr(8, merge_state="BEHIND", decision="APPROVED", reviews=app), pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("refresh", 8, "behind main")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("refresh", 8, "behind main")])
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("auto-merge", 9, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("auto-merge", 9, "h2")])
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, reviews=app)])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 9, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 9, "h2")], "protected, no Owner approval yet (#127)")
+        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, files=["system/standing-rules.md"],
+                         reviews=app + [(SECOND, "APPROVED", "h2")])])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 9, "h2")], "both current, but SR1 leaves it to the Owner")
         s = snap(prs=[pr(7, merge_state="CLEAN", decision="APPROVED", auto_merge=True, reviews=app),
                       pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [])
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED")])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [], "GitHub's APPROVED alone isn't enough: the Reviewer App's must be current (#118)")
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [], "GitHub's APPROVED alone isn't enough: the Reviewer App's must be current (#118)")
 
     def test_a_protected_pr_is_refreshed_before_the_owner_is_asked_once(self):
         # Behind main and waiting only on the Owner: refresh first, ask nothing yet.
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BEHIND", reviews=[(BOT, "APPROVED", "h1")], head="h1")])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("refresh", 23, "behind main")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("refresh", 23, "behind main")])
         # Refreshed: the App's approval is on the old head, so renew it, and still don't ask the Owner.
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h1")], head="h2")])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 23, "h1")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("renew", 23, "h1")])
         # Renewed on the new head and up to date: now ask the Owner, once.
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")], head="h2")])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 23, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 23, "h2")])
         # The Owner approved the same head: SR1 merges it (#116).
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="CLEAN", decision="APPROVED",
                          reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")], head="h2")])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("auto-merge", 23, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("auto-merge", 23, "h2")])
 
     def test_sr1_merges_a_protected_pr_only_with_both_approvals_on_its_head(self):
         both = [(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")]
         ready = lambda **kw: snap(prs=[pr(40, protected=True, merge_state="CLEAN", decision="APPROVED", **kw)])
-        self.assertEqual(plan.merge_plan(ready(reviews=both), IDENTITY), [("auto-merge", 40, "h2")])
+        self.assertEqual(merge_rules.merge_plan(ready(reviews=both), IDENTITY), [("auto-merge", 40, "h2")])
         owner_only = [(SECOND, "APPROVED", "h2")]
-        self.assertEqual(plan.merge_plan(ready(reviews=owner_only), IDENTITY), [],
+        self.assertEqual(merge_rules.merge_plan(ready(reviews=owner_only), IDENTITY), [],
                          "the Owner approved before the Reviewer: nothing merges, and nothing is asked, until the Reviewer approves")
         asked_again = [(BOT, "APPROVED", "h2"), (BOT, "CHANGES_REQUESTED", "h2"), (SECOND, "APPROVED", "h2")]
-        self.assertEqual(plan.merge_plan(ready(reviews=asked_again), IDENTITY), [], "the latest review counts")
+        self.assertEqual(merge_rules.merge_plan(ready(reviews=asked_again), IDENTITY), [], "the latest review counts")
         old_head = [(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h2")]
-        self.assertNotIn(("auto-merge", 40, "h2"), plan.merge_plan(ready(reviews=old_head), IDENTITY))
+        self.assertNotIn(("auto-merge", 40, "h2"), merge_rules.merge_plan(ready(reviews=old_head), IDENTITY))
         rules = ready(reviews=both)
         rules["prs"][0]["files"] = ["system/standing-rules.md"]
-        self.assertEqual(plan.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")], "SR1 never merges a change to itself")
+        self.assertEqual(merge_rules.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")], "SR1 never merges a change to itself")
+        rules["prs"][0]["files"] = ["system/dispatcher/merge_rules.py"]
+        self.assertEqual(merge_rules.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")])
         rules["prs"][0]["files"] = ["system/dispatcher/plan.py"]
-        self.assertEqual(plan.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")])
+        self.assertEqual(merge_rules.merge_plan(rules, IDENTITY), [("auto-merge", 40, "h2")],
+                         "the dispatch order is an ordinary protected file now: SR1 covers it (#150)")
 
     def test_a_conflict_free_refresh_keeps_both_approvals_and_a_real_push_does_not(self):
         # GitHub no longer dismisses stale approvals; the Dispatcher marks those followed only by merges (#118).
         old = [(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h1")]
         refreshed = pr(50, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=old)
         refreshed["fresh"] = {BOT: True, SECOND: True}
-        self.assertEqual(plan.merge_plan(snap(prs=[refreshed]), IDENTITY), [("auto-merge", 50, "h2")], "SR1, no re-approval")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[refreshed]), IDENTITY), [("auto-merge", 50, "h2")], "SR1, no re-approval")
         pushed = pr(50, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=old)
         pushed["fresh"] = {BOT: False, SECOND: False}
-        acts = plan.merge_plan(snap(prs=[pushed]), IDENTITY)
+        acts = merge_rules.merge_plan(snap(prs=[pushed]), IDENTITY)
         self.assertNotIn("auto-merge", [a for a, *_ in acts], "real changes after the approvals: no merge")
         unprotected = pr(51, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h1")])
         unprotected["fresh"] = {BOT: False}
-        self.assertEqual(plan.merge_plan(snap(prs=[unprotected]), IDENTITY), [], "unprotected too: the Reviewer must see the new code")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[unprotected]), IDENTITY), [], "unprotected too: the Reviewer must see the new code")
         unprotected["fresh"] = {BOT: True}
-        self.assertEqual(plan.merge_plan(snap(prs=[unprotected]), IDENTITY), [("auto-merge", 51, "h2")])
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[unprotected]), IDENTITY), [("auto-merge", 51, "h2")])
+
+    def test_an_owner_held_pr_goes_behind_one_sr1_can_merge_and_is_asked_to_reapprove(self):
+        # #113 waited on the Owner's re-approval and held #115, which SR1 could merge (#127).
+        held = pr(113, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h1")])
+        held["fresh"] = {SECOND: False}
+        ready = pr(115, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")])
+        acts = merge_rules.merge_plan(snap(prs=[held, ready]), IDENTITY)
+        self.assertEqual(acts, [("auto-merge", 115, "h2"), ("ask-owner-to-reapprove", 113, "h2")])
+        acts = merge_rules.merge_plan(snap(prs=[held]), IDENTITY)
+        self.assertEqual(acts, [("ask-owner-to-reapprove", 113, "h2")], "re-approve, never merge, while the approval isn't current")
+
+    def test_no_new_review_while_the_reviewers_approval_still_covers_the_pr(self):
+        refreshed = pr(60, reviews=[(BOT, "APPROVED", "h1")])
+        refreshed["fresh"] = {BOT: True}
+        self.assertNotIn("reviewer", [c[0] for c in plan.candidates(snap(prs=[refreshed]), set(), IDENTITY)])
+        refreshed["fresh"] = {BOT: False}
+        self.assertIn("reviewer", [c[0] for c in plan.candidates(snap(prs=[refreshed]), set(), IDENTITY)])
+
+    def test_same_changes_compares_the_prs_own_diff_not_its_commits(self):
+        def gh_for(files_by_ref):
+            gh = mock.Mock(repo="o/r")
+            gh.api.side_effect = lambda method, path, body=None, paginate=False: {"files": files_by_ref[path.rsplit("...", 1)[1]]}
+            return gh
+
+        def patch(text):
+            return [{"filename": "a.py", "status": "modified", "patch": text}]
+        gh = gh_for({
+            "A": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+new\n+    return True\n     check()"),
+            "B": patch("@@ -9,4 +9,4 @@ def f():\n ctx\n-old\n+new\n+    return True\n     check()"),
+            "C": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+newer\n+    return True\n     check()"),
+            "M": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+new\n     check()\n+    return True"),
+            "S": patch("@@ -1,4 +1,4 @@ def f():\n ctx\n-old\n+    return True\n+new\n     check()"),
+            "X": patch("@@ -1,4 +1,4 @@ def f():\n other ctx\n-old\n+new\n+    return True\n     check()"),
+        })
+        self.assertTrue(merge_rules.same_changes(gh, "A", "B"), "main added lines above: the hunk only shifted")
+        self.assertFalse(merge_rules.same_changes(gh, "A", "C"), "a changed line")
+        self.assertFalse(merge_rules.same_changes(gh, "A", "M"), "a line moved below its context")
+        self.assertFalse(merge_rules.same_changes(gh, "A", "S"), "two added lines swapped")
+        self.assertFalse(merge_rules.same_changes(gh, "A", "X"), "main edited the context: ask again, the safe way")
+        binary = [{"filename": "m.bin", "status": "modified", "sha": "s1"}]
+        gh = gh_for({"D": binary, "E": binary})
+        self.assertTrue(merge_rules.same_changes(gh, "D", "E"))
+        self.assertFalse(merge_rules.same_changes(gh_for({"D": binary, "F": [dict(binary[0], sha="s2")]}), "D", "F"))
 
     def test_auto_merge_is_turned_off_when_the_approvals_stop_covering_the_pr(self):
         stale = pr(52, merge_state="CLEAN", decision="APPROVED", auto_merge=True, reviews=[(BOT, "APPROVED", "h1")])
         stale["fresh"] = {BOT: False}
-        self.assertEqual(plan.merge_plan(snap(prs=[stale]), IDENTITY), [("cancel-auto-merge", 52, "h2")])
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[stale]), IDENTITY), [("cancel-auto-merge", 52, "h2")])
         stale["fresh"] = {BOT: True}
-        self.assertEqual(plan.merge_plan(snap(prs=[stale]), IDENTITY), [], "still covered: leave it to GitHub")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[stale]), IDENTITY), [], "still covered: leave it to GitHub")
 
     def test_the_owner_is_not_asked_while_github_is_still_working_out_the_merge_state(self):
         # Right after main moves, GitHub reports mergeStateStatus UNKNOWN; #34 was really 12 commits behind.
         s = snap(prs=[pr(34, protected=True, merge_state="UNKNOWN", reviews=[(BOT, "APPROVED", "h2")])])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [])
         s = snap(prs=[pr(34, protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")])])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 34, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 34, "h2")])
 
     def test_renewals_and_owner_approvals(self):
         s = snap(prs=[pr(9, reviews=[(BOT, "APPROVED", "h1")])])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 9, "h1")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("renew", 9, "h1")])
         s = snap(prs=[pr(9, protected=True, reviews=[(BOT, "APPROVED", "h2")])])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 9, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 9, "h2")])
         s = snap(prs=[pr(9, protected=True, reviews=[(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h1")])])
-        self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 9, "h1"), ("ask-owner-to-reapprove", 9, "h2")])
+        self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("renew", 9, "h1"), ("ask-owner-to-reapprove", 9, "h2")])
+
+
+class SR2Test(unittest.TestCase):
+    """#150: a refreshed PR whose own lines are unchanged goes to the Coordinator, not straight back to the Owner."""
+    A, H = "a" * 40, "c" * 40
+
+    def refreshed(self, n=113, labels=(), files=(), merge_state="BLOCKED", same_lines=True, sign_off=None, fresh_sign_off=None,
+                  role="developer"):
+        p = pr(n, role=role, protected=True, merge_state=merge_state, decision="APPROVED", head=self.H, labels=labels, files=files,
+               reviews=[(BOT, "APPROVED", self.H), (SECOND, "APPROVED", self.A)])
+        p["fresh"], p["same_lines"], p["sign_off"] = {SECOND: False}, same_lines, sign_off
+        if fresh_sign_off is not None:
+            p["fresh"]["sign-off"] = fresh_sign_off
+        return p
+
+    def test_the_coordinator_is_asked_once_instead_of_the_owner(self):
+        ask = [("ask-coordinator-to-sign-off", 113, self.A)]
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed()]), IDENTITY), ask)
+        held, ready = self.refreshed(merge_state="BEHIND"), pr(115, merge_state="BEHIND", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2")])
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[held, ready]), IDENTITY), [("refresh", 115, "behind main")] + ask,
+                         "behind main and at the back of the queue: asked anyway, so it isn't stuck there (#113)")
+        for level in ("coordinator", "builder", "owner"):
+            self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(labels=[f"needs-decision:{level}"])]), IDENTITY), [],
+                             f"already with the {level}")
+
+    def test_changed_own_lines_go_to_the_builder_unless_it_wrote_the_pr(self):
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False)]), IDENTITY),
+                         [("ask-builder-to-sign-off", 113, self.A)])
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False, files=["system/dispatcher/plan.py"])]), IDENTITY),
+                         [("ask-builder-to-sign-off", 113, self.A)], "a change to the dispatch order too (#150)")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False, role="builder")]), IDENTITY),
+                         [("ask-owner-to-reapprove", 113, self.H)], "the builder never judges its own changes for the Owner")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=True, role="builder")]), IDENTITY),
+                         [("ask-coordinator-to-sign-off", 113, self.A)], "only main changed: the Coordinator judges, whoever wrote it")
+
+    def test_a_change_to_the_standing_rules_or_their_check_stays_with_the_owner(self):
+        for same in (True, False):
+            self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=same, files=["system/dispatcher/merge_rules.py"])]), IDENTITY),
+                             [("ask-owner-to-reapprove", 113, self.H)])
+
+    def test_a_sign_off_carries_the_owners_approval_and_survives_a_conflict_free_refresh(self):
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off=self.H)]), IDENTITY),
+                         [("auto-merge", 113, self.H)])
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off="d" * 40, fresh_sign_off=True)]), IDENTITY),
+                         [("auto-merge", 113, self.H)])
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off="d" * 40, fresh_sign_off=False)]), IDENTITY),
+                         [("ask-coordinator-to-sign-off", 113, self.A)], "main moved next to the lines again: judge again")
+        signed = self.refreshed(merge_state="CLEAN", sign_off=self.H)
+        held = self.refreshed(n=99)
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[held, signed]), IDENTITY),
+                         [("auto-merge", 113, self.H), ("ask-coordinator-to-sign-off", 99, self.A)],
+                         "a signed-off PR goes ahead of one still waiting")
+
+    def test_only_a_recorded_coordinator_or_builder_run_on_the_pr_signs_off_for_the_approved_commit(self):
+        target = self.refreshed()
+        runs = [{"event": "start", "run_id": "c-1", "role": "coordinator", "item": 113},
+                {"event": "start", "run_id": "d-1", "role": "developer", "item": 113},
+                {"event": "start", "run_id": "c-2", "role": "coordinator", "item": 99}]
+        owner = IDENTITY["owner_login"]
+
+        def signed(role, run, approved=self.A, login=owner):
+            body = post.with_marker(post.SIGN_OFF.format(approved=approved, head=self.H) + "\n\nreasons", role, run)
+            return merge_rules.signed_off(target, [comment(1, login, body, 0)], runs, IDENTITY, post.MARKER)
+        self.assertEqual(signed("coordinator", "c-1"), self.H)
+        self.assertIsNone(signed("developer", "d-1"), "not a signer")
+        self.assertIsNone(signed("coordinator", "d-1"), "the run was a developer's")
+        self.assertIsNone(signed("coordinator", "c-2"), "a run on another item")
+        self.assertIsNone(signed("coordinator", "c-9"), "a run the Dispatcher never recorded")
+        self.assertIsNone(signed("coordinator", "c-1", approved="b" * 40), "not the commit the Owner approved")
+        self.assertIsNone(signed("coordinator", "c-1", login="someone"), "not posted through post.py")
+        quoted = post.with_marker("**Needs a decision: builder.**\n\nI would post:\n"
+                                  + post.SIGN_OFF.format(approved=self.A, head=self.H), "coordinator", "c-1")
+        self.assertIsNone(merge_rules.signed_off(target, [comment(1, owner, quoted, 0)], runs, IDENTITY, post.MARKER),
+                          "a sign-off line quoted further down isn't a sign-off")
+        runs.append({"event": "start", "run_id": "b-1", "role": "builder", "item": 113})
+        target["same_lines"] = False
+        self.assertIsNone(signed("coordinator", "c-1"), "own lines changed: only the builder judges")
+        self.assertEqual(signed("builder", "b-1"), self.H)
+        target["author_role"] = "builder"
+        self.assertIsNone(signed("builder", "b-1"), "not on its own PR")
+
+    def test_each_level_hands_the_question_on_and_only_the_next_is_started(self):
+        labels = {"needs-decision:coordinator"}
+
+        class GitHub:
+            repo = "o/r"
+
+            def api(self, method, path, body=None, paginate=False):
+                if method == "POST":
+                    labels.update(body.get("labels", []))
+                elif method == "DELETE":
+                    labels.discard(path.rsplit("/", 1)[1].replace("%3A", ":"))
+                return {"labels": [{"name": x} for x in labels], "html_url": "url"}
+
+        def started():
+            p = pr(113, labels=labels, reviews=[(BOT, "APPROVED", "h2")])
+            return [(role, why) for role, n, _, why in plan.candidates(snap(prs=[p]), set(), IDENTITY) if n == 113]
+        post.cmd_escalate(GitHub(), ("coordinator", "c-1"), 113, "builder", "Can't tell.")
+        self.assertEqual(labels, {"needs-decision:builder"})
+        self.assertEqual(started(), [("builder", "decision")])
+        post.cmd_escalate(GitHub(), ("builder", "b-1"), 113, "owner", "Sign off?")
+        self.assertEqual(labels, {"needs-decision:owner"})
+        self.assertEqual(started(), [], "waiting on the Owner: no run is restarted")
+
+    def test_own_lines_ignore_the_code_around_them_but_not_their_order(self):
+        changes = lambda patch: {"a.py": ("modified", patch)}
+        before = merge_rules.own_lines(changes("@@ @@ def f():\n ctx\n-old\n+new\n+more\n tail"))
+        self.assertEqual(before, merge_rules.own_lines(changes("@@ @@ def g():\n other ctx\n-old\n+new\n+more\n changed tail")))
+        self.assertNotEqual(before, merge_rules.own_lines(changes("@@ @@ def f():\n ctx\n-old\n+more\n+new\n tail")))
+        self.assertEqual(merge_rules.own_lines({"m.bin": ("modified", "s1")}), {"m.bin": ("modified", "s1")})
+
+    def test_the_coordinator_is_started_on_the_pr(self):
+        p = pr(113, labels=["needs-decision:coordinator"], reviews=[(BOT, "APPROVED", "h2")])
+        self.assertIn(("coordinator", 113, "Item #113 needs your decision (needs-decision:coordinator).", "decision"),
+                      plan.candidates(snap(prs=[p]), set(), IDENTITY))
 
 
 def comment(cid, login, body, minutes):
@@ -305,6 +469,22 @@ class NotifyTest(unittest.TestCase):
         self.assertEqual(notify.latest_ask([ask, comment(2, "sloan3165", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", True))
         self.assertEqual(notify.latest_ask([ask, comment(2, "stranger", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", False))
         self.assertIsNone(notify.latest_ask([comment(3, "aray4702", "plain", 0)], IDENTITY, post.MARKER))
+
+    def test_an_item_closed_while_held_for_the_owner_is_reopened_until_answered(self):
+        ask = comment(1, "aray4702", self.ASK, 0)
+        def gh_with(labels, comments):
+            responses = {"closed": [{"number": 81, "labels": [{"name": n} for n in labels]},
+                                    {"number": 89, "pull_request": {}, "labels": [{"name": "needs-decision:owner"}]}],
+                         "comments": comments}
+            gh = mock.Mock(repo="o/r")
+            gh.api.side_effect = lambda method, path, body=None, paginate=False: (
+                responses["closed"] if "state=closed" in path else responses["comments"])
+            return gh
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], [ask]), IDENTITY, NOW), [(81, 1)])
+        answered = [ask, comment(2, "aray4702", "13a 14a", 5)]
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], answered), IDENTITY, NOW), [], "answered")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["type:definition"], [ask]), IDENTITY, NOW), [], "no longer held")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], []), IDENTITY, NOW), [], "no question asked")
 
     def test_unsent_filters_by_key(self):
         self.assertEqual(notify.unsent([{"key": "a"}], [("a", "x"), ("b", "y")]), [("b", "y")])
@@ -347,7 +527,7 @@ class FakeStore:
         self.appended = []
 
     def read(self, kind):
-        return []
+        return [r for k, r in self.appended if k == kind]
 
     def append(self, kind, record):
         self.appended.append((kind, record))
@@ -373,6 +553,52 @@ class DryRunTest(unittest.TestCase):
         ])
         spawn.assert_not_called()
         self.assertEqual(stores[0].appended, [])
+
+
+class HeldForTheOwner(FakeGitHub):
+    """#81 closed while its question to the Owner was unanswered (#114)."""
+    def api(self, method, path, body=None, paginate=False):
+        if path.startswith(f"repos/{self.repo}/issues?state=closed&labels=needs-decision%3Aowner"):
+            return [{"number": 81, "title": "Def", "labels": [{"name": "needs-decision:owner"}]}]
+        if path == f"repos/{self.repo}/issues/81/comments?per_page=100":
+            return [comment(1, "aray4702", NotifyTest.ASK, 0)]
+        got = super().api(method, path, body, paginate)
+        return {"html_url": "c/2"} if method == "POST" else got
+
+
+class ReopenTest(unittest.TestCase):
+    def passes(self, *dry_runs, gh=HeldForTheOwner):
+        store, github = FakeStore(), gh()
+        with mock.patch.object(post, "GitHub", lambda repo: github), \
+             mock.patch("system.dispatcher.state.Store", return_value=store), \
+             mock.patch.object(dispatch, "spawn"), \
+             mock.patch.object(dispatch.relay, "run", return_value=[]):
+            lines = [dispatch.dispatch_pass("poll", dry_run=d, now=NOW) for d in dry_runs]
+        return lines, github.writes, store.appended
+
+    def test_a_dry_run_says_it_would_reopen_and_changes_nothing(self):
+        (lines,), writes, appended = self.passes(True)
+        self.assertIn("would reopen #81: it closed while its question to the Owner was unanswered", lines)
+        self.assertEqual((writes, appended), ([], []))
+
+    def test_an_item_is_reopened_once_per_question_and_stays_closed_after(self):
+        # The second pass still finds #81 closed (closed again), its question unchanged and unanswered.
+        (first, second), writes, appended = self.passes(False, False)
+        self.assertIn("reopen #81: it closed while its question to the Owner was unanswered", first)
+        self.assertFalse([line for line in second if "reopen" in line], second)
+        self.assertEqual(writes, [("PATCH", "repos/aray4702/auto_research/issues/81"),
+                                  ("POST", "repos/aray4702/auto_research/issues/81/comments")])
+        self.assertEqual(appended, [("notices", {"key": "reopen:1", "at": NOW.isoformat()})])
+
+    def test_a_failed_check_never_stops_the_pass(self):
+        class Down(HeldForTheOwner):
+            def api(self, method, path, body=None, paginate=False):
+                if "labels=needs-decision%3Aowner" in path:
+                    raise SystemExit("failed: Bad Gateway (HTTP 502)")
+                return super().api(method, path, body, paginate)
+        (lines,), _, _ = self.passes(True, gh=Down)
+        self.assertEqual(lines[0], "reopen check failed: SystemExit: failed: Bad Gateway (HTTP 502)")
+        self.assertTrue(any(line.startswith("would start a developer run on #1") for line in lines), lines)
 
 
 if __name__ == "__main__":
