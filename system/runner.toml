@@ -40,6 +40,13 @@ deny = [
   "Bash(gh pr merge:*)", "Bash(gh api:*)", "Bash(security:*)", "Bash(curl:*)", "WebFetch",
 ]
 
+# Denial signatures (usage.denial_signature) the rules explain, each with the rule that says why not. The
+# daily pass doesn't raise them as permission gaps; they still count in denials_per_day (#138).
+[denials]
+explained = [
+  "Bash: cat << |",  # cat <<'EOF' | post.py: denied though both are allowed; rules.md, Posting, gives the heredoc form
+]
+
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
 [roles.architect]
 model = "claude-opus-5-5"

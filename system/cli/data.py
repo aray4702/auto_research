@@ -5,7 +5,7 @@ dispatcher/state branch and this Mac's runner; nothing is kept. Reads only.
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from system.dispatcher import github_state, killswitch, notify, plan, state, usage
+from system.dispatcher import github_state, killswitch, merge_rules, notify, plan, state, usage
 from system.tools import post, runner
 
 MERGES = """query($owner: String!, $name: String!, $after: String) { repository(owner: $owner, name: $name) {
@@ -29,7 +29,7 @@ def waiting_on(pr, identity):
         return "you: triage (outside contributor)"
     if pr["gate"] is None:
         return "CI"
-    app = plan.latest_review(pr, bot)
+    app = merge_rules.latest_review(pr, bot)
     if pr["gate"] == "FAILURE":
         return "author: red gate"
     if app and app["state"] == "CHANGES_REQUESTED" and app["commit"] == pr["head"]:
