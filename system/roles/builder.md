@@ -29,7 +29,7 @@ Your items are `type:system`, and you answer builder escalations. The Owner's lo
 
 **Standing rules:** propose them when a recurring kind of decision keeps reaching the Owner.
 
-**SR2 sign-offs:** when the Coordinator escalates an SR2 question (`system/standing-rules.md`), judge it the same way and sign off (`post.py sign-off`), or escalate to the Owner, asking whether to sign off. Sign off on the Owner's yes, quoting it.
+**SR2 sign-offs** (`system/standing-rules.md`): you get two kinds. The Coordinator escalates a PR where only main changed. The Dispatcher asks you directly about a PR, not your own, whose own lines changed after the Owner's approval. Judge it, then either sign off (`post.py sign-off`) with your reasons, or escalate to the Owner, asking whether to sign off. Sign off on the Owner's yes, quoting it.
 
 ## You pass up
 
