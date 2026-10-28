@@ -9,7 +9,8 @@ comes from AGENT_ROLE and the run ID from AGENT_RUN_ID, both set by whoever star
   post.py gate [REF]          the gate's result on a commit, branch or tag (default: main)
   post.py comment <n> BODY
   post.py issue-create --title T [--label L]... BODY
-  post.py edit-body <n> BODY
+  post.py edit-body <n> [--prepend | --replace-section H | --append-to-section H] BODY
+                              the whole body, or only part of it: so a long record is never resent
   post.py label <n> [--add L]... [--remove L]...
   post.py pr-create --head BRANCH --title T [--base main] BODY
   post.py close <n> [--reason completed|not_planned] [BODY]
@@ -190,7 +191,37 @@ def cmd_issue_create(gh, caller, title, labels, body):
     return f"#{issue['number']} {issue['html_url']}"
 
 
-def cmd_edit_body(gh, caller, n, body):
+def section(lines, heading):
+    """(start, end) of the lines under a heading line, up to the next heading of the same or a higher level."""
+    found = [i for i, line in enumerate(lines) if line.strip() == heading.strip()]
+    if len(found) != 1:
+        raise SystemExit(f"{heading!r} is {'not in' if not found else 'more than once in'} the record")
+    level = len(heading.strip()) - len(heading.strip().lstrip("#"))
+    end = next((j for j in range(found[0] + 1, len(lines))
+                if lines[j].startswith("#") and len(lines[j]) - len(lines[j].lstrip("#")) <= level), len(lines))
+    return found[0] + 1, end
+
+
+def edit_record(old, text, prepend=False, replace=None, append=None):
+    """A record's new body (without its marker): text at the top, in place of a section's content, or after
+    a section's last line; with none of these, text is the whole body."""
+    old = MARKER.sub("", old or "", count=1)
+    if prepend:
+        return text.rstrip("\n") + "\n" + old
+    if not (replace or append):
+        return text
+    lines = old.split("\n")
+    start, end = section(lines, replace or append)
+    new = text.rstrip("\n").split("\n")
+    if replace:
+        return "\n".join(lines[:start] + new + [""] + lines[end:]) if end < len(lines) else "\n".join(lines[:start] + new) + "\n"
+    last = max((i for i in range(start, end) if lines[i].strip()), default=start - 1)
+    return "\n".join(lines[:last + 1] + new + lines[last + 1:])
+
+
+def cmd_edit_body(gh, caller, n, body, prepend=False, replace=None, append=None):
+    if prepend or replace or append:
+        body = edit_record(gh.api("GET", f"repos/{gh.repo}/issues/{n}").get("body"), body, prepend, replace, append)
     return gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"body": with_marker(body, *caller)})["html_url"]
 
 
@@ -374,7 +405,10 @@ def parser():
     c = command("issue-create", number=False, body=True)
     c.add_argument("--title", required=True)
     c.add_argument("--label", action="append", default=[])
-    command("edit-body", body=True)
+    g = command("edit-body", body=True).add_mutually_exclusive_group()
+    g.add_argument("--prepend", action="store_true", help="add BODY at the top, as the dated note")
+    g.add_argument("--replace-section", metavar="HEADING", help="replace what's under this heading line with BODY")
+    g.add_argument("--append-to-section", metavar="HEADING", help="add BODY after this section's last line")
     c = command("label")
     c.add_argument("--add", action="append", default=[])
     c.add_argument("--remove", action="append", default=[])
@@ -412,7 +446,7 @@ def main(argv=None):
     elif c == "issue-create":
         out = cmd_issue_create(gh, caller, args.title, args.label, read_body(args))
     elif c == "edit-body":
-        out = cmd_edit_body(gh, caller, args.n, read_body(args))
+        out = cmd_edit_body(gh, caller, args.n, read_body(args), args.prepend, args.replace_section, args.append_to_section)
     elif c == "label":
         out = cmd_label(gh, args.n, args.add, args.remove)
     elif c == "pr-create":
