@@ -17,12 +17,14 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import github_state, state  # noqa: E402
+from system.dispatcher import github_state, plan, state  # noqa: E402
 from system.tools import runner  # noqa: E402
 
 # In the order the report lists them. A moment of an item's life takes the first stage that applies (stage_at).
 STAGES = ("running", "owner", "decision", "blocked", "rework", "review", "merging", "queued", "triage")
 WAITING = ("queued", "review")  # waits a run would end: with no run going at all, the system idles (§4.5)
+# A wait the Dispatcher would end lasts a poll (2 minutes) plus the gate's CI; one this long means runs couldn't start.
+IDLE_SPAN_HOURS = 0.5
 HISTORY_DAYS = 28
 NEVER = datetime.max.replace(tzinfo=timezone.utc)
 
@@ -42,11 +44,12 @@ def labels_at(changes, t):
 
 
 def stage_at(t, item, prs, runs, bot, code_owner):
-    """The one stage an item is in at t. runs are (start, end, role) on the item or its PRs."""
-    if any(s <= t < e for s, e, _ in runs):
-        return "running"
+    """The one stage an item is in at t. runs are (start, end, role) on the item or its PRs; a claim is a run
+    too, since a run the Dispatcher didn't start (the Owner's local session) claims its item."""
     open_prs = [p for p in prs if p["opened"] <= t < (p["closed"] or NEVER)]
     labels = labels_at(item["labels"], t).union(*(labels_at(p["labels"], t) for p in open_prs))
+    if any(s <= t < e for s, e, _ in runs) or plan.CLAIMED in labels:
+        return "running"
     if "needs-decision:owner" in labels:
         return "owner"
     if any(x.startswith("needs-decision:") for x in labels):
@@ -67,8 +70,19 @@ def stage_at(t, item, prs, runs, bot, code_owner):
     return "owner" if owner_ok and t < owner_ok[0] else "merging"
 
 
+def dispatched(stage, item, t):
+    """Whether the Dispatcher would end this wait on its own: a PR for the Reviewer, or a scheduled item of a type
+    the work order starts. Not an unscheduled item (#49 waited 15 h on the Owner's tag, unlabeled) nor a builder
+    item, which waits outside the order for the builder's daily run or the Owner's local session (#142)."""
+    if stage == "review":
+        return True
+    labels = labels_at(item["labels"], t)
+    return "state:ready" in labels and any(x in plan.TYPE_ROLE for x in labels)
+
+
 def record(item, prs, runs, bot, code_owner):
-    """One finished item's row: hours per stage, and its waiting while nothing ran at all.
+    """One finished item's row: hours per stage; its waiting, for a run the Dispatcher starts, while nothing ran
+    at all; and each stretch of that waiting over IDLE_SPAN_HOURS.
     runs are every run, (start, end, role, item); the item's own are those on it or its PRs."""
     mine = {item["number"], *(p["number"] for p in prs)}
     own = [(s, e, role) for s, e, role, n in runs if n in mine]
@@ -79,15 +93,20 @@ def record(item, prs, runs, bot, code_owner):
     points.update(r[0] for p in prs for r in p["reviews"])
     points.update(t for s, e, *_ in runs for t in (s, e))
     points = sorted(t for t in points if start <= t <= end)
-    stages, idle = {}, 0.0
+    stages, idle, spans = {}, 0.0, []
     for a, b in zip(points, points[1:]):
         stage, hours = stage_at(a, item, prs, own, bot, code_owner), (b - a).total_seconds() / 3600
         stages[stage] = stages.get(stage, 0.0) + hours
-        if stage in WAITING and not any(s <= a < e for s, e, *_ in runs):
+        if stage in WAITING and dispatched(stage, item, a) and not any(s <= a < e for s, e, *_ in runs):
             idle += hours
+            if spans and spans[-1][1] == a:
+                spans[-1][1] = b
+            else:
+                spans.append([a, b])
+    long = [[a.isoformat(), b.isoformat()] for a, b in spans if (b - a).total_seconds() / 3600 >= IDLE_SPAN_HOURS]
     return {"item": item["number"], "closed": end.isoformat(), "prs": sorted(p["number"] for p in prs),
             "hours": round((end - start).total_seconds() / 3600, 2),
-            "stages": {k: round(v, 2) for k, v in stages.items() if v}, "idle_hours": round(idle, 2)}
+            "stages": {k: round(v, 2) for k, v in stages.items() if v}, "idle_hours": round(idle, 2), "idle_spans": long}
 
 
 def run_spans(runs):
@@ -153,17 +172,20 @@ def bottlenecks(records, now):
     return out
 
 
-def idle_waits(records, now, threshold_hours=2):
-    """Items that waited for a run, or for the Reviewer, while nothing ran at all: §4.5's 'waits while a
-    role idles'. Raised when the week's total passes the threshold."""
-    week = [r for r in window(records, now - timedelta(days=7), now) if r.get("idle_hours")]
-    total = sum(r["idle_hours"] for r in week)
-    if total <= threshold_hours:
+def idle_waits(records, now, zone="America/Los_Angeles"):
+    """Stretches in which an item waited for a run the Dispatcher starts while nothing ran at all: §4.5's 'waits
+    while a role idles'. Raised on any stretch over IDLE_SPAN_HOURS; short ones are a poll and CI, and summing them
+    over a week's items rose with throughput alone (#142)."""
+    tz = ZoneInfo(zone)
+    spans = sorted(((at(b) - at(a), r["item"], at(a).astimezone(tz), at(b).astimezone(tz))
+                    for r in window(records, now - timedelta(days=7), now) for a, b in r.get("idle_spans", [])), reverse=True)
+    if not spans:
         return []
-    worst = ", ".join(f"#{r['item']} {r['idle_hours']:.1f} h" for r in sorted(week, key=lambda r: -r["idle_hours"])[:5])
-    return [(f"idle:{week_key(now)}", "builder", "Items waited while nothing ran",
-             f"{total:.1f} h this week across {len(week)} items ({worst}): queued or waiting for the Reviewer with no run "
-             f"going. Find what kept runs from starting (a cap, the kill switch, the Mac asleep, a missed poll).", None)]
+    worst = "; ".join(f"#{n} {a:%m-%d %H:%M}–{b:%H:%M %Z} ({d.total_seconds() / 3600:.1f} h)" for d, n, a, b in spans[:5])
+    return [(f"idle-span:{week_key(now)}", "builder", "Items waited while nothing ran",
+             f"{len(spans)} stretches this week over {IDLE_SPAN_HOURS * 60:.0f} minutes in which a scheduled item or a PR "
+             f"for the Reviewer waited with no run going ({worst}). Find what kept runs from starting at those times "
+             f"(a cap, the kill switch, the Mac asleep, a missed poll).", None)]
 
 
 def metrics(records, now):
