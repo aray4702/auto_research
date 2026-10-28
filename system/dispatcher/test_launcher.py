@@ -175,7 +175,8 @@ class MayStartTest(unittest.TestCase):
     def test_weekly_points_warn_then_stop(self):
         ppu = CAPS["claude"]["points_per_usd"]
         resets = int((NOW + timedelta(days=2)).timestamp())
-        near = [end("x", "developer", NOW - timedelta(days=1), cost=CAPS["claude"]["warn_at_points"] / ppu, resets=resets)]
+        # A dollar past the warning: warn_at_points / ppu alone can land a float rounding below it.
+        near = [end("x", "developer", NOW - timedelta(days=1), cost=CAPS["claude"]["warn_at_points"] / ppu + 1, resets=resets)]
         ok, _, warnings = usage.may_start(CAPS, near, "coordinator", NOW)
         self.assertTrue(ok)
         self.assertTrue(warnings)
@@ -184,12 +185,12 @@ class MayStartTest(unittest.TestCase):
         before_window = [end("x", "developer", NOW - timedelta(days=6), cost=CAPS["claude"]["weekly_points"] / ppu, resets=resets)]
         self.assertTrue(usage.may_start(CAPS, before_window, "coordinator", NOW)[0])
 
-    def test_weekly_points_stop_at_about_1000_dollars(self):
-        # 20 points at 1 point per $50: a coordinator run ($5 at most) may start at $990, not at $1,000.
+    def test_weekly_points_stop_at_about_765_dollars(self):
+        # 20 points at 0.026 points per $: a coordinator run ($5 at most) may start at $760, not at $770.
         resets = int((NOW + timedelta(days=2)).timestamp())
-        below = [end("x", "developer", NOW - timedelta(days=1), cost=990, resets=resets)]
+        below = [end("x", "developer", NOW - timedelta(days=1), cost=760, resets=resets)]
         self.assertTrue(usage.may_start(CAPS, below, "coordinator", NOW)[0])
-        at = [end("x", "developer", NOW - timedelta(days=1), cost=1000, resets=resets)]
+        at = [end("x", "developer", NOW - timedelta(days=1), cost=770, resets=resets)]
         ok, reasons, _ = usage.may_start(CAPS, at, "coordinator", NOW)
         self.assertFalse(ok)
         self.assertIn("weekly points", reasons[0])
