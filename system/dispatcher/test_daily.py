@@ -23,6 +23,21 @@ class DenialsTest(unittest.TestCase):
         self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("denial:Bash: gh pr", "builder")], "3 runs, as #44 sets")
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
+    def test_a_compound_command_denied_in_three_runs_is_not_a_gap(self):
+        runs = [end(x, denied=["Bash: git show (compound)"]) for x in "abc"]
+        self.assertEqual(daily.denials(runs, NOW), [], "the one-command rule, not a permission gap (#140)")
+
+    def test_compound_commands_are_marked_and_plain_ones_are_not(self):
+        for command, want in [("git show HEAD:a.py | sed -n '1,80p'", "Bash: git show (compound)"),
+                              ("git show HEAD > /tmp/x", "Bash: git show (compound)"),
+                              ("git fetch && git show FETCH_HEAD", "Bash: git fetch (compound)"),
+                              ("git show $(git rev-parse HEAD)", "Bash: git show (compound)"),
+                              ("cat a.py\ncat b.py","Bash: cat (compound)"),
+                              ("for f in a b; do cat $f; done", "Bash: for f (compound)"),
+                              ("git show HEAD:a.py", "Bash: git show"), ("grep -n 'a|b;c>d' x.py", "Bash: grep"),
+                              ("git commit -m 'one\n\ntwo'", "Bash: git commit"), ("git show 'unbalanced", "Bash: git show")]:
+            self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
+
     def test_signatures_keep_only_the_tool_and_first_two_words(self):
         self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "gh pr checks 34 --watch"}}), "Bash: gh pr")
         self.assertEqual(usage.denial_signature({"tool_name": "Write", "tool_input": {"file_path": "/tmp/x"}}), "Write")
