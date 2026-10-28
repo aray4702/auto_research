@@ -582,3 +582,4 @@
 {"at": "2026-10-28T23:16:21+00:00", "event": "start", "item": 191, "pid": 96716, "role": "reviewer", "run_id": "reviewer-20261028T231614Z", "task": "Review PR #191."}
 {"at": "2026-10-28T23:16:37+00:00", "cost_usd": 0.405791, "denials": 0, "denied": [], "event": "end", "five_hour": 0.32, "item": 193, "role": "builder", "run_id": "builder-20261028T231359Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 30}
 {"at": "2026-10-28T23:17:07+00:00", "cost_usd": 0.209901, "denials": 0, "denied": [], "event": "end", "five_hour": 0.32, "item": 191, "role": "reviewer", "run_id": "reviewer-20261028T231614Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 13}
+{"at": "2026-10-28T23:18:43+00:00", "event": "start", "item": 198, "pid": 97510, "role": "builder", "run_id": "builder-20261028T231834Z", "task": "PR #198 needs work: it conflicts with main."}
