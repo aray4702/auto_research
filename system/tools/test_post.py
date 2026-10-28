@@ -116,6 +116,29 @@ class WriteTest(unittest.TestCase):
         post.cmd_close(gh, CALLER, 4, "completed", "")
         self.assertEqual(gh.calls[-1][2], {"state": "closed"})
 
+    def test_milestones_are_created_with_the_marker_and_set_by_title(self):
+        gh = FakeGitHub({("GET", "repos/o/r/milestones"): [{"number": 2, "title": "S1.1"}, {"number": 3, "title": "S1.2"}]})
+        post.cmd_milestone_create(gh, CALLER, "S1.3", "Stage S1.3 of #21")
+        self.assertEqual(gh.calls[-1], ("POST", "repos/o/r/milestones",
+                                        {"title": "S1.3", "description": "<!-- role:developer run:run-7 -->\nStage S1.3 of #21"}))
+        post.cmd_issue_create(gh, CALLER, "Harness", ["type:feature"], "steps", milestone="S1.2")
+        self.assertEqual(gh.calls[-1][2]["milestone"], 3)
+        post.cmd_issue_create(gh, CALLER, "Other", [], "steps")
+        self.assertNotIn("milestone", gh.calls[-1][2])
+        post.cmd_milestone(gh, 7, "S1.1")
+        self.assertEqual(gh.calls[-1], ("PATCH", "repos/o/r/issues/7", {"milestone": 2}))
+        self.assertIn("state=all", gh.calls[-2][1], "a closed stage's milestone is found too")
+        post.cmd_milestone(gh, 7, None)
+        self.assertEqual(gh.calls[-1], ("PATCH", "repos/o/r/issues/7", {"milestone": None}))
+        with self.assertRaises(SystemExit):
+            post.cmd_milestone(gh, 7, "S9")
+        p = post.parser()
+        self.assertEqual(p.parse_args(["milestone", "7", "--set", "S1.1"]).set, "S1.1")
+        self.assertTrue(p.parse_args(["milestone", "7", "--clear"]).clear)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            p.parse_args(["milestone", "7"])
+        self.assertEqual(p.parse_args(["issue-create", "--title", "t", "--milestone", "S1.1", "--body", "b"]).milestone, "S1.1")
+
     def test_escalation_labels_the_level_and_posts_the_question(self):
         gh = FakeGitHub()
         post.cmd_escalate(gh, CALLER, 9, "owner", "1. A (recommended)\n2. B")
@@ -185,6 +208,13 @@ class ReadTest(unittest.TestCase):
             ]},
         })
         self.assertIn("gate: failure", post.cmd_read(gh, IDENTITY, 5))
+
+    def test_read_shows_the_milestone(self):
+        gh = FakeGitHub({("GET", "repos/o/r/issues/6"): issue(
+            [], title="Harness", state="open", body="b", user={"login": "aray4702"}, created_at="2026-10-27T02:00:00Z",
+            milestone={"title": "S1.1", "open_issues": 2, "closed_issues": 3}),
+            ("GET", "repos/o/r/issues/6/comments"): []})
+        self.assertIn("\nmilestone: S1.1 (2 open, 3 closed)\n", post.cmd_read(gh, IDENTITY, 6))
 
 
 class GateTest(unittest.TestCase):
