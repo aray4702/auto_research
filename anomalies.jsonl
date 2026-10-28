@@ -16,3 +16,4 @@
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: sed", "level": "builder", "title": "Recurring permission denial: Bash: sed"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Glob", "level": "builder", "title": "Recurring permission denial: Glob"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "bumpy:106:3", "level": "coordinator", "title": "Bumpy item #106"}
+{"at": "2026-10-28T21:06:10+00:00", "key": "builder-daily-missed:2026-10-28", "level": "builder", "title": "The builder's daily run hasn't started for over a day"}
