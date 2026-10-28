@@ -62,7 +62,7 @@ There is no baseline yet. Until the harness first measures, the gate's pass/fail
 
 These are the settings as applied on 2026-10-26. The record the Dispatcher's daily audit checks is the machine-readable copy in `system/identity.toml` `[branch_protection]`. Any live difference is a rule breach. Change both together.
 
-- **Merging:** only by pull request, with 1 approval, and code-owner review is required. GitHub doesn't dismiss stale approvals (since 2026-10-27, #118): an approval counts only while nothing but merges from `main` has been pushed after it, which the Dispatcher checks (`plan.current`) before any merge, and it turns auto-merge off when that stops holding.
+- **Merging:** only by pull request, with 1 approval, and code-owner review is required. GitHub doesn't dismiss stale approvals (since 2026-10-27, #118): an approval counts only while nothing but merges from `main` has been pushed after it, which the Dispatcher checks (`merge_rules.current`) before any merge, and it turns auto-merge off when that stops holding. Under SR2 a sign-off can carry the Owner's approval further (`system/standing-rules.md`).
 - **Required check:** `gate`, accepted only from GitHub Actions (app ID 15368), so a commit status posted by anyone else can't satisfy it. The branch must be up to date with `main`.
 - **Administrators are included.** Agents act as the admin `aray4702`, so an admin bypass would be their bypass too.
 - **No force pushes and no deletions.**

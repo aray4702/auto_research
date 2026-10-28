@@ -10,6 +10,7 @@
   arsys goal add ID GOAL OUTCOME [--deadline D]          propose a goal, by PR
   arsys req add ID TEXT [--priority P] [--use-case U] [--hint H]   propose a functional requirement, by PR
   arsys merges                 merges made from your account, to recognise
+  arsys audit [product|system] run the audits now and post their reports (also daily at 07:30, and `audit` in Discord)
   arsys serve [--port 8765]    the dashboard at http://127.0.0.1:PORT (this Mac only, read-only)
 
 Agents never run this: its actions are the Owner's (blueprint §5). Standard library only.
@@ -173,6 +174,7 @@ def parser():
     req.add_argument("--use-case", default="")
     req.add_argument("--hint", default="")
     sub.add_parser("merges")
+    sub.add_parser("audit").add_argument("kind", nargs="?", choices=["product", "system", "all"], default="all")
     sub.add_parser("serve").add_argument("--port", type=int, default=8765)
     return p
 
@@ -185,7 +187,11 @@ def main(argv=None):
     repo = identity["repo"]
     today = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
 
-    if args.command == "status":
+    if args.command == "audit":
+        from system.dispatcher import audit, dispatch
+        lines, _ = dispatch.audit_pass(audit.KINDS if args.kind == "all" else (args.kind,), announce=False)
+        print("\n".join(lines))
+    elif args.command == "status":
         print(views.text(data.collect(config)))
     elif args.command == "decisions":
         snap = data.github_state.snapshot(gh, identity)
