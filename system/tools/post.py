@@ -191,14 +191,16 @@ def cmd_issue_create(gh, caller, title, labels, body):
     return f"#{issue['number']} {issue['html_url']}"
 
 
+HEADING = re.compile(r"^#{1,6}\s")  # a Markdown heading; "#81 closed" is not one
+
+
 def section(lines, heading):
-    """(start, end) of the lines under a heading line, up to the next heading of the same or a higher level."""
+    """(start, end) of the lines under a heading line, up to the next heading of any level: a section's
+    subsections are never part of it, so editing one can't remove them (#112)."""
     found = [i for i, line in enumerate(lines) if line.strip() == heading.strip()]
     if len(found) != 1:
         raise SystemExit(f"{heading!r} is {'not in' if not found else 'more than once in'} the record")
-    level = len(heading.strip()) - len(heading.strip().lstrip("#"))
-    end = next((j for j in range(found[0] + 1, len(lines))
-                if lines[j].startswith("#") and len(lines[j]) - len(lines[j].lstrip("#")) <= level), len(lines))
+    end = next((j for j in range(found[0] + 1, len(lines)) if HEADING.match(lines[j])), len(lines))
     return found[0] + 1, end
 
 
@@ -407,8 +409,8 @@ def parser():
     c.add_argument("--label", action="append", default=[])
     g = command("edit-body", body=True).add_mutually_exclusive_group()
     g.add_argument("--prepend", action="store_true", help="add BODY at the top, as the dated note")
-    g.add_argument("--replace-section", metavar="HEADING", help="replace what's under this heading line with BODY")
-    g.add_argument("--append-to-section", metavar="HEADING", help="add BODY after this section's last line")
+    g.add_argument("--replace-section", metavar="HEADING", help="replace the lines under this heading, up to the next heading of any level, with BODY")
+    g.add_argument("--append-to-section", metavar="HEADING", help="add BODY after the last line under this heading, before the next heading of any level")
     c = command("label")
     c.add_argument("--add", action="append", default=[])
     c.add_argument("--remove", action="append", default=[])
