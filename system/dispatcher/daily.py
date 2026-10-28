@@ -9,6 +9,8 @@ responds (builder, coordinator, or owner for a rule breach); item, when set, is 
 import re
 from datetime import datetime, timedelta
 
+from system.dispatcher import usage
+
 FINISHED = "finished"
 KNOWN_STATUSES = {"finished", "cap: turns", "cap: budget", "timeout", "cut-off", "failed"}
 WATCH_ROW = re.compile(r"^\|\s*([^|]+?)\s*\|\s*`?([a-z_]+)`?\s*\|\s*([<>]=?)\s*([0-9.]+)\s*\|")
@@ -24,10 +26,11 @@ def ends(runs):
 
 
 def denials(runs, now):
-    """The same denial (tool and first words) in three or more runs this week: a permission gap (#44)."""
+    """The same denial (tool and first words) in three or more runs this week: a permission gap (#44).
+    A compound command's denial isn't one (#140): the rules say to run one command at a time."""
     seen = {}
     for r in ends(recent(runs, now)):
-        for signature in set(r.get("denied") or []):
+        for signature in {s for s in r.get("denied") or [] if not s.endswith(usage.COMPOUND)}:
             seen.setdefault(signature, set()).add(r["run_id"])
     return [(f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
              f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}. Grant it by rule, or say in the rules why not.", None)

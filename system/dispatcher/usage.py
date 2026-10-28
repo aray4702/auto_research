@@ -7,10 +7,12 @@ utilization. The system's own share is its runs' cost times caps.toml's points_p
 
 import json
 import re
+import shlex
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 STATUS = {"success": "finished", "error_max_turns": "cap: turns", "error_max_budget_usd": "cap: budget"}
+COMPOUND = " (compound)"
 
 
 def summarize(lines):
@@ -46,9 +48,21 @@ def summarize(lines):
     return out
 
 
+def compound(command):
+    """Whether a command pipes, chains, redirects, substitutes or runs a second line: a shell operator or
+    line break outside quotes. Such a command is denied when any part isn't allowed, even if its first is."""
+    lexer = shlex.shlex(command.strip(), posix=True, punctuation_chars="();<>|&\n")
+    lexer.whitespace, lexer.whitespace_split = " \t\r", True
+    try:
+        return any(token and set(token) <= set("();<>|&\n") for token in lexer) or "`" in command
+    except ValueError:
+        return False  # unbalanced quotes: unknown, so recorded as a plain command
+
+
 def denial_signature(denial):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
-    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record."""
+    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. A
+    compound command is marked as one (#140): its denial is the one-command rule, not a permission gap."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
     if tool != "Bash" or not command:
@@ -65,7 +79,7 @@ def denial_signature(denial):
         words.append(word)
         if len(words) == 2:
             break
-    return "Bash: " + (" ".join(words) or "?")
+    return "Bash: " + (" ".join(words) or "?") + (COMPOUND if compound(command) else "")
 
 
 def parse_time(iso):
