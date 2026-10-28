@@ -157,3 +157,4 @@
 {"at": "2026-10-28T02:47:08+00:00", "event": "start", "item": null, "pid": 60228, "role": "coordinator", "run_id": "coordinator-20261028T024705Z", "task": "Triage these issues: #91."}
 {"at": "2026-10-28T02:47:10+00:00", "event": "start", "item": 81, "pid": 60291, "role": "architect", "run_id": "architect-20261028T024705Z", "task": "The Owner answered your question on #81. Act on the answer, then remove needs-decision:owner."}
 {"at": "2026-10-28T02:48:33+00:00", "cost_usd": 0.364194, "denials": 1, "denied": ["Bash: gh repo"], "event": "end", "five_hour": 0.18, "item": null, "role": "coordinator", "run_id": "coordinator-20261028T024705Z", "seven_day": 0.21, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 25}
+{"at": "2026-10-28T02:49:22+00:00", "event": "start", "item": 92, "pid": 61799, "role": "reviewer", "run_id": "reviewer-20261028T024915Z", "task": "Review PR #92."}
