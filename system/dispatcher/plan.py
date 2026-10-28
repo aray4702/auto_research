@@ -137,9 +137,9 @@ def current(pr, login):
     return r is not None and r["state"] == "APPROVED" and (r["commit"] == pr["head"] or (pr.get("fresh") or {}).get(login, False))
 
 
-# Standing rule SR2 (#150): the Coordinator, then the builder, may judge that the Owner's approval still covers a PR
-# refreshed from main whose own added and removed lines are unchanged, though main edited code next to them.
-SR2_SIGNERS = ("coordinator", "builder")
+# Standing rule SR2 (#150): others may judge that the Owner's approval of an earlier commit still covers a PR. Its own
+# added and removed lines unchanged, only the code around them: the Coordinator, then the builder. Its own lines
+# changed: the builder, unless it wrote the PR. Then the Owner.
 SR2_LABELS = {"needs-decision:coordinator", "needs-decision:builder", "needs-decision:owner"}
 SIGN_OFF = re.compile(r"^\*\*SR2 sign-off:\*\* the Owner's approval of `(?P<approved>[0-9a-f]{40})` covers `(?P<head>[0-9a-f]{40})`")
 
@@ -151,12 +151,23 @@ def own_lines(changes):
             for f, (status, v) in changes.items()}
 
 
+def sr2_signers(pr):
+    """Who may sign off on this PR under SR2 (`pr["same_lines"]`, filled in by the Dispatcher). The builder never
+    judges its own changes in the Owner's place. Nobody, if the Dispatcher didn't compare the lines."""
+    if "same_lines" not in pr:
+        return ()
+    if pr["same_lines"]:
+        return ("coordinator", "builder")
+    return () if pr["author_role"] == "builder" else ("builder",)
+
+
 def signed_off(pr, comments, runs, identity, marker):
     """The commit up to which an SR2 sign-off says the Owner's latest approval covers the PR, or None. Only a sign-off
-    posted through post.py by a Coordinator or builder run the Dispatcher recorded on this PR counts, and only one
-    naming the commit the Owner approved."""
+    posted through post.py by a run of a role that may sign off on this PR (`sr2_signers`), recorded on this PR by the
+    Dispatcher, counts, and only one naming the commit the Owner approved."""
     owner = latest_review(pr, identity["second_login"])
-    if not owner or owner["state"] != "APPROVED":
+    signers = sr2_signers(pr)
+    if not owner or owner["state"] != "APPROVED" or not signers:
         return None
     recorded = {(r["run_id"], r["role"]) for r in runs if r["event"] == "start" and r.get("item") == pr["number"]}
     covered = None
@@ -165,7 +176,7 @@ def signed_off(pr, comments, runs, identity, marker):
         m = marker.match(body)
         # Only straight after the marker, where `post.py sign-off` writes it: a quoted sign-off line doesn't count.
         s = m and SIGN_OFF.match(body[m.end():].lstrip("\n"))
-        if (c["user"]["login"] == identity["owner_login"] and m and s and m["role"] in SR2_SIGNERS
+        if (c["user"]["login"] == identity["owner_login"] and m and s and m["role"] in signers
                 and (m["run"], m["role"]) in recorded and s["approved"] == owner["commit"]):
             covered = s["head"]
     return covered
@@ -180,12 +191,12 @@ def owner_approves(pr, second):
 
 def sr2_due(pr, bot, second):
     """SR2's checkable conditions hold and only the judgment is missing: green, protected, outside SR1's exclusions,
-    the Reviewer's approval current, the Owner's approval on an earlier commit with the PR's own lines unchanged
-    since (`pr["same_lines"]`, filled in by the Dispatcher), and no sign-off covering it yet."""
+    the Reviewer's approval current, the Owner's approval on an earlier commit, someone who may sign off on it
+    (`sr2_signers`), and no sign-off covering it yet."""
     owner = latest_review(pr, second)
     return (pr["protected"] and pr["gate"] == "SUCCESS" and not any(f in SR1_EXCLUDED for f in pr["files"])
             and current(pr, bot) and owner is not None and owner["state"] == "APPROVED"
-            and bool(pr.get("same_lines")) and not owner_approves(pr, second))
+            and bool(sr2_signers(pr)) and not owner_approves(pr, second))
 
 
 def sr1(pr, bot, second):
@@ -197,7 +208,7 @@ def sr1(pr, bot, second):
 
 def merge_plan(snap, identity):
     """Merge-queue actions: ('refresh'|'auto-merge'|'cancel-auto-merge'|'ask-owner-to-merge'|'ask-owner-to-approve'|
-    'renew'|'ask-owner-to-reapprove'|'ask-coordinator-to-sign-off', pr, detail)."""
+    'renew'|'ask-owner-to-reapprove'|'ask-coordinator-to-sign-off'|'ask-builder-to-sign-off', pr, detail)."""
     bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
     prs = [pr for pr in snap["prs"] if pr["author_role"] and not pr["draft"]]
     actions = []
@@ -240,10 +251,10 @@ def merge_plan(snap, identity):
         if pr["review_decision"] != "APPROVED" and app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
             actions.append(("renew", pr["number"], app["commit"]))
         if sr2_due(pr, bot, second):
-            # The Coordinator judges first, then the builder, then the Owner (#150). Behind main too: a sign-off
+            # The first who may sign off judges, then the next, then the Owner (#150). Behind main too: a sign-off
             # survives the refresh that the PR gets when the queue reaches it.
             if pr["merge_state"] in UP_TO_DATE + ("BEHIND",) and not pr["labels"] & SR2_LABELS:
-                actions.append(("ask-coordinator-to-sign-off", pr["number"], owner["commit"]))
+                actions.append((f"ask-{sr2_signers(pr)[0]}-to-sign-off", pr["number"], owner["commit"]))
         elif pr["protected"] and pr["merge_state"] in UP_TO_DATE:
             # Ask the Owner only about a PR GitHub reports as up to date: one behind main would be refreshed,
             # and GitHub reports UNKNOWN for a moment after main moves.

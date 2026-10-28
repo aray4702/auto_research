@@ -320,8 +320,9 @@ class SR2Test(unittest.TestCase):
     """#150: a refreshed PR whose own lines are unchanged goes to the Coordinator, not straight back to the Owner."""
     A, H = "a" * 40, "c" * 40
 
-    def refreshed(self, n=113, labels=(), files=(), merge_state="BLOCKED", same_lines=True, sign_off=None, fresh_sign_off=None):
-        p = pr(n, protected=True, merge_state=merge_state, decision="APPROVED", head=self.H, labels=labels, files=files,
+    def refreshed(self, n=113, labels=(), files=(), merge_state="BLOCKED", same_lines=True, sign_off=None, fresh_sign_off=None,
+                  role="developer"):
+        p = pr(n, role=role, protected=True, merge_state=merge_state, decision="APPROVED", head=self.H, labels=labels, files=files,
                reviews=[(BOT, "APPROVED", self.H), (SECOND, "APPROVED", self.A)])
         p["fresh"], p["same_lines"], p["sign_off"] = {SECOND: False}, same_lines, sign_off
         if fresh_sign_off is not None:
@@ -338,11 +339,18 @@ class SR2Test(unittest.TestCase):
             self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(labels=[f"needs-decision:{level}"])]), IDENTITY), [],
                              f"already with the {level}")
 
-    def test_a_change_to_the_prs_own_lines_or_an_excluded_file_still_goes_to_the_owner(self):
+    def test_changed_own_lines_go_to_the_builder_unless_it_wrote_the_pr(self):
         self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(same_lines=False)]), IDENTITY),
-                         [("ask-owner-to-reapprove", 113, self.H)])
-        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(files=["system/dispatcher/plan.py"])]), IDENTITY),
-                         [("ask-owner-to-reapprove", 113, self.H)])
+                         [("ask-builder-to-sign-off", 113, self.A)])
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(same_lines=False, role="builder")]), IDENTITY),
+                         [("ask-owner-to-reapprove", 113, self.H)], "the builder never judges its own changes for the Owner")
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(same_lines=True, role="builder")]), IDENTITY),
+                         [("ask-coordinator-to-sign-off", 113, self.A)], "only main changed: the Coordinator judges, whoever wrote it")
+
+    def test_a_change_to_the_standing_rules_or_their_check_stays_with_the_owner(self):
+        for same in (True, False):
+            self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(same_lines=same, files=["system/dispatcher/plan.py"])]), IDENTITY),
+                             [("ask-owner-to-reapprove", 113, self.H)])
 
     def test_a_sign_off_carries_the_owners_approval_and_survives_a_conflict_free_refresh(self):
         self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off=self.H)]), IDENTITY),
@@ -378,6 +386,12 @@ class SR2Test(unittest.TestCase):
                                   + post.SIGN_OFF.format(approved=self.A, head=self.H), "coordinator", "c-1")
         self.assertIsNone(plan.signed_off(target, [comment(1, owner, quoted, 0)], runs, IDENTITY, post.MARKER),
                           "a sign-off line quoted further down isn't a sign-off")
+        runs.append({"event": "start", "run_id": "b-1", "role": "builder", "item": 113})
+        target["same_lines"] = False
+        self.assertIsNone(signed("coordinator", "c-1"), "own lines changed: only the builder judges")
+        self.assertEqual(signed("builder", "b-1"), self.H)
+        target["author_role"] = "builder"
+        self.assertIsNone(signed("builder", "b-1"), "not on its own PR")
 
     def test_each_level_hands_the_question_on_and_only_the_next_is_started(self):
         labels = {"needs-decision:coordinator"}
