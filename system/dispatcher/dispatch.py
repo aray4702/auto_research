@@ -74,6 +74,22 @@ def relay_answers(gh, store, identity, dry_run, now):
         return [f"relay failed: {type(e).__name__}: {e}"]
 
 
+def orphaned_asks(gh, identity, now, days=2):
+    """Items closed while held for the Owner, their latest question unanswered: closing (often a PR's
+    `Resolves`) would otherwise hide the question, since only open items are forwarded (#114)."""
+    since = (now - timedelta(days=days)).isoformat().replace("+00:00", "Z")
+    out = []
+    for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&labels=needs-decision%3Aowner&since={since}&per_page=100",
+                    paginate=True):
+        if "pull_request" in i or "needs-decision:owner" not in {x["name"] for x in i["labels"]}:
+            continue
+        comments = gh.api("GET", f"repos/{gh.repo}/issues/{i['number']}/comments?per_page=100", paginate=True)
+        found = notify.latest_ask(comments, identity, post.MARKER)
+        if found and not found[2]:
+            out.append(i["number"])
+    return out
+
+
 def dispatch_pass(command, dry_run, now=None):
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
     config = runner.load_all()
@@ -88,6 +104,12 @@ def dispatch_pass(command, dry_run, now=None):
         return [f"paused: {why}"]
     store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
     lines += relay_answers(gh, store, identity, dry_run, now)
+    for n in orphaned_asks(gh, identity, now):
+        say(f"reopen #{n}: it closed while its question to the Owner was unanswered")
+        if not dry_run:
+            gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"state": "open"})
+            post.cmd_comment(gh, me, n, "Reopened: this item closed while its question to the Owner was still unanswered, and only "
+                             "open items' questions are forwarded (#114). The next pass forwards it; close it again once it's answered.")
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.

@@ -262,6 +262,22 @@ class NotifyTest(unittest.TestCase):
         self.assertEqual(notify.latest_ask([ask, comment(2, "stranger", "1", 5)], IDENTITY, post.MARKER)[1:], ("coordinator", False))
         self.assertIsNone(notify.latest_ask([comment(3, "aray4702", "plain", 0)], IDENTITY, post.MARKER))
 
+    def test_an_item_closed_while_held_for_the_owner_is_reopened_until_answered(self):
+        ask = comment(1, "aray4702", self.ASK, 0)
+        def gh_with(labels, comments):
+            responses = {"closed": [{"number": 81, "labels": [{"name": n} for n in labels]},
+                                    {"number": 89, "pull_request": {}, "labels": [{"name": "needs-decision:owner"}]}],
+                         "comments": comments}
+            gh = mock.Mock(repo="o/r")
+            gh.api.side_effect = lambda method, path, body=None, paginate=False: (
+                responses["closed"] if "state=closed" in path else responses["comments"])
+            return gh
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], [ask]), IDENTITY, NOW), [81])
+        answered = [ask, comment(2, "aray4702", "13a 14a", 5)]
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], answered), IDENTITY, NOW), [], "answered")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["type:definition"], [ask]), IDENTITY, NOW), [], "no longer held")
+        self.assertEqual(dispatch.orphaned_asks(gh_with(["needs-decision:owner"], []), IDENTITY, NOW), [], "no question asked")
+
     def test_unsent_filters_by_key(self):
         self.assertEqual(notify.unsent([{"key": "a"}], [("a", "x"), ("b", "y")]), [("b", "y")])
 
