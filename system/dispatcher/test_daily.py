@@ -39,6 +39,21 @@ class DenialsTest(unittest.TestCase):
         result = {"type": "result", "subtype": "success", "permission_denials": [{"tool_name": "WebFetch", "tool_input": {}}]}
         self.assertEqual(usage.summarize([json.dumps(result)])["denied"], ["WebFetch"])
 
+    def test_an_interpreters_signature_names_what_it_runs(self):
+        token = "gh" + "p_" + "A1b2" * 9
+        for command, want in [("python3 -I system/tools/post.py comment 141 --body-file -", "Bash: python3 -I system/tools/post.py"),
+                              ("python3 -I .github/scripts/tiers.py 3", "Bash: python3 -I .github/scripts/tiers.py"),
+                              ("python3 -I -m unittest discover -s system", "Bash: python3 -I -m unittest"),
+                              ("python3 -m pytest -q", "Bash: python3 -m pytest"),
+                              (f"python3 -c \"print('{token}')\"", "Bash: python3 -c"),
+                              (f"GH_TOKEN={token} python3 -I system/tools/post.py read 1", "Bash: python3 -I system/tools/post.py"),
+                              ("python3 /Users/x/secret.py", "Bash: python3"), ("python3 -I secrets/" + "a" * 60 + ".py", "Bash: python3 -I"),
+                              (f"python3 -I system/tools/post.py {token}", "Bash: python3 -I system/tools/post.py"),
+                              ("python3", "Bash: python3")]:
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertEqual(sig, want, command)
+            self.assertNotIn(token, sig)
+
 
 class BumpyTest(unittest.TestCase):
     def test_two_unfinished_runs_or_three_runs_make_an_open_item_bumpy(self):

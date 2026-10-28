@@ -48,15 +48,19 @@ def summarize(lines):
 
 def denial_signature(denial):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
-    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record."""
+    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. An
+    interpreter is followed by what it runs instead (see interpreted)."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
     if tool != "Bash" or not command:
         return tool
-    words = []
-    for word in command.split():
+    words, split = [], command.split()
+    for i, word in enumerate(split):
         if "=" in word and not words:
             continue  # a leading VAR=value assignment: skip it, never record it
+        if words and words[0] in INTERPRETERS:
+            words += interpreted(split[i:])
+            break
         # The command may carry digits or dots (python3, post.py); a second word only counts if it is
         # subcommand-shaped, so a lowercase token, hex string or filename argument is never kept.
         shape = r"[a-z][a-z0-9._-]*" if not words else r"[a-z]+(-[a-z]+)*"
@@ -66,6 +70,28 @@ def denial_signature(denial):
         if len(words) == 2:
             break
     return "Bash: " + (" ".join(words) or "?")
+
+
+INTERPRETERS = {"python3", "python"}
+SCRIPT = r"\.?[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*\.py"
+
+
+def interpreted(words):
+    """What an interpreter runs (#141): its one-letter flags, then the module after -m or the relative
+    .py path it's given. `python3 -I` alone hides which script was denied. Never -c's code, an absolute
+    path, or any argument after the script."""
+    out = []
+    for word in words:
+        if re.fullmatch(r"-[A-Za-z]", word):
+            out.append(word)
+            if word == "-c":
+                break
+        elif len(word) <= 60 and (out[-1:] == ["-m"] and re.fullmatch(r"[a-z][a-z0-9_.]*", word) or re.fullmatch(SCRIPT, word)):
+            out.append(word)
+            break
+        else:
+            break
+    return out
 
 
 def parse_time(iso):
