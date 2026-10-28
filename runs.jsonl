@@ -598,3 +598,4 @@
 {"at": "2026-10-28T23:28:44+00:00", "cost_usd": 0.270629, "denials": 1, "denied": ["Bash: python3 -I -c"], "event": "end", "five_hour": 0.33, "item": 198, "role": "reviewer", "run_id": "reviewer-20261028T232734Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 16}
 {"at": "2026-10-28T23:29:52+00:00", "event": "start", "item": 199, "pid": 3590, "role": "reviewer", "run_id": "reviewer-20261028T232945Z", "task": "Review PR #199."}
 {"at": "2026-10-28T23:29:53+00:00", "event": "start", "item": 195, "pid": 3634, "role": "builder", "run_id": "builder-20261028T232945Z", "task": "PR #195 needs work: it conflicts with main."}
+{"at": "2026-10-28T23:31:33+00:00", "cost_usd": 0.266815, "denials": 0, "denied": [], "event": "end", "five_hour": 0.34, "item": 195, "role": "builder", "run_id": "builder-20261028T232945Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 25}
