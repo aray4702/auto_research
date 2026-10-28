@@ -2,8 +2,11 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: exit 130's row covers both `lmt live` and `lmt demo`, and `lmt demo`'s stopping bullet no longer calls it the one command whose Ctrl-C isn't 130; the speaker-name rule needs no new schema version, now that the schema is 1.1 |
 | 2026-10-27 | architect, #83 | Reviewer's findings on #129: `rename` trims a name's outer white space; WebVTT escapes `&` in the voice tag too; `lmt demo` reads the transcript again on each load and needs no `.vtt`; only `lmt eval` needs the `eval` extra |
 | 2026-10-27 | architect, #83 | G3: `lmt rename` and `lmt demo`; speaker names' rules; the WebVTT cue shows the speaker as text as well as in the voice tag; the install command and version 1.0.0. Holds the recommended options on #83, waiting for the Owner's approval |
+| 2026-10-27 | architect, #82 | Reviewer's findings on #125: `source.file` stays a string in 1.1; a silent device warns rather than exiting 3; stdout is flushed per write; what a failed live session keeps |
+| 2026-10-27 | architect, #82 | G2: `lmt live` and its event stream, `lmt eval --set live` and `results/live.json`, transcript JSON 1.1 for live sessions, and exit codes 3 and 130 for live mode. It holds the recommended options on #82, waiting for the Owner's approval |
 | 2026-10-27 | architect, #81 | Reviewer's finding on #89: exit code 6 for `lmt eval --check-readme`'s mismatch, so drift and a bug can't look alike |
 | 2026-10-27 | architect, #81 | First version, for G1. It holds the recommended options on #81, waiting for the Owner's approval |
 
@@ -39,11 +42,52 @@ Transcribes one recording and writes its transcript.
 
 There is no language option: the product is English-only (F9).
 
+### `lmt live` (G2)
+
+Transcribes live from an input device, printing segments as they're recognised, until Ctrl-C, SIGTERM, `--duration` or the end of `--from-file`. Then it writes the transcript and exits 0 (#82, question 6).
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `-o`, `--output-dir DIR` | the current directory | Where the outputs go, as `<DIR>/<stem>.<ext>`. |
+| `-n`, `--name STEM` | `live-YYYYMMDD-HHMMSS`, the local start time | The outputs' file stem. |
+| `-f`, `--formats LIST` | `txt,srt,vtt,json` | As for `transcribe`. If `txt` is among them, `<stem>.txt` gets each segment as it completes. |
+| `--device NAME_OR_INDEX` | the system's default input | The input device, as `--list-devices` shows it. |
+| `--list-devices` | | Lists the input devices, with their index and name, and exits. |
+| `--from-file FILE` | not set | Reads `FILE` instead of a device, at real-time pace, as if it were being spoken. Any format `transcribe` takes. For trying it out and for measurement. |
+| `--duration SECONDS` | not set | Stops after this much audio. |
+| `--max-speakers N` | not set | At most N speakers, from 1 to 20. |
+| `--no-diarize` | off | Every segment is speaker `S1`. Can't be combined with `--max-speakers`. |
+| `--model NAME` | the manifest's live default | The ASR model. |
+| `--save-audio` | off | Also writes the audio as `<stem>.wav` (16 kHz mono, 16-bit), so `lmt transcribe` can redo the session afterwards. |
+| `--jsonl` | off | Prints the events below to stdout, one JSON object per line, instead of text. |
+| `--offline`, `--overwrite`, `-v`, `--verbose` | off | As for `transcribe`. Every output, `<stem>.wav` included, is checked before capture starts. |
+
+**Stdout.** Without `--jsonl`, each segment starts a line, `[HH:MM:SS] Speaker 1: `, and its words are added to the line as they're committed. Times are from the start of the session. Stdout is flushed after every write, text or event, so a reader through a pipe gets each one at once rather than when a buffer fills (G2-6 measures that arrival).
+
+**Stopping.** The first Ctrl-C stops capture, finishes the audio already captured, writes the outputs and exits 0. A second Ctrl-C while it's saving exits 130 and writes none of the final formats. `<stem>.txt` then keeps the segments completed before the stop, and `<stem>.wav` the audio.
+
+**What a failed session keeps.** A live session that ends after capture has started keeps `<stem>.txt` and, with `--save-audio`, `<stem>.wav`, as written so far, however it ends: a second Ctrl-C (130), a bug (1), or any other failure. This is the one exception to "a failed run leaves no outputs" below. The final formats are still written only on success. An error found before capture starts leaves no outputs, as for `transcribe`.
+
+**A silent device.** If the device gives exact zeros for its first 3 s, stderr gets one line, `lmt: warning: <device>: no sound for 3 s; the microphone may be blocked (System Settings, Privacy & Security, Microphone)`, and capture goes on. A loopback device is silent while nothing plays, so silence is never an error.
+
+#### Live events, version 1.0
+
+With `--jsonl`, each line is one event. `t` is the session time in seconds, how much audio had been captured when the event was written.
+
+| `type` | Fields | When |
+| --- | --- | --- |
+| `start` | `schema_version`, `t` (0), `source` (as in the transcript JSON), `models` | Capture starts. |
+| `words` | `t`, `segment` (its number, from 1), `speaker` (`S1`, …), `label`, `words` (each with `start`, `end`, `text`, `probability`) | Words are committed. They're never changed or sent again. |
+| `segment` | `t`, `segment`, `start`, `end`, `speaker`, `text` | A segment is complete. |
+| `stop` | `t`, `reason` (`end-of-input`, `duration`, `signal`) | Capture stops. The final formats follow. |
+
+Every event's fields are required. A minor version only adds fields or event types, and readers ignore those they don't know. `schema/live-events.schema.json` publishes the schema.
+
 ### `lmt models`
 
 | Subcommand | Effect |
 | --- | --- |
-| `lmt models download [--model NAME]` | Downloads the default models, or the named ASR model plus the diarization models, and verifies every file. A download of a gated pyannote model needs `HF_TOKEN`. |
+| `lmt models download [--model NAME]` | Downloads the default models (the live default among them, once it differs), or the named ASR model plus the diarization models, and verifies every file. A download of a gated pyannote model needs `HF_TOKEN`. |
 | `lmt models list [--bytes]` | Lists each model in the manifest: its name, revision, whether it's the default, and whether it's downloaded and verified. `--bytes` adds each one's size on disk and the default models' total (G1-10). |
 | `lmt models verify` | Re-checks every downloaded file's SHA-256. A file that doesn't match is deleted, and the command exits 5. |
 
@@ -55,6 +99,7 @@ Needs the `eval` extra (`lmt[eval]`). No other command does: `lmt demo --sample`
 | --- | --- |
 | `--set ci` | Downloads and caches the CI subset (LS-ci, AMI-ci), scores it, and writes `results/ci.json`. |
 | `--set full` | Runs `--set ci` twice and compares the two runs (G1-12). Then it scores LS full, AMI full and the one-hour recording, and writes `results/full.json`. |
+| `--set live` | Plays AMI-ci three times through `lmt live --from-file … --jsonl` in real time, measures each committed word's delay, scores the live transcript, and writes `results/live.json` (G2-6). |
 | `--out DIR` | Where the results files go. The default is `results/`. |
 | `--update-readme` | After `--set full`, regenerates `README.md`'s results table from `results/full.json`. |
 | `--check-readme` | Writes nothing, and runs no evaluation. Exits 0 if `README.md`'s results table equals what `results/full.json` renders, and 6 if it differs, printing the difference. |
@@ -88,7 +133,7 @@ Serves a page on this computer that shows a transcript, its speakers and its aud
 
 - **One of `TRANSCRIPT` and `--sample`** is required.
 - **On start,** it prints the page's URL to stdout, `http://127.0.0.1:<port>/<token>/`, where the token is random for each run, then opens it in the default browser.
-- **It stops** on Ctrl-C or SIGTERM and exits 0, since stopping is how a server ends. This is the one command for which Ctrl-C isn't exit 130.
+- **It stops** on Ctrl-C or SIGTERM and exits 0, since stopping is how a server ends. Here Ctrl-C is never exit 130, unlike a second Ctrl-C in `lmt live`.
 - **Only this computer can reach it:** it listens on `127.0.0.1` only, and has no option to listen elsewhere (Q8). It answers only requests that carry the token and a `Host` of `127.0.0.1:<port>` or `localhost:<port>`, and only GET and HEAD.
 - **It writes nothing,** except `--sample`'s cache in `LMT_DATA_DIR`. It needs no `.vtt` or other export beside the transcript.
 - **It reads the transcript again** each time the page loads, so after `lmt rename`, reloading the page shows the new names. If the file has become invalid, the page shows an error, stderr gets one `lmt: warning:` line, and the server keeps running.
@@ -112,13 +157,13 @@ Serves a page on this computer that shows a transcript, its speakers and its aud
 | 0 | Success. |
 | 1 | Internal error: a bug. It prints an error report naming the input format, the model revisions and the failed stage (Q6), and never a bare traceback. |
 | 2 | Usage error: an unknown option, a bad value, conflicting options, or an existing output without `--overwrite`. |
-| 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. |
+| 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. For `lmt live`: no input device, an unknown one, or one that can't be opened. A device that gives only silence is a warning, not an error ("A silent device", above). |
 | 4 | No speech found in the input. |
 | 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. |
 | 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from what `results/full.json` renders. A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
-| 130 | Interrupted (Ctrl-C). Partial outputs are deleted. `lmt demo` exits 0 instead, since Ctrl-C is how it stops. |
+| 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving. `<stem>.txt` and `<stem>.wav` are kept (above). `lmt demo` exits 0 instead, since Ctrl-C is how it stops. |
 
-Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11).
+Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11), except what a live session keeps ("What a failed session keeps", above).
 
 ## Environment
 
@@ -137,11 +182,13 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 - **WebVTT (`.vtt`):** a `WEBVTT` header, then one cue per segment, with times as `HH:MM:SS.mmm`. The speaker is both a voice tag and visible text, `<v Speaker 1>Speaker 1: text`, since players don't show a voice tag (#83, question 6). `&`, `<` and `>` in text are escaped as `&amp;`, `&lt;` and `&gt;`, and `&` in the voice tag's annotation is escaped as `&amp;` too (a label can't hold `<` or `>`). So `José & Ana` is written `<v José &amp; Ana>José &amp; Ana: text`. Long segments are split as in SRT, counting the visible prefix and not the tag.
 - **JSON (`.json`):** valid against `schema/transcript.schema.json`, as follows.
 
-### Transcript JSON, version 1.0
+### Transcript JSON, version 1.1
+
+Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case, as in 1.0: in a live session's transcript, it is the base name for `--from-file`, and the session's stem (`--name`) for a device. `source` also holds `"live": true` and, for a device, `"device"`, its name. Both are new optional fields, absent in `transcribe`'s output, which is otherwise unchanged from 1.0. So a 1.0 reader reads a 1.1 file.
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "lmt_version": "0.1.0",
   "source": {"file": "meeting.m4a", "duration": 3600.125},
   "models": {
@@ -164,8 +211,8 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 - **Required:** `schema_version`, `source`, `models`, `speakers` and `segments`. Every segment has `start`, `end`, `speaker` and `text` (F3). `words` is optional.
 - **Rules:** segments are sorted by `start`, and 0 ≤ `start` < `end` ≤ `source.duration`. Each `speaker` is the `id` of an entry in `speakers`. Speaker ids are `S1`, `S2`, … in order of first appearance. `models.diarization` is `null` with `--no-diarize`.
 - **Labels:** `label` is what every export shows. It starts as "Speaker N", and renaming (F7, G3) changes only `label`.
-- **Speaker names** (G3): a `label` is 1 to 32 Unicode code points, with no leading or trailing white space (`rename` trims it from what it's given), no control characters, and none of `<`, `>`, `{`, `}` and `=`. These keep every subtitle format valid, and a name with its `: ` within an SRT line of 42 characters. The schema states the rule. Every label `lmt` has written meets it, so `schema_version` stays 1.0. Two speakers may share a label.
-- **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13).
+- **Speaker names** (G3): a `label` is 1 to 32 Unicode code points, with no leading or trailing white space (`rename` trims it from what it's given), no control characters, and none of `<`, `>`, `{`, `}` and `=`. These keep every subtitle format valid, and a name with its `: ` within an SRT line of 42 characters. The schema states the rule. Every label `lmt` has written meets it, so the rule needs no new schema version. Two speakers may share a label.
+- **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13). A live session from a device is the exception: its `source.file` is its stem, which holds the start time by default. G2 doesn't require two live runs to be identical.
 - **Compatibility:** a minor version only adds optional fields, and readers ignore fields they don't know. A major version changes or removes fields.
 
 ## Results file, version 1.0
@@ -189,6 +236,7 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 }
 ```
 
-- **Values:** `system` is `product`, `whisper-alone` or `pyannote-alone`. A figure that doesn't apply is `null`.
-- **Timing fields:** `date`, `wall_seconds`, `rtf` and `peak_rss_bytes`. Two runs are compared with these removed (G1-5, G1-12).
+- **Values:** `system` is `product`, `whisper-alone`, `pyannote-alone` or, in `results/live.json`, `product-live`. A figure that doesn't apply is `null`.
+- **Live figures** (`results/live.json`, G2-6): `p50_delay_seconds`, `p95_delay_seconds`, `max_delay_seconds`, `matched_words`, `runs` (each run's `p95_delay_seconds` and `behind_seconds`, how far behind real time it was at the end), plus `wer` and `der`.
+- **Timing fields:** `date`, `wall_seconds`, `rtf`, `peak_rss_bytes`, and the live figures' delays and `behind_seconds`. Two runs are compared with these removed (G1-5, G1-12).
 - **`dirty`:** `true` when the working tree had uncommitted changes. A results file that the README's table is rendered from must have `dirty: false`.
