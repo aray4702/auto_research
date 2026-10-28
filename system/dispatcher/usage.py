@@ -117,7 +117,8 @@ def may_start(caps, runs, role, now, time_zone="America/Los_Angeles"):
         r["event"] == "start" and r["role"] == role and parse_time(r["at"]).astimezone(tz).date() == today
         for r in runs
     )
-    if started_today >= role_caps["max_runs_per_day"]:
+    lifted = (caps.get("override") or {}).get("no_daily_run_caps_until")  # the Owner's, for a day (#101)
+    if started_today >= role_caps["max_runs_per_day"] and not (lifted and now < datetime.fromisoformat(lifted)):
         reasons.append(f"{started_today} {role} runs today; the cap is {role_caps['max_runs_per_day']}")
     used = points_used(caps, runs, now)
     worst = role_caps["max_budget_usd"] * claude["points_per_usd"]
