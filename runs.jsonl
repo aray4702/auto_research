@@ -302,3 +302,4 @@
 {"at": "2026-10-28T15:21:09+00:00", "event": "start", "item": 138, "pid": 28561, "role": "builder", "run_id": "builder-20261028T152103Z", "task": "Item #138 needs your decision (needs-decision:builder)."}
 {"at": "2026-10-28T15:22:12+00:00", "cost_usd": 0.207732, "denials": 0, "denied": [], "event": "end", "five_hour": 0.05, "item": 138, "role": "builder", "run_id": "builder-20261028T152103Z", "seven_day": 0.33, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 13}
 {"at": "2026-10-28T15:23:03+00:00", "cost_usd": 0.22212, "denials": 1, "denied": ["Bash: python3"], "event": "end", "five_hour": 0.05, "item": 148, "role": "reviewer", "run_id": "reviewer-20261028T152103Z", "seven_day": 0.33, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 16}
+{"at": "2026-10-28T15:23:22+00:00", "event": "start", "item": null, "pid": 30289, "role": "coordinator", "run_id": "coordinator-20261028T152318Z", "task": "Triage these issues: #149."}
