@@ -14,3 +14,4 @@
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: ls", "level": "builder", "title": "Recurring permission denial: Bash: ls"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: python3 > ;", "level": "builder", "title": "Recurring permission denial: Bash: python3 > ;"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: sed", "level": "builder", "title": "Recurring permission denial: Bash: sed"}
+{"at": "2026-10-28T21:06:10+00:00", "key": "denial:Glob", "level": "builder", "title": "Recurring permission denial: Glob"}
