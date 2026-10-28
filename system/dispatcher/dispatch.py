@@ -3,7 +3,8 @@
 
   dispatch.py poll [--dry-run]        every 2 minutes
   dispatch.py reconcile [--dry-run]   every hour: a poll, plus expired claims and a heartbeat
-  dispatch.py daily                   07:30: anomaly signals and the rule audit (blueprint §8 step 7)
+  dispatch.py daily                   anomaly signals and the rule audit (blueprint §8 step 7), raised once each
+  dispatch.py audit [product|system|all]   07:30, and on demand: the daily pass, and reports (audit.py)
 
 Each pass: the kill switch; runs whose launcher died; the merge queue; new runs in dispatch order
 within the caps; notices to the Owner. With --dry-run it prints what it would do and changes
@@ -12,7 +13,6 @@ nothing. Standard library only.
 
 import argparse
 import os
-import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -20,8 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import daily, flow, github_state, killswitch, notify, plan, relay, state, usage  # noqa: E402
-from system.tools import post, runner  # noqa: E402
+from system.dispatcher import audit, daily, flow, github_state, killswitch, merge_rules, notify, plan, relay, state, usage  # noqa: E402
+from system.tools import post, runner, tracker  # noqa: E402
 
 
 def article(word):
@@ -38,24 +38,27 @@ def alive(pid):
     return True
 
 
-HUNK_LINE_NUMBERS = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.M)
-
-
-def own_changes(gh, ref):
-    """A commit's diff against its merge base with main, file by file: a PR's own changes. Each patch is kept whole
-    and in order, context included, less the line numbers in its hunk headers, so main adding or removing lines
-    elsewhere only shifts it. A file without a patch (binary, or too large to show) is compared by its blob."""
-    files = gh.api("GET", f"repos/{gh.repo}/compare/main...{ref}")["files"]
-    return {f["filename"]: (f["status"], HUNK_LINE_NUMBERS.sub("@@", f["patch"]))
-            if f.get("patch") is not None else (f["status"], f.get("sha")) for f in files}
-
-
-def same_changes(gh, approved, head):
-    """True when the PR's own changes at head are what they were at the approved commit: everything since came from
-    main. A merge that resolved a conflict by hand, or any commit of the PR's own, changes them (#118, #127). So
-    does main editing a line next to one of them: that errs toward asking for a re-approval.
-    (Comparing commits instead fails: the commits merged in from main include other PRs' own commits.)"""
-    return own_changes(gh, approved) == own_changes(gh, head)
+def sign_off_question(pr, approved):
+    """The SR2 question (#150), asked once on the PR. Own lines unchanged: the Coordinator judges, then the builder,
+    then the Owner. Own lines changed (on a PR the builder didn't write): the builder, then the Owner."""
+    n, head = pr["number"], pr["head"]
+    if pr.get("same_lines"):
+        what = (f"Since then only main changed: the PR's own added and removed lines are the same, in order, but main "
+                f"edited code next to them, so that approval no longer counts by itself.\n\n"
+                f"Judge whether main's changes around those lines change what the Owner approved: compare "
+                f"`compare/{approved}...{head}` and read main's commits that touched the same places.\n")
+    else:
+        what = (f"Since then the PR's own lines changed, and the Reviewer approved the new head.\n\n"
+                f"Judge whether the changes stay within what the Owner approved (for example, fixes the Reviewer asked "
+                f"for) or change what it does in a way the Owner should see: compare `compare/{approved}...{head}`.\n")
+    return (f"**SR2.** The Owner approved this PR at `{approved}`. {what}"
+            f"- **Within it:** `post.py sign-off {n} --approved {approved} --head {head}` with your reasons as the "
+            f"body. SR1 then merges it in its turn.\n"
+            f"- **You can't tell** (Coordinator): `post.py escalate {n} --level builder` with what you found.\n"
+            f"- **You can't tell** (builder): `post.py escalate {n} --level owner`, asking whether to sign off. On "
+            f"the Owner's yes, sign off quoting it; otherwise the Owner approves the PR again on GitHub.\n\n"
+            f"Only a sign-off from a run on this PR, by a role SR2 lets judge this kind of change, counts "
+            f"(`system/standing-rules.md`).")
 
 
 def expired_claims(gh, items, active_items, now):
@@ -83,8 +86,10 @@ def spawn(config, role, item, task, logs):
 
 
 def relay_answers(gh, store, identity, dry_run, now):
+    # The Owner may ask for an audit in the chat: it runs here, and the relay replies with the reports' links.
+    on_audit = lambda kinds: audit_pass(kinds, dry_run=False, now=now, announce=False)[1]  # noqa: E731
     try:
-        return relay.run(gh, store, identity, dry_run, now)
+        return relay.run(gh, store, identity, dry_run, now, on_audit=on_audit)
     except (Exception, SystemExit) as e:  # the chat must never stop a pass (GitHub errors are SystemExit); no secret named
         return [f"relay failed: {type(e).__name__}: {e}"]
 
@@ -160,17 +165,10 @@ def dispatch_pass(command, dry_run, now=None):
     url = lambda n: f"https://github.com/{identity['repo']}/pull/{n}"
     wanted, renewed = [], set()
 
-    # An approval followed only by merges from main still counts (#118): GitHub no longer dismisses it.
-    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
-    for pr in snap["prs"]:
-        pr["fresh"] = {}
-        for login in (bot, second):
-            r = plan.latest_review(pr, login)
-            if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
-                pr["fresh"][login] = same_changes(gh, r["commit"], pr["head"])
+    merge_rules.annotate(gh, snap, runs, identity, post.MARKER)
 
     # The merge queue: one PR at a time.
-    for action, n, detail in plan.merge_plan(snap, identity):
+    for action, n, detail in merge_rules.merge_plan(snap, identity):
         if action == "refresh":
             say(f"refresh PR #{n} from main ({detail})")
             if not dry_run:
@@ -185,12 +183,17 @@ def dispatch_pass(command, dry_run, now=None):
                 subprocess.run(["gh", "pr", "merge", str(n), "--disable-auto", "--repo", gh.repo], check=True, capture_output=True)
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
-            if same_changes(gh, detail, pr["head"]):
+            if merge_rules.same_changes(gh, detail, pr["head"]):
                 say(f"renew the Reviewer App's approval of PR #{n} (its own changes are as they were at {detail[:7]})")
                 renewed.add(n)
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
                                     f"Renewed after a refresh from main: the PR's own changes are unchanged since the approval of {detail[:7]}.")
+        elif action in ("ask-coordinator-to-sign-off", "ask-builder-to-sign-off"):
+            level = action.split("-")[1]
+            say(f"ask the {'Coordinator' if level == 'coordinator' else level} to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
+            if not dry_run:
+                post.cmd_escalate(gh, me, n, level, sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 
@@ -243,8 +246,9 @@ def dispatch_pass(command, dry_run, now=None):
     return lines or ["nothing to do"]
 
 
-def daily_pass(dry_run, now=None):
-    """Anomaly signals and the rule audit (blueprint §4.5), each taken to its response once per key."""
+def daily_pass(dry_run, now=None, collect=None):
+    """Anomaly signals and the rule audit (blueprint §4.5), each taken to its response once per key. With collect
+    (a dict), it also returns what the system audit reports: the findings, the flow records and the runs."""
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
     config = runner.load_all()
     identity = config["identity"]
@@ -281,9 +285,10 @@ def daily_pass(dry_run, now=None):
     watch = next((i for i in snap["issues"] if "record:watch-list" in i["labels"]), None)
 
     open_items = {i["number"] for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])}
-    found = (daily.denials(runs, now) + daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
+    explained = config["runner"].get("denials", {}).get("explained", [])
+    found = (daily.denials(runs, now, explained) +daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
-             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now)
+             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now, identity["time_zone"])
              + daily.watch_list(watch["body"] if watch else "", {**daily.metrics(runs, now, max(waits)), **flow.metrics(flows, now)}))
     live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
     found += daily.protection_breaches(live, identity["branch_protection"])
@@ -294,6 +299,9 @@ def daily_pass(dry_run, now=None):
         found.append((f"runner:{';'.join(drift)}", "builder", "The runner differs from main",
                       "runner.py check:\n- " + "\n- ".join(drift), None))
 
+    found += audit.missed_builder_daily(runs, now, identity["time_zone"])
+    if collect is not None:
+        collect.update(findings=[(key, level, title, key not in raised) for key, level, title, _, _ in found], flows=flows, runs=runs)
     lines = []
     for key, level, title, evidence, item in found:
         if key in raised:
@@ -322,12 +330,108 @@ def daily_pass(dry_run, now=None):
     return lines or ["no anomalies"]
 
 
+def record_issue(gh, me, kind, dry_run):
+    """The open record issue an audit's reports go on (created on first use), or None in a dry run before then."""
+    label, title = audit.RECORD[kind]
+    found = tracker.record_issues(gh, label)
+    if found:
+        return found[0]
+    if dry_run:
+        return None
+    made = post.cmd_issue_create(gh, me, title, [label], f"Reports of the {kind} audit (system/dispatcher/audit.py), newest "
+                                 "last: one comment each, daily at 07:30 and on demand. Each is linked in the Owner's chat.")
+    return gh.api("GET", f"repos/{gh.repo}/issues/{made.split()[0].lstrip('#')}")
+
+
+def product_facts(gh, store, config, record, now):
+    identity = config["identity"]
+    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
+    snap = github_state.snapshot(gh, identity)
+    merge_rules.annotate(gh, snap, store.read("runs"), identity, post.MARKER)
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=open&per_page=100", paginate=True)
+    in_review = {n for pr in snap["prs"] for n in pr["resolves"]}
+    items = [{"number": i["number"], "title": i["title"], "milestone": (i.get("milestone") or {}).get("title"),
+              "state": audit.item_state({x["name"] for x in i["labels"]}, i["number"] in in_review)}
+             for i in everything if "pull_request" not in i and i.get("milestone")]
+    questions = []
+    for i in snap["issues"] + snap["prs"]:
+        if "needs-decision:owner" in i["labels"]:
+            found = notify.latest_ask(gh.api("GET", f"repos/{gh.repo}/issues/{i['number']}/comments?per_page=100", paginate=True),
+                                      identity, post.MARKER)
+            if found and not found[2]:
+                questions.append((i["number"], i["title"], datetime.fromisoformat(found[0]["created_at"].replace("Z", "+00:00"))))
+    approvals = [(pr["number"], pr["title"]) for pr in snap["prs"]
+                 if pr["author_role"] and not pr["draft"] and pr["protected"] and pr["gate"] == "SUCCESS"
+                 and merge_rules.current(pr, bot) and not merge_rules.owner_approves(pr, second)
+                 and not merge_rules.sr2_due(pr, bot, second)]
+    last = gh.api("GET", f"repos/{gh.repo}/issues/{record['number']}/comments?per_page=100", paginate=True) if record else []
+    since = max((c["created_at"] for c in last), default=(now - timedelta(hours=12)).isoformat().replace("+00:00", "Z"))
+    merged = [(p["number"], p["title"]) for p in gh.api("GET", f"repos/{gh.repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50")
+              if p.get("merged_at") and p["merged_at"] > since]
+    milestones = [{"title": m["title"], "open": m["open_issues"], "closed": m["closed_issues"]}
+                  for m in gh.api("GET", f"repos/{gh.repo}/milestones?state=all&per_page=100", paginate=True)]
+    watch = next((i for i in snap["issues"] if "record:watch-list" in i["labels"]), None)
+    note = next((line for line in post.MARKER.sub("", (watch or {}).get("body") or "", count=1).splitlines() if line.strip()), "")
+    return {"goals": sorted((i for i in snap["issues"] if "record:goal" in i["labels"]), key=lambda i: i["title"]),
+            "deadlines": audit.deadlines(github_state.requirements_on_main(gh)), "milestones": milestones, "items": items,
+            "questions": questions, "approvals": approvals, "merged": merged, "gate": post.cmd_gate(gh, identity, "main"),
+            "watch": (watch["number"], note[:400] + ("…" if len(note) > 400 else "")) if watch else None}
+
+
+def system_facts(gh, store, config, collect, now):
+    identity, zone = config["identity"], config["identity"]["time_zone"]
+    runs = collect["runs"]
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=open&labels=type%3Asystem&per_page=100", paginate=True)
+    open_system = [(i["number"], i["title"], next((x["name"] for x in i["labels"] if x["name"].startswith("sev:")), "sev:?"))
+                   for i in everything if "pull_request" not in i]
+    _, reasons, warnings = usage.may_start(config["caps"], runs, "coordinator", now, zone)
+    beats = [datetime.fromisoformat(b["at"]) for b in store.read("heartbeats") if b.get("event") == "reconcile"]
+    return {"findings": collect["findings"], "open_system": open_system, "flow": flow.report(collect["flows"], now, 7, zone),
+            "paused": killswitch.paused(gh), "runs": audit.runs_summary(runs, now),
+            "usage": (warnings, [r for r in reasons if "points" in r]), "last_reconcile": max(beats, default=None),
+            "builder_daily": audit.builder_daily(runs)}
+
+
+def audit_pass(kinds=audit.KINDS, dry_run=False, now=None, announce=True):
+    """The product and system audits: each posted on its record issue; with announce, one notice in the Owner's chat.
+    Returns (lines, [(kind, headline, url)])."""
+    now = now or datetime.now(timezone.utc).replace(microsecond=0)
+    config = runner.load_all()
+    identity = config["identity"]
+    gh = post.GitHub(identity["repo"])
+    me = ("dispatcher", f"dispatcher-{now:%Y%m%dT%H%M%SZ}")
+    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    lines, posted = [], []
+    for kind in kinds:
+        record = record_issue(gh, me, kind, dry_run)
+        if kind == "system":
+            collect = {}
+            lines += daily_pass(dry_run, now, collect)
+            headline, body = audit.system_report(system_facts(gh, store, config, collect, now), now, identity["time_zone"])
+        else:
+            headline, body = audit.product_report(product_facts(gh, store, config, record, now), now, identity["time_zone"])
+        if dry_run:
+            lines += [f"would post the {kind} audit: {headline}", body]
+            continue
+        url = post.cmd_comment(gh, me, record["number"], body)
+        lines.append(f"posted the {kind} audit: {headline} ({url})")
+        posted.append((kind, headline, url))
+    if posted and announce:
+        notify.send(notify.webhook_url(identity), "\n".join(f"**{k.capitalize()} audit:** {h}\n<{u}>" for k, h, u in posted))
+    return lines, posted
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["poll", "reconcile", "daily"])
+    parser.add_argument("command", choices=["poll", "reconcile", "daily", "audit"])
+    parser.add_argument("kind", nargs="?", choices=["product", "system", "all"], default="all", help="audit only")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    if args.command == "audit":
+        for line in audit_pass(audit.KINDS if args.kind == "all" else (args.kind,), args.dry_run)[0]:
+            print(f"{stamp} audit: {line}")
+        return 0
     if args.command == "daily":
         thrown, why = killswitch.paused(post.GitHub(runner.load_all()["identity"]["repo"]))
         if thrown:  # the audit still runs while paused: a breach must reach the Owner
