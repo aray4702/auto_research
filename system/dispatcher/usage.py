@@ -49,7 +49,8 @@ def summarize(lines):
 def denial_signature(denial):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
     assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. An
-    interpreter is followed by what it runs instead (see interpreted)."""
+    interpreter is followed by what it runs instead (see interpreted). A first word that isn't
+    command-shaped is recorded by its shape (see first_word), not as a bare "?" (#176)."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
     if tool != "Bash" or not command:
@@ -58,18 +59,37 @@ def denial_signature(denial):
     for i, word in enumerate(split):
         if "=" in word and not words:
             continue  # a leading VAR=value assignment: skip it, never record it
-        if words and words[0] in INTERPRETERS:
+        if words and words[0].rsplit("/", 1)[-1] in INTERPRETERS:
             words += interpreted(split[i:])
             break
         # The command may carry digits or dots (python3, post.py); a second word only counts if it is
         # subcommand-shaped, so a lowercase token, hex string or filename argument is never kept.
-        shape = r"[a-z][a-z0-9._-]*" if not words else r"[a-z]+(-[a-z]+)*"
-        if not re.fullmatch(shape, word) or len(word) > 20:
+        if not words:
+            words.append(first_word(word))
+            if not re.fullmatch(COMMAND, words[0].removeprefix("…/")):
+                break
+            continue
+        if not re.fullmatch(r"[a-z]+(-[a-z]+)*", word) or len(word) > 20:
             break
         words.append(word)
         if len(words) == 2:
             break
     return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command)])
+
+
+COMMAND = r"[a-z][a-z0-9._-]{0,19}"
+SHAPES = "({[$\"'.~\\!"
+
+
+def first_word(word):
+    """The command, or what its first word looks like (#176): a path's command name after "…/", else the
+    symbol it starts with and "…", else "?". Never a path's directories, a quote's or a variable's text."""
+    if re.fullmatch(COMMAND, word):
+        return word
+    if "/" in word:
+        name = word.strip("'\"").rstrip("/").rsplit("/", 1)[-1]
+        return "…/" + (name if re.fullmatch(COMMAND, name) else "?")
+    return word[0] + "…" if word[0] in SHAPES else "?"
 
 
 OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
