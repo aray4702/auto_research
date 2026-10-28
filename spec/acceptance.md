@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-28 | architect, #158 | G2's deadline follows requirements v1.8 (#82, answer 1a): 2026-10-30 for the criteria CI checks, 2026-10-31 for the Mac checks. Dropped "If the Owner picks other options on #82", since the Owner picked the recommended ones. No criterion changes |
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: G2's section sits between G1's and G3's, both unchanged |
 | 2026-10-28 | architect, #83 | Merged `main` into #129: G1's deadline paragraph takes #105's wording, and G3's section follows it unchanged |
 | 2026-10-27 | architect, #83 | Reviewer's findings on #129: one rule for outer white space in a name (`rename` trims it), with a case each in G3-1 and G3-3; G3-2 compares the voice after decoding character references; G3-4 checks that the demo re-reads its transcript and renders its track; G3-7 checks that `--sample`'s code loads without the `eval` extra |
@@ -126,9 +127,9 @@ These are the Architect's proposal. The Coordinator charts the plan.
 
 ## G2: live transcription
 
-**Goal:** `project_requirements.md` §2, G2. **Measurable outcome:** "F6; Q10." **Deadline:** 2026-10-28 in requirements v1.7. It can't be met: G2 runs on G1's pipeline, which G1's stage 2 builds (#82, question 1).
+**Goal:** `project_requirements.md` §2, G2. **Measurable outcome:** "F6; Q10." **Deadline:** 2026-10-30 for the criteria CI checks, and 2026-10-31 for the Mac checks (G2-5m, G2-6), in requirements v1.8 (#82, answer 1a).
 
-G2 builds on G1's pipeline and public API. The names below (`lmt live`, its options, the event stream, `results/live.json`) are the ones `design/public-api.md` and `design/architecture.md`, "Live mode (G2)", propose. If the Owner picks other options on #82, this section follows.
+G2 builds on G1's pipeline and public API. The names below (`lmt live`, its options, the event stream, `results/live.json`) are the ones `design/public-api.md` and `design/architecture.md`, "Live mode (G2)", propose.
 
 ### Terms
 
@@ -183,7 +184,7 @@ These are the Architect's proposal. The Coordinator charts the plan. G2 needs tw
    - the harness's `--set live` and `results/live.json`, tested on fixed event logs, so it needs no model. This one can start as soon as G1's harness lands.
 2. **On the Mac.** An investigation measures the candidate live models, the update interval and the diarization latency on the Mac against Q10 (`design/architecture.md`, "Live mode (G2)"), and the default is pinned. Then the Owner runs `lmt eval --set live` and makes the G2-5m reading.
 
-**The deadline, 2026-10-28.** It can't be met. G2's stage 1 starts only when G1's stage 2 has landed, which is planned for 2026-10-28 at the earliest, and most of G2's items are on protected paths that the Owner merges. On 2026-10-28, G2 can have this definition, its internal design, and perhaps the harness item. #82's question 1 proposes 2026-10-30 for the criteria CI checks, and 2026-10-31 for the Mac checks (G2-5m, G2-6).
+**The deadlines, 2026-10-30 and 2026-10-31.** Requirements v1.8 dates G2's criteria CI checks to 2026-10-30, and its Mac checks (G2-5m, G2-6) to 2026-10-31 (#82, answer 1a). G2's stage 1 starts only when G1's stage 2 has landed, and most of G2's items are on protected paths that the Owner merges.
 
 ## G3: a portfolio-ready v1.0 release
 
