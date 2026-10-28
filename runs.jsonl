@@ -603,3 +603,4 @@
 {"at": "2026-10-28T23:32:12+00:00", "event": "start", "item": 198, "pid": 5763, "role": "builder", "run_id": "builder-20261028T233205Z", "task": "PR #198 needs work: the Reviewer asked for changes."}
 {"at": "2026-10-28T23:34:25+00:00", "event": "start", "item": 195, "pid": 7169, "role": "reviewer", "run_id": "reviewer-20261028T233419Z", "task": "Review PR #195."}
 {"at": "2026-10-28T23:34:55+00:00", "cost_usd": 0.403979, "denials": 0, "denied": [], "event": "end", "five_hour": 0.34, "item": 198, "role": "builder", "run_id": "builder-20261028T233205Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 28}
+{"at": "2026-10-28T23:35:09+00:00", "cost_usd": 0.170831, "denials": 1, "denied": ["Bash: git range-diff"], "event": "end", "five_hour": 0.34, "item": 195, "role": "reviewer", "run_id": "reviewer-20261028T233419Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 16}
