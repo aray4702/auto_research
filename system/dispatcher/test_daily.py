@@ -46,6 +46,14 @@ class DenialsTest(unittest.TestCase):
                               ("echo $(cat key) && ls; date", "Bash: echo $( && ;"), ("cat a\\|b", "Bash: cat")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
 
+    def test_a_second_line_is_marked_so_a_multiline_denial_is_raised_as_compound(self):
+        for command, want in [("git fetch origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
+                              ("git fetch origin main\n", "Bash: git fetch"), ("git fetch \\\n  origin main", "Bash: git fetch"),
+                              ("cat > a.md <<'EOF'\nx\nEOF", "Bash: cat > <<"), ("git log | head\ndate", "Bash: git log | ⏎")]:
+            self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
+        runs = [end(x, denied=["Bash: git fetch ⏎"]) for x in "abc"]
+        self.assertEqual([k for k, *_ in daily.denials(runs, NOW)], ["compound:Bash: git fetch ⏎"], "#178: not a git fetch gap")
+
     def test_signatures_keep_only_the_tool_and_first_two_words(self):
         self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "gh pr checks 34 --watch"}}), "Bash: gh pr")
         self.assertEqual(usage.denial_signature({"tool_name": "Write", "tool_input": {"file_path": "/tmp/x"}}), "Write")
