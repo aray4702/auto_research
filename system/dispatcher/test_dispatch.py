@@ -186,14 +186,18 @@ class ChooseTest(unittest.TestCase):
 
 class MergePlanTest(unittest.TestCase):
     def test_one_pr_at_a_time_refreshing_then_merging(self):
-        s = snap(prs=[pr(8, merge_state="BEHIND", decision="APPROVED"), pr(9, merge_state="CLEAN", decision="APPROVED")])
+        app = [(BOT, "APPROVED", "h2")]
+        s = snap(prs=[pr(8, merge_state="BEHIND", decision="APPROVED", reviews=app), pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("refresh", 8, "behind main")])
-        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED")])
+        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("auto-merge", 9, "h2")])
-        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True)])
+        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, reviews=app)])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("ask-owner-to-merge", 9, "h2")])
-        s = snap(prs=[pr(7, merge_state="CLEAN", decision="APPROVED", auto_merge=True), pr(9, merge_state="CLEAN", decision="APPROVED")])
+        s = snap(prs=[pr(7, merge_state="CLEAN", decision="APPROVED", auto_merge=True, reviews=app),
+                      pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
         self.assertEqual(plan.merge_plan(s, IDENTITY), [])
+        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED")])
+        self.assertEqual(plan.merge_plan(s, IDENTITY), [], "GitHub's APPROVED alone isn't enough: the Reviewer App's must be current (#118)")
 
     def test_a_protected_pr_is_refreshed_before_the_owner_is_asked_once(self):
         # Behind main and waiting only on the Owner: refresh first, ask nothing yet.
@@ -215,10 +219,10 @@ class MergePlanTest(unittest.TestCase):
         ready = lambda **kw: snap(prs=[pr(40, protected=True, merge_state="CLEAN", decision="APPROVED", **kw)])
         self.assertEqual(plan.merge_plan(ready(reviews=both), IDENTITY), [("auto-merge", 40, "h2")])
         owner_only = [(SECOND, "APPROVED", "h2")]
-        self.assertEqual(plan.merge_plan(ready(reviews=owner_only), IDENTITY), [("ask-owner-to-merge", 40, "h2")],
-                         "the Owner approved before the Reviewer: nothing merges without the Reviewer")
+        self.assertEqual(plan.merge_plan(ready(reviews=owner_only), IDENTITY), [],
+                         "the Owner approved before the Reviewer: nothing merges, and nothing is asked, until the Reviewer approves")
         asked_again = [(BOT, "APPROVED", "h2"), (BOT, "CHANGES_REQUESTED", "h2"), (SECOND, "APPROVED", "h2")]
-        self.assertEqual(plan.merge_plan(ready(reviews=asked_again), IDENTITY)[0][0], "ask-owner-to-merge", "latest review counts")
+        self.assertEqual(plan.merge_plan(ready(reviews=asked_again), IDENTITY), [], "the latest review counts")
         old_head = [(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h2")]
         self.assertNotIn(("auto-merge", 40, "h2"), plan.merge_plan(ready(reviews=old_head), IDENTITY))
         rules = ready(reviews=both)
@@ -226,6 +230,29 @@ class MergePlanTest(unittest.TestCase):
         self.assertEqual(plan.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")], "SR1 never merges a change to itself")
         rules["prs"][0]["files"] = ["system/dispatcher/plan.py"]
         self.assertEqual(plan.merge_plan(rules, IDENTITY), [("ask-owner-to-merge", 40, "h2")])
+
+    def test_a_conflict_free_refresh_keeps_both_approvals_and_a_real_push_does_not(self):
+        # GitHub no longer dismisses stale approvals; the Dispatcher marks those followed only by merges (#118).
+        old = [(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h1")]
+        refreshed = pr(50, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=old)
+        refreshed["fresh"] = {BOT: True, SECOND: True}
+        self.assertEqual(plan.merge_plan(snap(prs=[refreshed]), IDENTITY), [("auto-merge", 50, "h2")], "SR1, no re-approval")
+        pushed = pr(50, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=old)
+        pushed["fresh"] = {BOT: False, SECOND: False}
+        acts = plan.merge_plan(snap(prs=[pushed]), IDENTITY)
+        self.assertNotIn("auto-merge", [a for a, *_ in acts], "real changes after the approvals: no merge")
+        unprotected = pr(51, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h1")])
+        unprotected["fresh"] = {BOT: False}
+        self.assertEqual(plan.merge_plan(snap(prs=[unprotected]), IDENTITY), [], "unprotected too: the Reviewer must see the new code")
+        unprotected["fresh"] = {BOT: True}
+        self.assertEqual(plan.merge_plan(snap(prs=[unprotected]), IDENTITY), [("auto-merge", 51, "h2")])
+
+    def test_auto_merge_is_turned_off_when_the_approvals_stop_covering_the_pr(self):
+        stale = pr(52, merge_state="CLEAN", decision="APPROVED", auto_merge=True, reviews=[(BOT, "APPROVED", "h1")])
+        stale["fresh"] = {BOT: False}
+        self.assertEqual(plan.merge_plan(snap(prs=[stale]), IDENTITY), [("cancel-auto-merge", 52, "h2")])
+        stale["fresh"] = {BOT: True}
+        self.assertEqual(plan.merge_plan(snap(prs=[stale]), IDENTITY), [], "still covered: leave it to GitHub")
 
     def test_the_owner_is_not_asked_while_github_is_still_working_out_the_merge_state(self):
         # Right after main moves, GitHub reports mergeStateStatus UNKNOWN; #34 was really 12 commits behind.
