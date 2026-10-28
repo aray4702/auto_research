@@ -86,8 +86,28 @@ def orphaned_asks(gh, identity, now, days=2):
         comments = gh.api("GET", f"repos/{gh.repo}/issues/{i['number']}/comments?per_page=100", paginate=True)
         found = notify.latest_ask(comments, identity, post.MARKER)
         if found and not found[2]:
-            out.append(i["number"])
+            out.append((i["number"], found[0]["id"]))
     return out
+
+
+def reopen_orphans(gh, store, me, identity, notices, dry_run, now):
+    """Reopen each orphaned question's item once per question (`reopen:<ask id>`): closed again, it stays closed."""
+    done = {n["key"] for n in notices}
+    lines = []
+    try:
+        for n, ask_id in orphaned_asks(gh, identity, now):
+            if f"reopen:{ask_id}" in done:
+                continue
+            lines.append(("would " if dry_run else "") + f"reopen #{n}: it closed while its question to the Owner was unanswered")
+            if not dry_run:
+                gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"state": "open"})
+                post.cmd_comment(gh, me, n, "Reopened: this item closed while its question to the Owner was still unanswered, and "
+                                 "only open items' questions are forwarded (#114). The next pass forwards it; close it again once "
+                                 "it's answered.")
+                store.append("notices", {"key": f"reopen:{ask_id}", "at": now.isoformat()})
+    except (Exception, SystemExit) as e:  # best-effort, like the relay: never stops a pass (GitHub errors are SystemExit)
+        lines.append(f"reopen check failed: {type(e).__name__}: {e}")
+    return lines
 
 
 def dispatch_pass(command, dry_run, now=None):
@@ -104,12 +124,7 @@ def dispatch_pass(command, dry_run, now=None):
         return [f"paused: {why}"]
     store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
     lines += relay_answers(gh, store, identity, dry_run, now)
-    for n in orphaned_asks(gh, identity, now):
-        say(f"reopen #{n}: it closed while its question to the Owner was unanswered")
-        if not dry_run:
-            gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"state": "open"})
-            post.cmd_comment(gh, me, n, "Reopened: this item closed while its question to the Owner was still unanswered, and only "
-                             "open items' questions are forwarded (#114). The next pass forwards it; close it again once it's answered.")
+    lines += reopen_orphans(gh, store, me, identity, store.read("notices"), dry_run, now)
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.
