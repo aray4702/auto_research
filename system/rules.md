@@ -40,7 +40,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 ## Escalation
 
 - **Decide at the lowest level that can.** Pass the rest up with a recommendation, using `post.py escalate <n> --level <level>`. This holds the item and labels it; other work continues.
-- **To the Owner:** one short question with numbered options and a recommendation, answerable in one line. Batch related questions and withdraw moot ones.
+- **To the Owner:** one short question with numbered options and a recommendation, answerable in one line. Batch related questions and withdraw moot ones. To change or add to a question, `escalate` again with the whole revised question: only an escalation reaches the Owner's chat, never a plain comment.
 - **Silence is never consent.**
 - **System problems and gaps in these rules** go to the builder.
 

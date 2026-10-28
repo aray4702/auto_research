@@ -150,12 +150,27 @@ class MayStartTest(unittest.TestCase):
         self.assertFalse(usage.may_start(CAPS, runs, "coordinator", NOW)[0])
 
     def test_runs_per_day_count_the_owners_day(self):
-        cap = CAPS["roles"]["architect"]["max_runs_per_day"]
+        caps = {k: v for k, v in CAPS.items() if k != "override"}
+        cap = caps["roles"]["architect"]["max_runs_per_day"]
         earlier = NOW - timedelta(hours=1)
         runs = [r for i in range(cap) for r in (start(f"r{i}", "architect", earlier), end(f"r{i}", "architect", earlier))]
-        self.assertFalse(usage.may_start(CAPS, runs, "architect", NOW)[0])
+        self.assertFalse(usage.may_start(caps, runs, "architect", NOW)[0])
         tomorrow = NOW + timedelta(hours=12)  # 08:00 PT next day
-        self.assertTrue(usage.may_start(CAPS, runs, "architect", tomorrow)[0])
+        self.assertTrue(usage.may_start(caps, runs, "architect", tomorrow)[0])
+
+    def test_the_owners_override_lifts_only_the_daily_caps_and_only_until_it_ends(self):
+        caps = {**CAPS, "override": {"no_daily_run_caps_until": "2026-10-26T21:00:00-07:00"}}  # NOW is 20:00 PDT
+        cap = caps["roles"]["architect"]["max_runs_per_day"]
+        earlier = NOW - timedelta(hours=1)
+        runs = [r for i in range(cap) for r in (start(f"r{i}", "architect", earlier), end(f"r{i}", "architect", earlier))]
+        self.assertEqual(usage.may_start(caps, runs, "architect", NOW), (True, [], []), "lifted before it ends (#101)")
+        ok, reasons, _ = usage.may_start(caps, runs, "architect", NOW + timedelta(hours=1, minutes=30))  # 21:30, same day
+        self.assertFalse(ok, "back once it ends")
+        self.assertIn("architect runs today", reasons[0])
+        busy = runs + [start("live", "architect", NOW)]
+        self.assertIn("a architect run is already active", usage.may_start(caps, busy, "architect", NOW)[1], "concurrency still holds")
+        heavy = runs + [end("x", "developer", NOW, five_hour=0.6)]
+        self.assertFalse(usage.may_start(caps, heavy, "architect", NOW)[0], "the 5-hour hold still holds")
 
     def test_weekly_points_warn_then_stop(self):
         ppu = CAPS["claude"]["points_per_usd"]
