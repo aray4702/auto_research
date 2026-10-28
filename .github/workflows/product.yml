@@ -1,5 +1,5 @@
-# The product's CI jobs, called by the gate. A product file: the first goal adds the
-# product's build, tests and harness here, on the platforms the requirements name.
+# The product's CI jobs, called by the gate. A product file: G1 adds the product's build,
+# tests and harness here, on the platforms the requirements name.
 name: product
 
 on:
@@ -22,7 +22,28 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # S1-3's Build block runs uv, at toolchain.toml's version (tests/test_toolchain.py).
+      - uses: astral-sh/setup-uv@<setup-uv commit SHA> # <setup-uv tag>
+        with:
+          version: "<uv version>"
+          enable-cache: true
       - name: The README checks' own tests
         run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
       - name: README checks (S1-1 to S1-5)
         run: python3 -I .github/scripts/check_readme.py --root .
+
+  # The product's tests that need no model or data, and ruff (design/internal/g1-stage1.md §1a).
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@<setup-uv commit SHA> # <setup-uv tag>
+        with:
+          version: "<uv version>"
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      - run: uv run --frozen ruff check
+      - run: uv run --frozen pytest
