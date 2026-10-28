@@ -24,3 +24,16 @@ allow_write = [
 # The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
 [uv]
 version = "0.13.6"
+
+# G1-15's licence check (.github/scripts/check_licences.py), in the test job on both platforms' installs.
+[licences]
+# The Owner's answer 2a on #81, project_requirements.md §7. Only the Owner adds to these lists.
+# Licences a distribution's own metadata may give.
+distributions = ["MIT", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "PSF-2.0", "ISC", "Unlicense", "HPND", "MPL-2.0"]
+# Further licences a bundled shared library may carry. LGPL is accepted only as a bundled library.
+bundled = [
+  "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+  "GPL-3.0-or-later WITH GCC-exception-3.1",
+  "LicenseRef-Intel-Simplified-Software-License",
+  "Apache-2.0 WITH LLVM-exception",
+]
