@@ -5,6 +5,8 @@ rest, then the work order in sequence; while a work-order item is busy, only par
 start. Merging is one PR at a time, by auto-merge (blueprint §4.4).
 """
 
+import re
+
 from system.dispatcher import usage
 
 CLAIMED = "state:claimed"
@@ -66,7 +68,7 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
             out.append(("reviewer", pr["number"], f"Review PR #{pr['number']}.", "review"))
     # Decisions are dispatched on records too: a plan review's changes reach the Coordinator as
     # needs-decision:coordinator on the goal issue (a record:goal). Triage and the work order skip records.
-    for i in snap["issues"]:
+    for i in snap["issues"] + snap["prs"]:  # a PR too: SR2 asks the Coordinator on the PR itself (#150)
         for label, role in DECISION_ROLE.items():
             if label in i["labels"] and free(i["number"], i["labels"]):
                 out.append((role, i["number"], f"Item #{i['number']} needs your decision ({label}).", "decision"))
@@ -135,21 +137,71 @@ def current(pr, login):
     return r is not None and r["state"] == "APPROVED" and (r["commit"] == pr["head"] or (pr.get("fresh") or {}).get(login, False))
 
 
+# Standing rule SR2 (#150): the Coordinator, then the builder, may judge that the Owner's approval still covers a PR
+# refreshed from main whose own added and removed lines are unchanged, though main edited code next to them.
+SR2_SIGNERS = ("coordinator", "builder")
+SR2_LABELS = {"needs-decision:coordinator", "needs-decision:builder", "needs-decision:owner"}
+SIGN_OFF = re.compile(r"^\*\*SR2 sign-off:\*\* the Owner's approval of `(?P<approved>[0-9a-f]{40})` covers `(?P<head>[0-9a-f]{40})`", re.M)
+
+
+def own_lines(changes):
+    """A PR's own changes (`dispatch.own_changes`) reduced to its added and removed lines, in order, file by file.
+    A file compared by its blob stays so."""
+    return {f: (status, tuple(line for line in v.splitlines() if line[:1] in "+-") if isinstance(v, str) and v.startswith("@@") else v)
+            for f, (status, v) in changes.items()}
+
+
+def signed_off(pr, comments, runs, identity, marker):
+    """The commit up to which an SR2 sign-off says the Owner's latest approval covers the PR, or None. Only a sign-off
+    posted through post.py by a Coordinator or builder run the Dispatcher recorded on this PR counts, and only one
+    naming the commit the Owner approved."""
+    owner = latest_review(pr, identity["second_login"])
+    if not owner or owner["state"] != "APPROVED":
+        return None
+    recorded = {(r["run_id"], r["role"]) for r in runs if r["event"] == "start" and r.get("item") == pr["number"]}
+    covered = None
+    for c in comments:
+        body = c.get("body") or ""
+        m, s = marker.match(body), SIGN_OFF.search(body)
+        if (c["user"]["login"] == identity["owner_login"] and m and s and m["role"] in SR2_SIGNERS
+                and (m["run"], m["role"]) in recorded and s["approved"] == owner["commit"]):
+            covered = s["head"]
+    return covered
+
+
+def owner_approves(pr, second):
+    """The Owner's approval covers the PR as it is: current itself, or carried to a later commit by an SR2 sign-off
+    (`pr["sign_off"]`) after which only a conflict-free refresh followed (`pr["fresh"]["sign-off"]`)."""
+    covered = pr.get("sign_off")
+    return current(pr, second) or bool(covered and (covered == pr["head"] or (pr.get("fresh") or {}).get("sign-off")))
+
+
+def sr2_due(pr, bot, second):
+    """SR2's checkable conditions hold and only the judgment is missing: green, protected, outside SR1's exclusions,
+    the Reviewer's approval current, the Owner's approval on an earlier commit with the PR's own lines unchanged
+    since (`pr["same_lines"]`, filled in by the Dispatcher), and no sign-off covering it yet."""
+    owner = latest_review(pr, second)
+    return (pr["protected"] and pr["gate"] == "SUCCESS" and not any(f in SR1_EXCLUDED for f in pr["files"])
+            and current(pr, bot) and owner is not None and owner["state"] == "APPROVED"
+            and bool(pr.get("same_lines")) and not owner_approves(pr, second))
+
+
 def sr1(pr, bot, second):
     """SR1: a protected PR merges on its own once the Reviewer App and the Owner's code-owner account have both
-    approved it as it is (#116, #118), unless it changes the standing rules or this check."""
-    return current(pr, bot) and current(pr, second) and not any(f in SR1_EXCLUDED for f in pr["files"])
+    approved it as it is (#116, #118), or SR2 carried the Owner's approval to it (#150), unless it changes the
+    standing rules or this check."""
+    return current(pr, bot) and owner_approves(pr, second) and not any(f in SR1_EXCLUDED for f in pr["files"])
 
 
 def merge_plan(snap, identity):
-    """Merge-queue actions: ('refresh'|'auto-merge'|'ask-owner-to-merge'|'ask-owner-to-approve'|
-    'renew'|'ask-owner-to-reapprove', pr, detail)."""
+    """Merge-queue actions: ('refresh'|'auto-merge'|'cancel-auto-merge'|'ask-owner-to-merge'|'ask-owner-to-approve'|
+    'renew'|'ask-owner-to-reapprove'|'ask-coordinator-to-sign-off', pr, detail)."""
     bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
     prs = [pr for pr in snap["prs"] if pr["author_role"] and not pr["draft"]]
     actions = []
     # Auto-merge on, but the approvals no longer cover the PR as it is (real changes were pushed): turn it off,
     # since GitHub keeps stale approvals now (#118).
-    stale = [pr for pr in prs if pr["auto_merge"] and not (current(pr, bot) and (not pr["protected"] or current(pr, second)))]
+    stale = [pr for pr in prs if pr["auto_merge"] and not (current(pr, bot) and (not pr["protected"] or owner_approves(pr, second)))]
     actions += [("cancel-auto-merge", pr["number"], pr["head"]) for pr in stale]
     in_flight = [pr for pr in prs if pr["auto_merge"] and pr not in stale]
 
@@ -173,22 +225,27 @@ def merge_plan(snap, identity):
         elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"] and nxt["review_decision"] == "APPROVED":
             if not needs_owner(nxt):
                 actions.append(("auto-merge", nxt["number"], nxt["head"]))
-            elif current(nxt, second):  # current approvals, but a path SR1 leaves to the Owner
+            elif owner_approves(nxt, second):  # current approvals, but a path SR1 leaves to the Owner
                 actions.append(("ask-owner-to-merge", nxt["number"], nxt["head"]))
-            # Otherwise the Owner's approval isn't current: the loop below asks them to re-approve.
+            # Otherwise the Owner's approval isn't current: the loop below asks for a sign-off or a re-approval.
     for pr in prs:
         if pr["gate"] != "SUCCESS":
             continue
         app, owner = latest_review(pr, bot), latest_review(pr, second)
         # GitHub keeps stale approvals now, so APPROVED alone no longer means there's nothing to ask (#127).
-        if pr["review_decision"] == "APPROVED" and current(pr, bot) and (not pr["protected"] or current(pr, second)):
+        if pr["review_decision"] == "APPROVED" and current(pr, bot) and (not pr["protected"] or owner_approves(pr, second)):
             continue
         if pr["review_decision"] != "APPROVED" and app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
             actions.append(("renew", pr["number"], app["commit"]))
-        if pr["protected"] and pr["merge_state"] in UP_TO_DATE:
+        if sr2_due(pr, bot, second):
+            # The Coordinator judges first, then the builder, then the Owner (#150). Behind main too: a sign-off
+            # survives the refresh that the PR gets when the queue reaches it.
+            if pr["merge_state"] in UP_TO_DATE + ("BEHIND",) and not pr["labels"] & SR2_LABELS:
+                actions.append(("ask-coordinator-to-sign-off", pr["number"], owner["commit"]))
+        elif pr["protected"] and pr["merge_state"] in UP_TO_DATE:
             # Ask the Owner only about a PR GitHub reports as up to date: one behind main would be refreshed,
             # and GitHub reports UNKNOWN for a moment after main moves.
-            if owner and owner["state"] == "APPROVED" and not current(pr, second):
+            if owner and owner["state"] == "APPROVED" and not owner_approves(pr, second):
                 actions.append(("ask-owner-to-reapprove", pr["number"], pr["head"]))
             elif current(pr, bot) and not owner:
                 actions.append(("ask-owner-to-approve", pr["number"], pr["head"]))
