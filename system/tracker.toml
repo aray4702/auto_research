@@ -25,6 +25,8 @@ labels = [
   { name = "record:work-order", color = "5319e7", description = "Record: the one order of scheduled work" },
   { name = "record:watch-list", color = "5319e7", description = "Record: risks with signals and thresholds" },
   { name = "record:decision-log", color = "5319e7", description = "Record: the index of decisions" },
+  { name = "record:audit-product", color = "5319e7", description = "Record: the product audit's reports" },
+  { name = "record:audit-system", color = "5319e7", description = "Record: the system audit's reports" },
 ]
 
 # Records that exist once each from the start. Goal records are opened per goal.

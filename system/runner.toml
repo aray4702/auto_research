@@ -115,9 +115,10 @@ command = ["system/dispatcher/dispatch.py", "reconcile"]
 
 [schedules.dispatcher-daily]
 enabled = true
+# The product and system audits (audit.py), once a day: the Owner's choice, 2026-10-28 (#159).
 hour = 7
 minute = 30
-command = ["system/dispatcher/dispatch.py", "daily"]
+command = ["system/dispatcher/dispatch.py", "audit"]
 
 [schedules.builder-daily]
 enabled = true
