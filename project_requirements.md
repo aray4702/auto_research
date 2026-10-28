@@ -9,6 +9,7 @@
 | 1.3     | 2026-10-26 | builder, as agreed on #17 | S1 struck through: blueprint §8 step 5 passed (#17); S1 closed (#21) |
 | 1.4     | 2026-10-27 | builder, from the Owner's answers (#79) | §1–§11 for the Local Meeting Transcriber: goals G1–G3, all due 2026-10-28; MIT; pyannote allowed; this repository |
 | 1.5     | 2026-10-27 | architect, from the Owner's answer (#81, 19:42 PT) | G1's evaluation checks on the Owner's Mac (the full evaluation sets, Q2, Q3 and Q7's repeat run, and the results table's figures) are due 2026-10-29; the criteria CI checks stay due 2026-10-28 |
+| 1.6     | 2026-10-27 | architect, from the Owner's answer (#81, 20:05 PT) | §7: the dependency licence classes accepted beyond MIT, BSD and Apache-2.0 |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -149,7 +150,13 @@ Project table, deadlines under Goals.
 - **The product's licence:** MIT.
 - **Language:** Python 3.11 or later.
 - **Dependencies, models and datasets:**
-  - Dependencies must have permissive licences: MIT, BSD or Apache-2.0.
+  - Dependencies must have permissive licences: MIT, BSD or Apache-2.0. The Owner also accepted these classes on #81 (answer 2a), for the dependency tree and the libraries bundled in its wheels. Anything else stops for the Owner, including GPL or AGPL without an exception and any non-commercial terms:
+    - other permissive licences: PSF-2.0, ISC, Unlicense and HPND;
+    - MPL-2.0, used unmodified;
+    - LGPL, only as shared libraries bundled in a wheel (FFmpeg in PyAV; libsndfile, with mpg123 and LAME, in `soundfile`);
+    - GPL-3.0 with the GCC Runtime Library Exception (`libgomp`, `libgfortran`, `libquadmath`);
+    - the Intel Simplified Software License (Intel's OpenMP runtime in CTranslate2's Linux wheel);
+    - `Apache-2.0 WITH LLVM-exception` (LLVM's OpenMP runtime in torch's macOS wheel).
   - Models must be ones CI and the agents can download; Whisper's weights are MIT.
   - **pyannote is allowed** (the Owner's answer on #79): its open-source diarization models, run locally, downloaded through the Owner's free Hugging Face account. The token is a secret: keychain service `auto_research.huggingface`, account `aray4702`, and the GitHub Actions secret `HF_TOKEN`. Never pyannoteAI's hosted API: it would send audio off the computer (Q8).
   - Evaluation sets: LibriSpeech (CC BY 4.0) and the AMI meeting corpus (CC BY 4.0). CI uses a small fixed subset that it can download.
@@ -205,6 +212,6 @@ None open. The Owner answered on #79:
 - the product lives in this repository;
 - it's named Local Meeting Transcriber;
 - G1–G3 are due 2026-10-28 (on #81 the Owner moved G1's evaluation checks on the Mac to 2026-10-29);
-- the licence is MIT, and pyannote may be used;
+- the licence is MIT, and pyannote may be used (on #81 the Owner accepted the dependency licence classes in §7);
 - the proposed targets and defaults are accepted;
 - the summary (F10) is a non-goal for now.
