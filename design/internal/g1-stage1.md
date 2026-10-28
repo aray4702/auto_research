@@ -3,6 +3,7 @@
 | Date (PT) | By | Change |
 | --- | --- | --- |
 | 2026-10-27 | architect, #104 | First version: phase 1.1's items, #106 to #111, with item 1 and item 5 each split in two |
+| 2026-10-27 | architect, #104 | Reviewer's changes on #119: one order the Coordinator can follow, with the `test` job's two edits; the filter's own tier recorded as open (#121); `dirty` excludes the output directory only inside the work tree; the WER fixture's word counts spelled out |
 
 This is the detail a Developer needs to build each of G1 stage 1's items in one run. It works inside `spec/acceptance.md` G1, `design/architecture.md` and `design/public-api.md`, and the Owner's answers 1a–14a on #81 and #105. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
@@ -21,7 +22,20 @@ Two items were too big for one run, so each is split. Item 1's dependency lock c
 | **5b** (new) | Full sets, the one-hour recording and the fixture clips' recipes | 5a | `src/lmt/eval/manifests/*.toml` (added entries), `src/lmt/eval/datasets.py` (the concatenation recipe), `tests/test_datasets.py` |
 | **6** (#111) | The README results table | 1a, 2 | `src/lmt/eval/readme.py`, `src/lmt/eval/cli.py` (replaces the stub), `results/full.json`, `README.md` (`## Results`), `tests/test_readme_table.py`, `.github/workflows/product.yml` (`readme` job) |
 
-**Parallel-safe:** after 1a, items 1b, 2 and 6 touch different files except `product.yml`. After 1b, items 3 and 4 share no file. `product.yml` is the shared file: item 2 gives each job its own block (below), and later items each change only their own job's block, so their PRs merge without conflicts once item 2 has landed. Item 6 needs nothing from item 4: it reads the results file's documented format, not item 4's code. So #111 can drop its block on #109. Item 5a imports item 4's types, so it stays after item 4.
+**Order.** The "Needs" column is the order. An item can start once everything it needs has merged:
+
+1. **1a.**
+2. **After 1a:** 1b and 2, in parallel.
+3. **After 2:** 6. It needs 2 because its `readme` step runs "at tier ≥ 1", a condition item 2 creates. It can run beside 1b.
+4. **After 1b:** 4. **After 1b and 2:** 3.
+5. **After 2 and 4:** 5a. **After 5a:** 5b.
+
+**Parallel-safe,** by the files in the table. Items that may run at the same time share only `product.yml`, never the same lines of it:
+- **1b and 2** both edit the `test` job. Item 2 adds `needs: changes` and its `if:` to the job's header, under `test:`. Item 1b inserts its steps after `uv sync --locked --all-extras`. The two edits are separated by unchanged lines (`runs-on`, `timeout-minutes`, `steps:`, the checkout and setup-uv steps), so git merges them cleanly. If the second PR does conflict, its Developer updates the branch from `main` and keeps both edits.
+- **From item 2 on,** each job has its own block (below). Items 3, 5a and 6 each change only their own job's block (`test-models`, `eval-ci`, `readme`), so they merge without conflicts. Item 4 doesn't touch `product.yml`.
+- **Other shared files:** none between items that can run at the same time.
+
+Item 6 needs nothing from item 4: it reads the results file's documented format, not item 4's code. So #111 can drop its block on #109. Item 5a imports item 4's types, so it stays after item 4.
 
 **Every item's local checks:** `uv run --frozen ruff check`, `uv run --frozen pytest`, and `python3 -I system/gate/generic.py --base origin/main`.
 
@@ -270,6 +284,8 @@ TIER3_FILES = ("pyproject.toml", "uv.lock", "toolchain.toml", ".python-version")
 
 An entry ending `/` matches by prefix, any other exactly.
 
+**Open: the filter's own tier (#121).** As the architecture stands, `.github/scripts/tiers.py` is tier 1, like every CI script. But it decides which jobs run, which is the architecture's reason for putting the workflows in tier 3, so a PR changing it would be checked by its own filter. #121 proposes moving it to tier 3 and waits for the Owner. If the Owner approves before item 2 is built, item 2 adds `".github/scripts/tiers.py"` to `TIER3_FILES` and the test case `.github/scripts/tiers.py` → 3. Otherwise #121 adds them afterwards. Item 2 doesn't add them without the approval.
+
 - `tier_for_path(path) -> int` is the highest tier whose rule matches, else 0. `tier_for_paths(paths)` is the highest over all paths (0 for none).
 - `main(argv)`, with `--event`, `--base` and `--head`:
   - `workflow_dispatch` or `schedule`: 3.
@@ -446,7 +462,7 @@ def machine() -> dict
 
 - **`build`** returns the results file, version 1.0, in `public-api.md`'s key order. `models` is the caller's dict, shaped as the transcript JSON's `models`. The keyword arguments are for tests; otherwise:
   - `commit` is `git rev-parse HEAD`, or `null` outside a git checkout.
-  - `dirty` is whether `git status --porcelain -- . ':(exclude)<out_dir>'` prints anything. The output directory is excluded, so the first of two runs writing `results/ci.json` doesn't make the second "dirty" (G1-5's comparison would fail otherwise).
+  - `dirty` is whether `git -C <top> status --porcelain` prints anything, where `<top>` is `git rev-parse --show-toplevel`. When `out_dir` resolves inside `<top>` (`Path(out_dir).resolve().is_relative_to(Path(top).resolve())`), the command adds `-- . ':(exclude)<out_dir relative to top>'`, so the first of two runs writing `results/ci.json` doesn't make the second "dirty" (G1-5's comparison would fail otherwise). An `out_dir` outside the work tree, such as `--out /tmp/r`, can't dirty it, and an exclude would make git fail ("outside repository"), so none is added.
   - `date` is `datetime.now().astimezone().isoformat(timespec="seconds")`.
 - **`machine()`:** `arch` is `platform.machine()` (`uname -m`). On Linux: `cpu` is `/proc/cpuinfo`'s first `model name`, `memory_bytes` is `/proc/meminfo`'s `MemTotal` × 1024, `os` is `/etc/os-release`'s `PRETTY_NAME`. On macOS: `sysctl -n machdep.cpu.brand_string` and `hw.memsize`, and `os` is `"macOS " + platform.mac_ver()[0]`.
 - **`write`:** `json.dumps(results, indent=2, ensure_ascii=False) + "\n"`, to a temporary file in the same directory, then renamed into place.
@@ -458,19 +474,19 @@ def machine() -> dict
 
 - **WER, `ls/`:** four utterances, references in LibriSpeech's upper case, hypotheses as transcript JSON:
 
-  | Id | Reference | Hypothesis | Normalized errors | Reference words |
+  | Id | Reference | Hypothesis | Normalized errors | Reference words, normalized |
   | --- | --- | --- | --- | --- |
   | u1 | `THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG` | `The quick brown fox jumped over the lazy dog.` | 1 substitution | 9 |
-  | u2 | `IT WAS TWENTY FIVE PAST TEN` | `It was 25 past ten.` | 0 (both normalize to `it was 25 past 10`) | 5 |
+  | u2 | `IT WAS TWENTY FIVE PAST TEN` | `It was 25 past ten.` | 0 (both normalize to `it was 25 past 10`) | 5 (`it`, `was`, `25`, `past`, `10`; 6 before normalizing) |
   | u3 | `I SAW HER` | *(empty)* | 3 deletions | 3 |
   | u4 | `GOOD MORNING` | `Good good morning.` | 1 insertion | 2 |
 
-  Pooled WER = 5 / 19 = 0.263158. The mean of per-file rates would be 0.402778, so the test also proves the pooling. If the pinned normalizer disagrees with a row's normalized form, the Developer replaces that row with one it agrees with, recomputes the totals by hand, and says so on the item. The test must never be adjusted to whatever the code prints.
+  Pooled WER = 5 / (9 + 5 + 3 + 2) = 5 / 19 = 0.263158. The mean of per-file rates, (1/9 + 0 + 1 + 1/2) / 4, would be 0.402778, so the test also proves the pooling. If the pinned normalizer disagrees with a row's normalized form, the Developer replaces that row with one it agrees with, recomputes the totals by hand, and says so on the item. The test must never be adjusted to whatever the code prints.
 - **DER, `ami/`:** two files, references as RTTM, hypotheses as transcript JSON (a single stream, so no overlap):
   - f1, 10 s. Reference: A 0–4, B 4–8, A 7–10. Hypothesis: S1 0–4, S2 4–7, S1 7–10. Missed speech 1 s (B in the overlap 7–8), against 11 s of reference speech.
   - f2, 6 s. Reference: A 0–3, B 3–6. Hypothesis: S1 0–4, S2 4–6. Confusion 1 s (3–4), against 6 s.
   - Pooled DER = 2 / 17 = 0.117647. With `skip_overlap=True` f1 would score 0, and the mean of per-file rates would be 0.128788, so the test proves both settings.
-- **Results file:** `results_golden.json`, built by `build` from the two sets' figures with a fixed `commit`, `dirty`, `date` and `machine`. The test compares `write`'s output with it byte for byte. Then it builds a second file with other timing values and other `wall_seconds` and checks `same_accuracy` is true, and that changing one `wer` makes it false. A test of `dirty` makes a temporary git repository, writes into its output directory, and checks that `dirty` stays false.
+- **Results file:** `results_golden.json`, built by `build` from the two sets' figures with a fixed `commit`, `dirty`, `date` and `machine`. The test compares `write`'s output with it byte for byte. Then it builds a second file with other timing values and other `wall_seconds` and checks `same_accuracy` is true, and that changing one `wer` makes it false. Tests of `dirty` make a temporary git repository with one commit and check: writing into an output directory inside it leaves `dirty` false; an `out_dir` outside it (a second temporary directory) gives `false`, with no git error; an untracked file elsewhere in the repository gives `true`, both with an inside and an outside `out_dir`.
 
 **Test of the item:** `tests/test_score.py` and `tests/test_report.py`, in the `test` job.
 
