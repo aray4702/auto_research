@@ -6,6 +6,7 @@ utilization. The system's own share is its runs' cost times caps.toml's points_p
 """
 
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -13,8 +14,8 @@ from zoneinfo import ZoneInfo
 STATUS = {"success": "finished", "error_max_turns": "cap: turns", "error_max_budget_usd": "cap: budget"}
 
 
-def summarize(lines):
-    """A run's outcome and usage from its stream-json lines."""
+def summarize(lines, worktree=None):
+    """A run's outcome and usage from its stream-json lines. The worktree tells which paths were outside it."""
     result, reading = None, None
     for line in lines:
         try:
@@ -37,7 +38,7 @@ def summarize(lines):
             "denials": len(result.get("permission_denials") or []),
             # What was denied, as the tool and the command's first two words (#44): enough to spot a
             # recurring permission gap, nothing more of the command.
-            "denied": sorted({denial_signature(d) for d in result.get("permission_denials") or []}),
+            "denied": sorted({denial_signature(d, worktree) for d in result.get("permission_denials") or []}),
         }
     if reading:
         out["five_hour"] = reading.get("five_hour", {}).get("utilization")
@@ -46,10 +47,11 @@ def summarize(lines):
     return out
 
 
-def denial_signature(denial):
+def denial_signature(denial, worktree=None):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
     assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. An
-    interpreter is followed by what it runs instead (see interpreted)."""
+    interpreter is followed by what it runs instead (see interpreted). Shell operators and OUTSIDE follow
+    as symbols: `git diff` is allowed, yet denied with `$(…)` or a path outside the worktree (#177)."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
     if tool != "Bash" or not command:
@@ -69,10 +71,13 @@ def denial_signature(denial):
         words.append(word)
         if len(words) == 2:
             break
-    return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command)])
+    outside = [OUTSIDE] if reaches_outside(command, worktree) else []
+    return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command), *outside])
 
 
 OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
+EXPANDED = ("$(", "`")  # the shell expands these inside double quotes too
+OUTSIDE = "[outside]"
 
 
 def shell_operators(command):
@@ -81,6 +86,10 @@ def shell_operators(command):
     line, out, quote, i = command.split("\n", 1)[0], [], None, 0
     while i < len(line):
         c = line[i]
+        if quote == '"' and (op := next((o for o in EXPANDED if line.startswith(o, i)), None)):
+            out += [op] if op not in out else []
+            i += len(op)
+            continue
         if quote:
             quote = None if c == quote else quote
         elif c in "'\"":
@@ -95,6 +104,24 @@ def shell_operators(command):
                 continue
         i += 1
     return out
+
+
+def reaches_outside(command, worktree=None):
+    """Whether a path on the command's first line leads outside the worktree, which --restricted denies.
+    A word counts as a path once its quotes and any `--flag=` are stripped; with no worktree known, any
+    absolute, `~` or `..` path does."""
+    for word in command.split("\n", 1)[0].split():
+        word = re.sub(r"^--?[\w-]+=", "", word.strip("'\""))
+        if word.startswith("~"):
+            return True
+        if not (word.startswith("/") or word == ".." or word.startswith("../") or "/../" in word):
+            continue
+        if not worktree:
+            return True
+        path = os.path.normpath(os.path.join(worktree, word))
+        if os.path.commonpath([path, os.path.normpath(worktree)]) != os.path.normpath(worktree):
+            return True
+    return False
 
 
 INTERPRETERS = {"python3", "python"}
