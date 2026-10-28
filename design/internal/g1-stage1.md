@@ -4,6 +4,8 @@
 | --- | --- | --- |
 | 2026-10-27 | architect, #104 | First version: phase 1.1's items, #106 to #111, with item 1 and item 5 each split in two |
 | 2026-10-27 | architect, #104 | Reviewer's changes on #119: one order the Coordinator can follow, with the `test` job's two edits; the filter's own tier recorded as open (#121); `dirty` excludes the output directory only inside the work tree; the WER fixture's word counts spelled out |
+| 2026-10-28 | architect, #82 | `public-api.md` now documents `lmt live` (G2): G1-6's table test skips the sections marked "(G2)", and G2's `lmt live` item adds the subcommand to `cli.py` |
+| 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: the table test's skip and the `cli.py` exception also cover G3's `lmt rename` and `lmt demo`, which G3's items add |
 
 This is the detail a Developer needs to build each of G1 stage 1's items in one run. It works inside `spec/acceptance.md` G1, `design/architecture.md` and `design/public-api.md`, and the Owner's answers 1a–14a on #81 and #105. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
@@ -124,7 +126,7 @@ src/lmt/eval/cli.py      stub: def cli_eval(args): raise NotBuilt("eval")       
 | `CheckFailed` | 6 | `lmt eval --check-readme` found the table differs |
 
 **`cli.py`.**
-- `build_parser()` builds the whole public CLI now: `transcribe`, `models` (`download`, `list`, `verify`) and `eval`, with exactly the options and defaults in `public-api.md`. Each subcommand calls `set_defaults(handler="lmt.pipeline:cli_transcribe")` (or `lmt.models:cli_models`, `lmt.eval.cli:cli_eval`). `main` imports the handler's module only when it runs, so `lmt --help` loads no heavy library. Later items replace a stub module, never `cli.py`.
+- `build_parser()` builds the whole public CLI now: `transcribe`, `models` (`download`, `list`, `verify`) and `eval`, with exactly the options and defaults in `public-api.md`. Each subcommand calls `set_defaults(handler="lmt.pipeline:cli_transcribe")` (or `lmt.models:cli_models`, `lmt.eval.cli:cli_eval`). `main` imports the handler's module only when it runs, so `lmt --help` loads no heavy library. Later items replace a stub module, never `cli.py`. The exceptions are the later goals' items that add a command: G2's `lmt live` item adds `live`, and G3's items add `rename` and `demo` (`public-api.md`, the sections marked "(G2)" and "(G3, …)"). G1 builds none of them.
 - The parser is a subclass of `argparse.ArgumentParser` whose `error(message)` raises `UsageError` instead of printing usage and exiting. So every usage error is one line, as G1-6 requires. The subject is the option argparse names, or `lmt` if it names none.
 - `--version` prints `lmt 0.1.0`.
 - `validate(args)` raises `UsageError` for what argparse can't express:
@@ -134,7 +136,7 @@ src/lmt/eval/cli.py      stub: def cli_eval(args): raise NotBuilt("eval")       
   - `--model` isn't checked here. Stage 2 checks it against the model manifest.
 - `main(argv=None) -> int`: parse, validate, call the handler, return its code (`None` is 0). It catches `LmtError` and prints `lmt: error: {e}` to stderr, returning `e.exit_code`; `KeyboardInterrupt` returns 130; any other exception prints `lmt: error: internal: <type>: <message>` and returns 1, never a traceback (Q6's full report comes with the pipeline). `run()` is `sys.exit(main())`.
 
-**Tests (`tests/test_cli.py`):** `lmt --help` and every subcommand's `--help` exit 0; `--version`; one test per `validate` rule and per argparse error, each checking exit 2 and a single stderr line starting `lmt: error:` that names the option; a stub command exits 1 with one line; `KeyboardInterrupt` gives 130. Plus G1-6's table test: it reads the option tables in `design/public-api.md` (rows starting `` | `- ``) and compares each command's option strings with the parser's, both ways.
+**Tests (`tests/test_cli.py`):** `lmt --help` and every subcommand's `--help` exit 0; `--version`; one test per `validate` rule and per argparse error, each checking exit 2 and a single stderr line starting `lmt: error:` that names the option; a stub command exits 1 with one line; `KeyboardInterrupt` gives 130. Plus G1-6's table test: it reads the option tables in `design/public-api.md` (rows starting `` | `- ``) and compares each command's option strings with the parser's, both ways. It skips any section whose heading ends in a later goal's marker, "(G2)" or "(G3, …)", until the item that adds that section's command removes its skip (spec, G2-7 and G3-3).
 
 ### `NOTICE`, `LICENSE` and the README
 
