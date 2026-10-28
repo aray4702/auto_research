@@ -209,7 +209,8 @@ def dispatch_pass(command, dry_run, now=None):
                 answered[item["number"]] = found[1]
 
     # New runs, in dispatch order, within the caps.
-    starts, skipped = plan.choose(snap, runs, caps, identity, now, skip_review=renewed, answered=answered)
+    starts, skipped = plan.choose(snap, runs, caps, identity, now, skip_review=renewed, answered=answered,
+                                  daily_schedule=config["runner"]["schedules"].get("builder-daily"))
     logs = Path(config["runner"]["runner"]["logs"]).expanduser() / "runs"
     for role, item, task, why in starts:
         say(f"start {article(role)} {role} run" + (f" on #{item}" if item else "") + f" ({why}): {task}")
