@@ -4,6 +4,10 @@ name: product
 
 on:
   workflow_call:
+    secrets:
+      HF_TOKEN:
+        description: The Owner's Hugging Face read token, for gated models such as pyannote's (#96). Read it only in steps that download models.
+        required: false
 
 permissions:
   contents: read
