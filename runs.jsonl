@@ -394,3 +394,4 @@
 {"at": "2026-10-28T20:13:10+00:00", "event": "start", "item": 147, "pid": 10801, "role": "reviewer", "run_id": "reviewer-20261028T201303Z", "task": "Review PR #147."}
 {"at": "2026-10-28T20:15:02+00:00", "cost_usd": 0.593741, "denials": 1, "denied": ["Bash: python3 > | ;"], "event": "end", "five_hour": 0.1, "item": null, "role": "coordinator", "run_id": "coordinator-20261028T201303Z", "seven_day": 0.36, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 20}
 {"at": "2026-10-28T20:15:02+00:00", "cost_usd": 0.255689, "denials": 0, "denied": [], "event": "end", "five_hour": 0.1, "item": 147, "role": "reviewer", "run_id": "reviewer-20261028T201303Z", "seven_day": 0.36, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 14}
+{"at": "2026-10-28T20:15:36+00:00", "event": "start", "item": 160, "pid": 12585, "role": "reviewer", "run_id": "reviewer-20261028T201530Z", "task": "Review PR #160."}
