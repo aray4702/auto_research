@@ -454,3 +454,4 @@
 {"at": "2026-10-28T21:24:27+00:00", "cost_usd": 1.078578, "denials": 0, "denied": [], "event": "end", "five_hour": 0.21, "item": 188, "role": "reviewer", "run_id": "reviewer-20261028T211949Z", "seven_day": 0.39, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 43}
 {"at": "2026-10-28T21:26:46+00:00", "event": "start", "item": 162, "pid": 51208, "role": "reviewer", "run_id": "reviewer-20261028T212641Z", "task": "Review PR #162."}
 {"at": "2026-10-28T21:26:47+00:00", "event": "start", "item": 184, "pid": 51226, "role": "builder", "run_id": "builder-20261028T212641Z", "task": "Item #184 needs your decision (needs-decision:builder)."}
+{"at": "2026-10-28T21:27:32+00:00", "cost_usd": 0.221661, "denials": 1, "denied": ["Bash: git diff $("], "event": "end", "five_hour": 0.21, "item": 162, "role": "reviewer", "run_id": "reviewer-20261028T212641Z", "seven_day": 0.39, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 10}
