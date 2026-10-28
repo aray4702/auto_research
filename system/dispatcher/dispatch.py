@@ -3,7 +3,8 @@
 
   dispatch.py poll [--dry-run]        every 2 minutes
   dispatch.py reconcile [--dry-run]   every hour: a poll, plus expired claims and a heartbeat
-  dispatch.py daily                   07:30: anomaly signals and the rule audit (blueprint §8 step 7)
+  dispatch.py daily                   anomaly signals and the rule audit (blueprint §8 step 7), raised once each
+  dispatch.py audit [product|system|all]   07:30, and on demand: the daily pass, and reports (audit.py)
 
 Each pass: the kill switch; runs whose launcher died; the merge queue; new runs in dispatch order
 within the caps; notices to the Owner. With --dry-run it prints what it would do and changes
@@ -19,8 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from system.dispatcher import daily, flow, github_state, killswitch, merge_rules, notify, plan, relay, state, usage  # noqa: E402
-from system.tools import post, runner  # noqa: E402
+from system.dispatcher import audit, daily, flow, github_state, killswitch, merge_rules, notify, plan, relay, state, usage  # noqa: E402
+from system.tools import post, runner, tracker  # noqa: E402
 
 
 def article(word):
@@ -85,8 +86,10 @@ def spawn(config, role, item, task, logs):
 
 
 def relay_answers(gh, store, identity, dry_run, now):
+    # The Owner may ask for an audit in the chat: it runs here, and the relay replies with the reports' links.
+    on_audit = lambda kinds: audit_pass(kinds, dry_run=False, now=now, announce=False)[1]  # noqa: E731
     try:
-        return relay.run(gh, store, identity, dry_run, now)
+        return relay.run(gh, store, identity, dry_run, now, on_audit=on_audit)
     except (Exception, SystemExit) as e:  # the chat must never stop a pass (GitHub errors are SystemExit); no secret named
         return [f"relay failed: {type(e).__name__}: {e}"]
 
@@ -243,8 +246,9 @@ def dispatch_pass(command, dry_run, now=None):
     return lines or ["nothing to do"]
 
 
-def daily_pass(dry_run, now=None):
-    """Anomaly signals and the rule audit (blueprint §4.5), each taken to its response once per key."""
+def daily_pass(dry_run, now=None, collect=None):
+    """Anomaly signals and the rule audit (blueprint §4.5), each taken to its response once per key. With collect
+    (a dict), it also returns what the system audit reports: the findings, the flow records and the runs."""
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
     config = runner.load_all()
     identity = config["identity"]
@@ -284,7 +288,7 @@ def daily_pass(dry_run, now=None):
     explained = config["runner"].get("denials", {}).get("explained", [])
     found = (daily.denials(runs, now, explained) +daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
-             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now)
+             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now, identity["time_zone"])
              + daily.watch_list(watch["body"] if watch else "", {**daily.metrics(runs, now, max(waits)), **flow.metrics(flows, now)}))
     live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
     found += daily.protection_breaches(live, identity["branch_protection"])
@@ -295,6 +299,9 @@ def daily_pass(dry_run, now=None):
         found.append((f"runner:{';'.join(drift)}", "builder", "The runner differs from main",
                       "runner.py check:\n- " + "\n- ".join(drift), None))
 
+    found += audit.missed_builder_daily(runs, now, identity["time_zone"])
+    if collect is not None:
+        collect.update(findings=[(key, level, title, key not in raised) for key, level, title, _, _ in found], flows=flows, runs=runs)
     lines = []
     for key, level, title, evidence, item in found:
         if key in raised:
@@ -323,12 +330,108 @@ def daily_pass(dry_run, now=None):
     return lines or ["no anomalies"]
 
 
+def record_issue(gh, me, kind, dry_run):
+    """The open record issue an audit's reports go on (created on first use), or None in a dry run before then."""
+    label, title = audit.RECORD[kind]
+    found = tracker.record_issues(gh, label)
+    if found:
+        return found[0]
+    if dry_run:
+        return None
+    made = post.cmd_issue_create(gh, me, title, [label], f"Reports of the {kind} audit (system/dispatcher/audit.py), newest "
+                                 "last: one comment each, daily at 07:30 and on demand. Each is linked in the Owner's chat.")
+    return gh.api("GET", f"repos/{gh.repo}/issues/{made.split()[0].lstrip('#')}")
+
+
+def product_facts(gh, store, config, record, now):
+    identity = config["identity"]
+    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
+    snap = github_state.snapshot(gh, identity)
+    merge_rules.annotate(gh, snap, store.read("runs"), identity, post.MARKER)
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=open&per_page=100", paginate=True)
+    in_review = {n for pr in snap["prs"] for n in pr["resolves"]}
+    items = [{"number": i["number"], "title": i["title"], "milestone": (i.get("milestone") or {}).get("title"),
+              "state": audit.item_state({x["name"] for x in i["labels"]}, i["number"] in in_review)}
+             for i in everything if "pull_request" not in i and i.get("milestone")]
+    questions = []
+    for i in snap["issues"] + snap["prs"]:
+        if "needs-decision:owner" in i["labels"]:
+            found = notify.latest_ask(gh.api("GET", f"repos/{gh.repo}/issues/{i['number']}/comments?per_page=100", paginate=True),
+                                      identity, post.MARKER)
+            if found and not found[2]:
+                questions.append((i["number"], i["title"], datetime.fromisoformat(found[0]["created_at"].replace("Z", "+00:00"))))
+    approvals = [(pr["number"], pr["title"]) for pr in snap["prs"]
+                 if pr["author_role"] and not pr["draft"] and pr["protected"] and pr["gate"] == "SUCCESS"
+                 and merge_rules.current(pr, bot) and not merge_rules.owner_approves(pr, second)
+                 and not merge_rules.sr2_due(pr, bot, second)]
+    last = gh.api("GET", f"repos/{gh.repo}/issues/{record['number']}/comments?per_page=100", paginate=True) if record else []
+    since = max((c["created_at"] for c in last), default=(now - timedelta(hours=12)).isoformat().replace("+00:00", "Z"))
+    merged = [(p["number"], p["title"]) for p in gh.api("GET", f"repos/{gh.repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50")
+              if p.get("merged_at") and p["merged_at"] > since]
+    milestones = [{"title": m["title"], "open": m["open_issues"], "closed": m["closed_issues"]}
+                  for m in gh.api("GET", f"repos/{gh.repo}/milestones?state=all&per_page=100", paginate=True)]
+    watch = next((i for i in snap["issues"] if "record:watch-list" in i["labels"]), None)
+    note = next((line for line in post.MARKER.sub("", (watch or {}).get("body") or "", count=1).splitlines() if line.strip()), "")
+    return {"goals": sorted((i for i in snap["issues"] if "record:goal" in i["labels"]), key=lambda i: i["title"]),
+            "deadlines": audit.deadlines(github_state.requirements_on_main(gh)), "milestones": milestones, "items": items,
+            "questions": questions, "approvals": approvals, "merged": merged, "gate": post.cmd_gate(gh, identity, "main"),
+            "watch": (watch["number"], note[:400] + ("…" if len(note) > 400 else "")) if watch else None}
+
+
+def system_facts(gh, store, config, collect, now):
+    identity, zone = config["identity"], config["identity"]["time_zone"]
+    runs = collect["runs"]
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=open&labels=type%3Asystem&per_page=100", paginate=True)
+    open_system = [(i["number"], i["title"], next((x["name"] for x in i["labels"] if x["name"].startswith("sev:")), "sev:?"))
+                   for i in everything if "pull_request" not in i]
+    _, reasons, warnings = usage.may_start(config["caps"], runs, "coordinator", now, zone)
+    beats = [datetime.fromisoformat(b["at"]) for b in store.read("heartbeats") if b.get("event") == "reconcile"]
+    return {"findings": collect["findings"], "open_system": open_system, "flow": flow.report(collect["flows"], now, 7, zone),
+            "paused": killswitch.paused(gh), "runs": audit.runs_summary(runs, now),
+            "usage": (warnings, [r for r in reasons if "points" in r]), "last_reconcile": max(beats, default=None),
+            "builder_daily": audit.builder_daily(runs)}
+
+
+def audit_pass(kinds=audit.KINDS, dry_run=False, now=None, announce=True):
+    """The product and system audits: each posted on its record issue; with announce, one notice in the Owner's chat.
+    Returns (lines, [(kind, headline, url)])."""
+    now = now or datetime.now(timezone.utc).replace(microsecond=0)
+    config = runner.load_all()
+    identity = config["identity"]
+    gh = post.GitHub(identity["repo"])
+    me = ("dispatcher", f"dispatcher-{now:%Y%m%dT%H%M%SZ}")
+    store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    lines, posted = [], []
+    for kind in kinds:
+        record = record_issue(gh, me, kind, dry_run)
+        if kind == "system":
+            collect = {}
+            lines += daily_pass(dry_run, now, collect)
+            headline, body = audit.system_report(system_facts(gh, store, config, collect, now), now, identity["time_zone"])
+        else:
+            headline, body = audit.product_report(product_facts(gh, store, config, record, now), now, identity["time_zone"])
+        if dry_run:
+            lines += [f"would post the {kind} audit: {headline}", body]
+            continue
+        url = post.cmd_comment(gh, me, record["number"], body)
+        lines.append(f"posted the {kind} audit: {headline} ({url})")
+        posted.append((kind, headline, url))
+    if posted and announce:
+        notify.send(notify.webhook_url(identity), "\n".join(f"**{k.capitalize()} audit:** {h}\n<{u}>" for k, h, u in posted))
+    return lines, posted
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("command", choices=["poll", "reconcile", "daily"])
+    parser.add_argument("command", choices=["poll", "reconcile", "daily", "audit"])
+    parser.add_argument("kind", nargs="?", choices=["product", "system", "all"], default="all", help="audit only")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
     stamp = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M %Z")
+    if args.command == "audit":
+        for line in audit_pass(audit.KINDS if args.kind == "all" else (args.kind,), args.dry_run)[0]:
+            print(f"{stamp} audit: {line}")
+        return 0
     if args.command == "daily":
         thrown, why = killswitch.paused(post.GitHub(runner.load_all()["identity"]["repo"]))
         if thrown:  # the audit still runs while paused: a breach must reach the Owner
