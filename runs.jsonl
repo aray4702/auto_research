@@ -213,3 +213,4 @@
 {"at": "2026-10-28T05:00:07+00:00", "cost_usd": 0.638229, "denials": 2, "denied": ["Bash: gh pr", "Bash: git show"], "event": "end", "five_hour": 0.02, "item": 84, "role": "reviewer", "run_id": "reviewer-20261028T045718Z", "seven_day": 0.25, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 26}
 {"at": "2026-10-28T05:00:41+00:00", "cost_usd": 0.849998, "denials": 0, "denied": [], "event": "end", "five_hour": 0.03, "item": 119, "role": "architect", "run_id": "architect-20261028T045718Z", "seven_day": 0.25, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 29}
 {"at": "2026-10-28T05:01:55+00:00", "event": "start", "item": 113, "pid": 14424, "role": "builder", "run_id": "builder-20261028T050150Z", "task": "PR #113 needs work: it conflicts with main."}
+{"at": "2026-10-28T05:01:56+00:00", "event": "start", "item": 119, "pid": 14456, "role": "reviewer", "run_id": "reviewer-20261028T050150Z", "task": "Review PR #119."}
