@@ -23,4 +23,4 @@ allow_write = [
 
 # The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
 [uv]
-version = "<uv version>"
+version = "0.13.6"

@@ -11,11 +11,11 @@ PRODUCT_YML = ROOT / ".github" / "workflows" / "product.yml"
 
 def setup_uv_versions(workflow):
     """The `version:` each astral-sh/setup-uv step passes (None if it passes none), read without YAML."""
-    steps = re.split(r"^\s*- (?=uses:|name:|run:)", workflow, flags=re.M)
+    steps = re.split(r"^\s*- (?=uses:|name:|run:)", workflow, flags=re.MULTILINE)
     versions = []
     for step in steps:
-        if re.search(r"^\s*uses:\s*astral-sh/setup-uv@", step, re.M):
-            m = re.search(r"^\s+version:\s*[\"']?([^\"'\s#]+)", step, re.M)
+        if re.search(r"^\s*uses:\s*astral-sh/setup-uv@", step, re.MULTILINE):
+            m = re.search(r"^\s+version:\s*[\"']?([^\"'\s#]+)", step, re.MULTILINE)
             versions.append(m.group(1) if m else None)
     return versions
 
