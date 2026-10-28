@@ -66,14 +66,36 @@ class CalibrateTest(unittest.TestCase):
         self.assertEqual((c["local_cost_usd"], c["system_runs_usd"], c["seven_day_points"]), (110.0, 10.0, 7.0))
         self.assertAlmostEqual(c["average_points_per_usd"], round(7 / 110, 4))
         self.assertIsNone(c["marginal_points_per_usd"])
-        # An earlier calibration in the same window: 4 points at $60 -> 3 points for $50 since = 0.06/$.
+        self.assertIsNone(c["window_marginal_points_per_usd"])
+        # An earlier calibration in the same window: 2 points at $60 -> 5 points for $50 since = 0.1/$.
         earlier = [{"window_start": c["window_start"], "reading_at": (at - timedelta(hours=5)).isoformat(),
-                    "seven_day_points": 4.0, "local_cost_usd": 60.0}]
+                    "seven_day_points": 2.0, "local_cost_usd": 60.0}]
         c = calibrate.calibrate(CAPS, runs, earlier, lines, PRICES, NOW)
-        self.assertAlmostEqual(c["marginal_points_per_usd"], 0.06)
-        self.assertEqual(c["measured_points_per_usd"], max(c["average_points_per_usd"], 0.06))
+        self.assertAlmostEqual(c["marginal_points_per_usd"], 0.1)
+        self.assertEqual(c["measured_points_per_usd"], max(c["average_points_per_usd"], 0.1))
         self.assertEqual(c["caps_safe"], CAPS["claude"]["points_per_usd"] >= c["measured_points_per_usd"])
         self.assertIn("points/$", calibrate.report(c))
+
+    def test_a_marginal_under_five_points_is_noise(self):
+        # Whole-percent readings: 4 -> 7 points could be 2-4 points, so no marginal is drawn from it.
+        at = NOW - timedelta(minutes=10)
+        runs = [reading(at, 0.07, cost=110.0)]
+        earlier = [{"window_start": calibrate.usage.window_start(runs, NOW).isoformat(),
+                    "reading_at": (at - timedelta(hours=5)).isoformat(), "seven_day_points": 4.0, "local_cost_usd": 60.0}]
+        self.assertIsNone(calibrate.calibrate(CAPS, runs, earlier, [], PRICES, NOW)["marginal_points_per_usd"])
+
+    def test_the_window_marginal_needs_no_earlier_calibration(self):
+        # A fresh window (#203): $1,000 of early usage moved it to 6 points; the next $100 moved it 7 more.
+        first, at = NOW - timedelta(days=2), NOW - timedelta(minutes=10)
+        lines = [msg("claude-opus-5-5", first - timedelta(hours=1), output_tokens=50_000_000),  # $1,000
+                 msg("claude-opus-5-5", first + timedelta(hours=1), output_tokens=4_000_000)]  # $80
+        runs = [reading(first, 0.06), reading(at, 0.13, cost=20.0)]
+        c = calibrate.calibrate(CAPS, runs, [], lines, PRICES, NOW)
+        self.assertAlmostEqual(c["average_points_per_usd"], round(13 / 1100, 4))
+        self.assertEqual(c["window_marginal_from"], first.isoformat())
+        self.assertAlmostEqual(c["window_marginal_points_per_usd"], 0.07)
+        self.assertEqual(c["measured_points_per_usd"], 0.07)
+        self.assertIn("first run reading", calibrate.report(c))
 
     def test_no_reading_yet(self):
         c = calibrate.calibrate(CAPS, [], [], [], PRICES, NOW)
