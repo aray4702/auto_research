@@ -378,3 +378,4 @@
 {"at": "2026-10-28T19:57:14+00:00", "cost_usd": 0.449517, "denials": 1, "denied": ["Bash: python3"], "event": "end", "five_hour": 0.07, "item": 136, "role": "architect", "run_id": "architect-20261028T195456Z", "seven_day": 0.36, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 24}
 {"at": "2026-10-28T19:57:41+00:00", "event": "start", "item": 85, "pid": 97236, "role": "reviewer", "run_id": "reviewer-20261028T195729Z", "task": "Review the plan or design on #85."}
 {"at": "2026-10-28T19:58:54+00:00", "cost_usd": 0.39692, "denials": 0, "denied": [], "event": "end", "five_hour": 0.07, "item": 85, "role": "reviewer", "run_id": "reviewer-20261028T195729Z", "seven_day": 0.36, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 16}
+{"at": "2026-10-28T20:00:10+00:00", "event": "start", "item": 136, "pid": 98428, "role": "reviewer", "run_id": "reviewer-20261028T200004Z", "task": "Review PR #136."}
