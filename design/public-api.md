@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-27 | architect, #82 | Reviewer's findings on #125: `source.file` stays a string in 1.1; a silent device warns rather than exiting 3; stdout is flushed per write; what a failed live session keeps |
 | 2026-10-27 | architect, #82 | G2: `lmt live` and its event stream, `lmt eval --set live` and `results/live.json`, transcript JSON 1.1 for live sessions, and exit codes 3 and 130 for live mode. It holds the recommended options on #82, waiting for the Owner's approval |
 | 2026-10-27 | architect, #81 | Reviewer's finding on #89: exit code 6 for `lmt eval --check-readme`'s mismatch, so drift and a bug can't look alike |
 | 2026-10-27 | architect, #81 | First version, for G1. It holds the recommended options on #81, waiting for the Owner's approval |
@@ -58,9 +59,13 @@ Transcribes live from an input device, printing segments as they're recognised, 
 | `--jsonl` | off | Prints the events below to stdout, one JSON object per line, instead of text. |
 | `--offline`, `--overwrite`, `-v`, `--verbose` | off | As for `transcribe`. Every output, `<stem>.wav` included, is checked before capture starts. |
 
-**Stdout.** Without `--jsonl`, each segment starts a line, `[HH:MM:SS] Speaker 1: `, and its words are added to the line as they're committed. Times are from the start of the session.
+**Stdout.** Without `--jsonl`, each segment starts a line, `[HH:MM:SS] Speaker 1: `, and its words are added to the line as they're committed. Times are from the start of the session. Stdout is flushed after every write, text or event, so a reader through a pipe gets each one at once rather than when a buffer fills (G2-6 measures that arrival).
 
-**Stopping.** The first Ctrl-C stops capture, finishes the audio already captured, writes the outputs and exits 0. A second Ctrl-C while it's saving exits 130 and writes none of the final formats. `<stem>.txt` then keeps the segments completed before the stop, and `<stem>.wav` the audio. This is the one exception to "a failed run leaves no outputs" below: a live session's text is kept as it goes.
+**Stopping.** The first Ctrl-C stops capture, finishes the audio already captured, writes the outputs and exits 0. A second Ctrl-C while it's saving exits 130 and writes none of the final formats. `<stem>.txt` then keeps the segments completed before the stop, and `<stem>.wav` the audio.
+
+**What a failed session keeps.** A live session that ends after capture has started keeps `<stem>.txt` and, with `--save-audio`, `<stem>.wav`, as written so far, however it ends: a second Ctrl-C (130), a bug (1), or any other failure. This is the one exception to "a failed run leaves no outputs" below. The final formats are still written only on success. An error found before capture starts leaves no outputs, as for `transcribe`.
+
+**A silent device.** If the device gives exact zeros for its first 3 s, stderr gets one line, `lmt: warning: <device>: no sound for 3 s; the microphone may be blocked (System Settings, Privacy & Security, Microphone)`, and capture goes on. A loopback device is silent while nothing plays, so silence is never an error.
 
 #### Live events, version 1.0
 
@@ -107,13 +112,13 @@ Needs the `eval` extra (`lmt[eval]`).
 | 0 | Success. |
 | 1 | Internal error: a bug. It prints an error report naming the input format, the model revisions and the failed stage (Q6), and never a bare traceback. |
 | 2 | Usage error: an unknown option, a bad value, conflicting options, or an existing output without `--overwrite`. |
-| 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. For `lmt live`: no input device, an unknown one, one that can't be opened, or one that gives only silence (exact zeros for 3 s, as macOS does when the microphone permission is denied). |
+| 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. For `lmt live`: no input device, an unknown one, or one that can't be opened. A device that gives only silence is a warning, not an error ("A silent device", above). |
 | 4 | No speech found in the input. |
 | 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. |
 | 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from what `results/full.json` renders. A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
-| 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving (above). |
+| 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving. `<stem>.txt` and `<stem>.wav` are kept (above). |
 
-Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11).
+Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11), except what a live session keeps ("What a failed session keeps", above).
 
 ## Environment
 
@@ -134,7 +139,7 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 
 ### Transcript JSON, version 1.1
 
-Version 1.1 (G2) adds live sessions. In a live session's transcript, `source.file` is `null` for a device, and the base name for `--from-file`. `source` also holds `"live": true` and, for a device, `"device"`, its name. Both are optional, and absent in `transcribe`'s output, which is otherwise unchanged from 1.0.
+Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case, as in 1.0: in a live session's transcript, it is the base name for `--from-file`, and the session's stem (`--name`) for a device. `source` also holds `"live": true` and, for a device, `"device"`, its name. Both are new optional fields, absent in `transcribe`'s output, which is otherwise unchanged from 1.0. So a 1.0 reader reads a 1.1 file.
 
 ```json
 {
@@ -161,7 +166,7 @@ Version 1.1 (G2) adds live sessions. In a live session's transcript, `source.fil
 - **Required:** `schema_version`, `source`, `models`, `speakers` and `segments`. Every segment has `start`, `end`, `speaker` and `text` (F3). `words` is optional.
 - **Rules:** segments are sorted by `start`, and 0 ≤ `start` < `end` ≤ `source.duration`. Each `speaker` is the `id` of an entry in `speakers`. Speaker ids are `S1`, `S2`, … in order of first appearance. `models.diarization` is `null` with `--no-diarize`.
 - **Labels:** `label` is what every export shows. It starts as "Speaker N", and renaming (F7, G3) changes only `label`.
-- **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13).
+- **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13). A live session from a device is the exception: its `source.file` is its stem, which holds the start time by default. G2 doesn't require two live runs to be identical.
 - **Compatibility:** a minor version only adds optional fields, and readers ignore fields they don't know. A major version changes or removes fields.
 
 ## Results file, version 1.0
