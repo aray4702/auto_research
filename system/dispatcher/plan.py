@@ -141,7 +141,7 @@ def current(pr, login):
 # refreshed from main whose own added and removed lines are unchanged, though main edited code next to them.
 SR2_SIGNERS = ("coordinator", "builder")
 SR2_LABELS = {"needs-decision:coordinator", "needs-decision:builder", "needs-decision:owner"}
-SIGN_OFF = re.compile(r"^\*\*SR2 sign-off:\*\* the Owner's approval of `(?P<approved>[0-9a-f]{40})` covers `(?P<head>[0-9a-f]{40})`", re.M)
+SIGN_OFF = re.compile(r"^\*\*SR2 sign-off:\*\* the Owner's approval of `(?P<approved>[0-9a-f]{40})` covers `(?P<head>[0-9a-f]{40})`")
 
 
 def own_lines(changes):
@@ -162,7 +162,9 @@ def signed_off(pr, comments, runs, identity, marker):
     covered = None
     for c in comments:
         body = c.get("body") or ""
-        m, s = marker.match(body), SIGN_OFF.search(body)
+        m = marker.match(body)
+        # Only straight after the marker, where `post.py sign-off` writes it: a quoted sign-off line doesn't count.
+        s = m and SIGN_OFF.match(body[m.end():].lstrip("\n"))
         if (c["user"]["login"] == identity["owner_login"] and m and s and m["role"] in SR2_SIGNERS
                 and (m["run"], m["role"]) in recorded and s["approved"] == owner["commit"]):
             covered = s["head"]

@@ -327,6 +327,11 @@ def cmd_escalate(gh, caller, n, level, body):
     if level not in LEVELS:
         raise SystemExit(f"--level must be one of {', '.join(LEVELS)}")
     cmd_label(gh, n, [f"needs-decision:{level}"], [])
+    # Passing a decision on hands it over: the caller's own label goes, or the Dispatcher keeps restarting the
+    # caller on the item while it waits on the next level (#151).
+    own = f"needs-decision:{caller[0]}"
+    if caller[0] in LEVELS and caller[0] != level and own in {x["name"] for x in gh.api("GET", f"repos/{gh.repo}/issues/{n}")["labels"]}:
+        cmd_label(gh, n, [], [own])
     return cmd_comment(gh, caller, n, f"**Needs a decision: {level}.**\n\n{body}")
 
 
