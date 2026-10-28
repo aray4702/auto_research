@@ -99,7 +99,7 @@ Concrete scenarios, end to end. Each one becomes acceptance scenarios.
 | F3  | Export plain text, SRT and WebVTT subtitles, and JSON (segments with start, end, speaker, text) | must | U1 | The JSON validates against a published schema; the SRT plays in a standard player |
 | F4  | An evaluation harness: one command computes word error rate, diarization error rate and real-time factor on the named evaluation sets, and writes the README's results table | must | U3 | Two runs on the same machine give the same accuracy numbers; CI runs it on a small fixed subset |
 | F5  | A command-line interface with `--help`, documented options and meaningful exit codes | must | U1 | Each documented option works; bad input gives a clear message and a non-zero exit code |
-| F6  | Live mode: transcribe from the microphone, writing segments as they're recognised | should | U2 | Q2's live latency met on a recorded clip played back as a live stream |
+| F6  | Live mode: transcribe from the microphone, writing segments as they're recognised | should | U2 | Q10 met on a recorded clip played back as a live stream |
 | F7  | Rename speakers and export again | should | U4 | A rename shows up in every export format |
 | F8  | A local demo: a small web page served on this computer that shows the transcript, its speakers and the audio together | should | U1, U3 | It opens from one command and plays the audio from a clicked segment |
 | F9  | English only | must | U1 | The evaluation sets are English |
@@ -134,7 +134,7 @@ Targets the product must run on (OS, CPU, browsers, devices), and how it
 ships (packages, stores, versioning). CI covers each target; how often (every
 PR, nightly) is sized against your CI limit.
 
-- **macOS on Apple Silicon:** the primary target, the Owner's Mac. Speed (Q2, Q3) is measured here.
+- **macOS on Apple Silicon:** the primary target, the Owner's Mac. Speed (Q2, Q3, Q10) is measured here.
 - **Linux x86_64, CPU only:** CI, and reviewers reproducing the results (U3). No GPU is assumed anywhere.
 - **Ships as** a Python package installable with one command, with semantic versions and GitHub releases.
 
@@ -164,7 +164,7 @@ questions land here or in the tables above.
 
 | ID  | Assumption                                 | Requirements that rest on it | How to check it              | If it's false             |
 | --- | ------------------------------------------ | ---------------------------- | ---------------------------- | ------------------------- |
-| A1  | The Owner's Mac is Apple Silicon with 16 GB of memory (checked 2026-10-27: Apple M4, 16 GB) | Q2, Q3, Q10 | `sysctl hw.memsize`, `uname -m` | Smaller models; restate Q2 and Q3 |
+| A1  | The Owner's Mac is Apple Silicon with 16 GB of memory (checked 2026-10-27: Apple M4, 16 GB) | Q2, Q3, Q10 | `sysctl hw.memsize`, `uname -m` | Smaller models; restate Q2, Q3 and Q10 |
 | A2  | Meetings are in English, with at most 8 speakers and at most 2 hours long | F2, F9, Q1, L1, L2 | The evaluation sets' statistics | Widen the envelope, or reopen F9 |
 | A3  | LibriSpeech and AMI are close enough to real meetings to support the published accuracy claims | Q1, G1 | Spot-check the Owner's own recordings (never published) | Add a closer public set |
 | A4  | A CI runner can run a small model on short clips within a few minutes | F4, Q1 (CI subset) | The first CI run | Measure only on the Mac, nightly |
