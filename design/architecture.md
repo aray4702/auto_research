@@ -2,8 +2,10 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-28 | architect, #83 | Merged `main` into #129: #105's row below is kept. The layout lists `NOTICE` once, in #105's place, with G3's datasets and sample meeting added to its description |
 | 2026-10-27 | architect, #83 | Reviewer's findings on #129: WebVTT escapes `&` in the voice tag; the demo re-reads and re-validates the transcript on each request and renders the track in memory; only `eval/score.py` imports the `eval` extra, and a test checks that the rest loads without it |
 | 2026-10-27 | architect, #83 | G3: speaker names, the demo server and page, packaging and release; the `browser` and `install-full` jobs; `rename.py` and `demo/` leave tier 3. Each choice is the recommended option on #83, waiting for the Owner's approval |
+| 2026-10-27 | architect, #105 | The Owner's answer 13a on #81: the diarization models' licences as their model cards give them (the embedding model is CC BY 4.0, not MIT), and the manifest records each model's attribution for the README and `NOTICE` |
 | 2026-10-27 | architect, #81 | Reviewer's second review of #89: tier 3 lists only what it leaves out, and the workflows run tiers 1 to 3; the monthly estimate is ≈ 1,850 minutes; the system's own CI minutes are #91; LLVM's OpenMP runtime is listed |
 | 2026-10-27 | architect, #81 | Reviewer's findings on #89: CI runs in tiers by the paths a change touches, sized against the 3,000-minute signal; the expected licences outside MIT, BSD and Apache-2.0, and how bundled libraries are listed |
 | 2026-10-27 | architect, #81 | First version, for G1. Each choice is the recommended option on #81, waiting for the Owner's approval |
@@ -40,7 +42,7 @@ input file ─► decode ─► audio (16 kHz mono float32)
 | --- | --- | --- | --- | --- | --- |
 | ASR | faster-whisper (MIT) on CTranslate2 (MIT) | `distil-large-v3`, provisional (below) | `Systran/faster-distil-whisper-large-v3` on Hugging Face | MIT | ≈ 1.5 GB |
 | VAD | Silero VAD, bundled with faster-whisper | Silero VAD v5 | inside the faster-whisper wheel | MIT | ≈ 2 MB |
-| Diarization | pyannote.audio 3.x (MIT) | `pyannote/speaker-diarization-3.1`, which uses `pyannote/segmentation-3.0` and `pyannote/wespeaker-voxceleb-resnet34-LM` | Hugging Face, gated: a free account that has accepted the models' conditions, and a token (§7) | MIT | ≈ 35 MB |
+| Diarization | pyannote.audio 3.x (MIT) | `pyannote/speaker-diarization-3.1`, which uses `pyannote/segmentation-3.0` and `pyannote/wespeaker-voxceleb-resnet34-LM` | Hugging Face, gated: a free account that has accepted the models' conditions, and a token (§7) | MIT (`speaker-diarization-3.1`, `segmentation-3.0`); CC BY 4.0 (`wespeaker-voxceleb-resnet34-LM`, accepted with attribution on #81, answer 13a) | ≈ 35 MB |
 
 The default models total about 1.55 GB, under Q3's 2 GB.
 
@@ -48,9 +50,9 @@ The default models total about 1.55 GB, under Q3's 2 GB.
 - **CI uses the default models,** so that CI's subset checks (G1-8c) test what the Mac measures. The model files go into CI's cache, keyed by the model manifest's hash, so they are downloaded once and not on every run.
 - **Options considered (#81, questions 7 and 8):**
   - **ASR:** faster-whisper is *recommended*: one engine for Linux CI and the Mac, CPU int8, deterministic, with word timestamps and VAD built in. mlx-whisper is fast on Apple GPUs but doesn't run on Linux, so CI would test a different engine. whisper.cpp (`pywhispercpp`) has Metal on the Mac and CPU on Linux, but its Python binding is less mature. Either alternative could become a later Mac-only speed backend, if Q2 needs one.
-  - **Diarization:** `speaker-diarization-3.1` on pyannote.audio 3.x is *recommended*: MIT, and it meets Q1 by its own model card. `speaker-diarization-community-1` on pyannote.audio 4.x is reported to be more accurate, but its model licence (CC BY 4.0) isn't on §7's list, and 4.x's telemetry would need checking against Q8. sherpa-onnx (Apache-2.0) needs no token, but its DER on AMI is unmeasured.
+  - **Diarization:** `speaker-diarization-3.1` on pyannote.audio 3.x is *recommended*: it meets Q1 by its own model card. `speaker-diarization-community-1` on pyannote.audio 4.x is reported to be more accurate, but 4.x's telemetry would need checking against Q8, and switching costs time before the deadline. Both carry CC BY 4.0, 3.1 through its embedding model, which the Owner accepted with attribution (#81, answer 13a). sherpa-onnx (Apache-2.0) needs no token, but its DER on AMI is unmeasured.
 
-**Model handling (`models`).** The model manifest (`src/lmt/models.toml`) lists each model's repository, revision (a commit hash) and every file with its SHA-256 and size. `lmt models download` fetches exactly those files with `huggingface_hub`, verifies each one, and deletes any file that doesn't match (exit 5, Q9). The cache is `LMT_CACHE_DIR` (default `~/.cache/lmt/models`). Once every file there is verified, the product sets `HF_HUB_OFFLINE=1` before importing any model library, so nothing tries the network (Q8, L4). `lmt transcribe` downloads missing models on first use, saying so on stderr. `--offline` forbids that.
+**Model handling (`models`).** The model manifest (`src/lmt/models.toml`) lists each model's repository, revision (a commit hash) and every file with its SHA-256 and size. It also records each model's licence and attribution, as its model card gives them: the creators, the licence and a link to the card. `NOTICE` and the README's `## Licences` section give that attribution for every model in the manifest (§7, #81 answer 13a), and a test keeps both in step with it (spec, G1-15). `lmt models download` fetches exactly those files with `huggingface_hub`, verifies each one, and deletes any file that doesn't match (exit 5, Q9). The cache is `LMT_CACHE_DIR` (default `~/.cache/lmt/models`). Once every file there is verified, the product sets `HF_HUB_OFFLINE=1` before importing any model library, so nothing tries the network (Q8, L4). `lmt transcribe` downloads missing models on first use, saying so on stderr. `--offline` forbids that.
 
 **Determinism (Q7).** Models are pinned by hash, decoding is fixed (above), and the thread counts are fixed for CTranslate2 and torch. Torch also runs with `torch.use_deterministic_algorithms(True)`, and pyannote's clustering is seeded. `lmt eval` compares two runs (G1-5, G1-12).
 
@@ -128,6 +130,7 @@ lmt demo ─► decode (audio.py), once ─► 16 kHz mono WAV, in memory
 
 ```
 pyproject.toml, uv.lock, .python-version
+NOTICE              attributions: the models (§7), datasets, the sample meeting (G3)
 src/lmt/
   cli.py            commands and options; maps errors to exit codes
   errors.py         InputError, NoSpeechError, ModelError, UsageError
@@ -146,7 +149,6 @@ src/lmt/
 tests/              unit tests, fixtures and their recipes, fuzz and network tests
 results/            committed results files (the measurements, by commit)
 docs/demo.png       the README's demo image (G3)
-NOTICE              attributions: models, datasets, the sample meeting
 ```
 
 `schema/transcript.schema.json` at the repository root is the published copy of the schema (F3). A test keeps it identical to the package's copy.
