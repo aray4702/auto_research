@@ -1,1 +1,2 @@
 {"at": "2026-10-27T17:05:17+00:00", "handled": "already fixed by #36 (the launcher's `ended` name clash); recorded by the builder before the step-7 switch-on", "key": "failure:failed: launcher: TypeError", "level": "builder", "title": "New kind of failure: failed: launcher: TypeError"}
+{"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: cat", "level": "builder", "title": "Recurring permission denial: Bash: cat"}
