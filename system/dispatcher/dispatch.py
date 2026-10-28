@@ -4,7 +4,7 @@
   dispatch.py poll [--dry-run]        every 2 minutes
   dispatch.py reconcile [--dry-run]   every hour: a poll, plus expired claims and a heartbeat
   dispatch.py daily                   anomaly signals and the rule audit (blueprint §8 step 7), raised once each
-  dispatch.py audit [product|system|all]   07:30 and 19:30, and on demand: the daily pass, and reports (audit.py)
+  dispatch.py audit [product|system|all]   07:30, and on demand: the daily pass, and reports (audit.py)
 
 Each pass: the kill switch; runs whose launcher died; the merge queue; new runs in dispatch order
 within the caps; notices to the Owner. With --dry-run it prints what it would do and changes
@@ -339,7 +339,7 @@ def record_issue(gh, me, kind, dry_run):
     if dry_run:
         return None
     made = post.cmd_issue_create(gh, me, title, [label], f"Reports of the {kind} audit (system/dispatcher/audit.py), newest "
-                                 "last: one comment each, twice daily and on demand. Each is linked in the Owner's chat.")
+                                 "last: one comment each, daily at 07:30 and on demand. Each is linked in the Owner's chat.")
     return gh.api("GET", f"repos/{gh.repo}/issues/{made.split()[0].lstrip('#')}")
 
 

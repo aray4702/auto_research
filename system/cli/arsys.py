@@ -10,7 +10,7 @@
   arsys goal add ID GOAL OUTCOME [--deadline D]          propose a goal, by PR
   arsys req add ID TEXT [--priority P] [--use-case U] [--hint H]   propose a functional requirement, by PR
   arsys merges                 merges made from your account, to recognise
-  arsys audit [product|system] run the audits now and post their reports (also twice daily, and `audit` in Discord)
+  arsys audit [product|system] run the audits now and post their reports (also daily at 07:30, and `audit` in Discord)
   arsys serve [--port 8765]    the dashboard at http://127.0.0.1:PORT (this Mac only, read-only)
 
 Agents never run this: its actions are the Owner's (blueprint §5). Standard library only.
