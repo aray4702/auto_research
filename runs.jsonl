@@ -574,3 +574,4 @@
 {"at": "2026-10-28T23:09:26+00:00", "cost_usd": 1.568134, "denials": 2, "denied": ["Bash: python3 -I system/cli/arsys.py", "Glob"], "event": "end", "five_hour": 0.31, "item": null, "role": "builder", "run_id": "builder-20261028T230248Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 79}
 {"at": "2026-10-28T23:09:35+00:00", "event": "start", "item": 194, "pid": 91067, "role": "reviewer", "run_id": "reviewer-20261028T230929Z", "task": "Review PR #194."}
 {"at": "2026-10-28T23:11:47+00:00", "event": "start", "item": 191, "pid": 93273, "role": "builder", "run_id": "builder-20261028T231142Z", "task": "PR #191 needs work: it conflicts with main."}
+{"at": "2026-10-28T23:11:48+00:00", "cost_usd": 0.233433, "denials": 0, "denied": [], "event": "end", "five_hour": 0.31, "item": 194, "role": "reviewer", "run_id": "reviewer-20261028T230929Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 23}
