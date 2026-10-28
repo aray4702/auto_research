@@ -283,6 +283,19 @@ class JwtTest(unittest.TestCase):
             )
             self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
 
+    def test_a_sign_off_names_both_commits_and_clears_the_sr2_labels(self):
+        a, h = "a" * 40, "b" * 40
+        gh = FakeGitHub({("GET", "repos/o/r/issues/9"): issue(["needs-decision:builder", "type:system"])})
+        post.cmd_sign_off(gh, ("builder", "run-8"), 9, a, h, "main only renamed a helper next to it.")
+        body = gh.calls[0][2]["body"]
+        self.assertIn(post.SIGN_OFF.format(approved=a, head=h), body)
+        self.assertTrue(body.startswith("<!-- role:builder run:run-8 -->"))
+        self.assertEqual(gh.calls[-1][:2], ("DELETE", "repos/o/r/issues/9/labels/needs-decision%3Abuilder"))
+        with self.assertRaises(SystemExit):
+            post.cmd_sign_off(FakeGitHub(), CALLER, 9, a, h, "x")
+        with self.assertRaises(SystemExit):
+            post.cmd_sign_off(FakeGitHub(), ("coordinator", "r"), 9, "abc1234", h, "x")
+
 
 class ParserTest(unittest.TestCase):
     def test_bodies_are_required_where_they_must_be(self):

@@ -58,6 +58,22 @@ def same_changes(gh, approved, head):
     return own_changes(gh, approved) == own_changes(gh, head)
 
 
+def sign_off_question(pr, approved):
+    """The SR2 question (#150), asked once on the PR: the Coordinator judges, then the builder, then the Owner."""
+    n, head = pr["number"], pr["head"]
+    return (f"**SR2.** The Owner approved this PR at `{approved}`. Since then only main changed: the PR's own added and "
+            f"removed lines are the same, in order, but main edited code next to them, so that approval no longer counts "
+            f"by itself.\n\n"
+            f"Judge whether main's changes around those lines change what the Owner approved: compare "
+            f"`compare/{approved}...{head}` and read main's commits that touched the same places.\n"
+            f"- **They don't:** `post.py sign-off {n} --approved {approved} --head {head}` with your reasons as the "
+            f"body. SR1 then merges it in its turn.\n"
+            f"- **You can't tell** (Coordinator): `post.py escalate {n} --level builder` with what you found.\n"
+            f"- **You can't tell** (builder): `post.py escalate {n} --level owner`, asking whether to sign off. On "
+            f"the Owner's yes, sign off quoting it; otherwise the Owner approves the PR again on GitHub.\n\n"
+            f"Only a sign-off from a Coordinator or builder run on this PR counts (`system/standing-rules.md`).")
+
+
 def expired_claims(gh, items, active_items, now):
     out = []
     for n in items:
@@ -167,7 +183,16 @@ def dispatch_pass(command, dry_run, now=None):
         for login in (bot, second):
             r = plan.latest_review(pr, login)
             if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
-                pr["fresh"][login] = same_changes(gh, r["commit"], pr["head"])
+                approved, head = own_changes(gh, r["commit"]), own_changes(gh, pr["head"])
+                pr["fresh"][login] = approved == head
+                if login == second and pr["protected"] and not pr["fresh"][login]:
+                    # SR2 (#150): the PR's own lines unchanged, only the code around them: a sign-off may carry the approval.
+                    pr["same_lines"] = plan.own_lines(approved) == plan.own_lines(head)
+                    if pr["same_lines"]:
+                        comments = gh.api("GET", f"repos/{gh.repo}/issues/{pr['number']}/comments?per_page=100", paginate=True)
+                        pr["sign_off"] = plan.signed_off(pr, comments, runs, identity, post.MARKER)
+                        if pr["sign_off"] and pr["sign_off"] != pr["head"]:
+                            pr["fresh"]["sign-off"] = same_changes(gh, pr["sign_off"], pr["head"])
 
     # The merge queue: one PR at a time.
     for action, n, detail in plan.merge_plan(snap, identity):
@@ -191,6 +216,10 @@ def dispatch_pass(command, dry_run, now=None):
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
                                     f"Renewed after a refresh from main: the PR's own changes are unchanged since the approval of {detail[:7]}.")
+        elif action == "ask-coordinator-to-sign-off":
+            say(f"ask the Coordinator to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
+            if not dry_run:
+                post.cmd_escalate(gh, me, n, "coordinator", sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 

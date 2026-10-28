@@ -29,6 +29,8 @@ Your items are `type:system`, and you answer builder escalations. The Owner's lo
 
 **Standing rules:** propose them when a recurring kind of decision keeps reaching the Owner.
 
+**SR2 sign-offs:** when the Coordinator escalates an SR2 question (`system/standing-rules.md`), judge it the same way and sign off (`post.py sign-off`), or escalate to the Owner, asking whether to sign off. Sign off on the Owner's yes, quoting it.
+
 ## You pass up
 
 Owner matters, and any anomaly that persists after your change.

@@ -316,6 +316,78 @@ class MergePlanTest(unittest.TestCase):
         self.assertEqual(plan.merge_plan(s, IDENTITY), [("renew", 9, "h1"), ("ask-owner-to-reapprove", 9, "h2")])
 
 
+class SR2Test(unittest.TestCase):
+    """#150: a refreshed PR whose own lines are unchanged goes to the Coordinator, not straight back to the Owner."""
+    A, H = "a" * 40, "c" * 40
+
+    def refreshed(self, n=113, labels=(), files=(), merge_state="BLOCKED", same_lines=True, sign_off=None, fresh_sign_off=None):
+        p = pr(n, protected=True, merge_state=merge_state, decision="APPROVED", head=self.H, labels=labels, files=files,
+               reviews=[(BOT, "APPROVED", self.H), (SECOND, "APPROVED", self.A)])
+        p["fresh"], p["same_lines"], p["sign_off"] = {SECOND: False}, same_lines, sign_off
+        if fresh_sign_off is not None:
+            p["fresh"]["sign-off"] = fresh_sign_off
+        return p
+
+    def test_the_coordinator_is_asked_once_instead_of_the_owner(self):
+        ask = [("ask-coordinator-to-sign-off", 113, self.A)]
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed()]), IDENTITY), ask)
+        held, ready = self.refreshed(merge_state="BEHIND"), pr(115, merge_state="BEHIND", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2")])
+        self.assertEqual(plan.merge_plan(snap(prs=[held, ready]), IDENTITY), [("refresh", 115, "behind main")] + ask,
+                         "behind main and at the back of the queue: asked anyway, so it isn't stuck there (#113)")
+        for level in ("coordinator", "builder", "owner"):
+            self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(labels=[f"needs-decision:{level}"])]), IDENTITY), [],
+                             f"already with the {level}")
+
+    def test_a_change_to_the_prs_own_lines_or_an_excluded_file_still_goes_to_the_owner(self):
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(same_lines=False)]), IDENTITY),
+                         [("ask-owner-to-reapprove", 113, self.H)])
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(files=["system/dispatcher/plan.py"])]), IDENTITY),
+                         [("ask-owner-to-reapprove", 113, self.H)])
+
+    def test_a_sign_off_carries_the_owners_approval_and_survives_a_conflict_free_refresh(self):
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off=self.H)]), IDENTITY),
+                         [("auto-merge", 113, self.H)])
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off="d" * 40, fresh_sign_off=True)]), IDENTITY),
+                         [("auto-merge", 113, self.H)])
+        self.assertEqual(plan.merge_plan(snap(prs=[self.refreshed(merge_state="CLEAN", sign_off="d" * 40, fresh_sign_off=False)]), IDENTITY),
+                         [("ask-coordinator-to-sign-off", 113, self.A)], "main moved next to the lines again: judge again")
+        signed = self.refreshed(merge_state="CLEAN", sign_off=self.H)
+        held = self.refreshed(n=99)
+        self.assertEqual(plan.merge_plan(snap(prs=[held, signed]), IDENTITY),
+                         [("auto-merge", 113, self.H), ("ask-coordinator-to-sign-off", 99, self.A)],
+                         "a signed-off PR goes ahead of one still waiting")
+
+    def test_only_a_recorded_coordinator_or_builder_run_on_the_pr_signs_off_for_the_approved_commit(self):
+        target = self.refreshed()
+        runs = [{"event": "start", "run_id": "c-1", "role": "coordinator", "item": 113},
+                {"event": "start", "run_id": "d-1", "role": "developer", "item": 113},
+                {"event": "start", "run_id": "c-2", "role": "coordinator", "item": 99}]
+        owner = IDENTITY["owner_login"]
+
+        def signed(role, run, approved=self.A, login=owner):
+            body = post.with_marker(post.SIGN_OFF.format(approved=approved, head=self.H) + "\n\nreasons", role, run)
+            return plan.signed_off(target, [comment(1, login, body, 0)], runs, IDENTITY, post.MARKER)
+        self.assertEqual(signed("coordinator", "c-1"), self.H)
+        self.assertIsNone(signed("developer", "d-1"), "not a signer")
+        self.assertIsNone(signed("coordinator", "d-1"), "the run was a developer's")
+        self.assertIsNone(signed("coordinator", "c-2"), "a run on another item")
+        self.assertIsNone(signed("coordinator", "c-9"), "a run the Dispatcher never recorded")
+        self.assertIsNone(signed("coordinator", "c-1", approved="b" * 40), "not the commit the Owner approved")
+        self.assertIsNone(signed("coordinator", "c-1", login="someone"), "not posted through post.py")
+
+    def test_own_lines_ignore_the_code_around_them_but_not_their_order(self):
+        changes = lambda patch: {"a.py": ("modified", patch)}
+        before = plan.own_lines(changes("@@ @@ def f():\n ctx\n-old\n+new\n+more\n tail"))
+        self.assertEqual(before, plan.own_lines(changes("@@ @@ def g():\n other ctx\n-old\n+new\n+more\n changed tail")))
+        self.assertNotEqual(before, plan.own_lines(changes("@@ @@ def f():\n ctx\n-old\n+more\n+new\n tail")))
+        self.assertEqual(plan.own_lines({"m.bin": ("modified", "s1")}), {"m.bin": ("modified", "s1")})
+
+    def test_the_coordinator_is_started_on_the_pr(self):
+        p = pr(113, labels=["needs-decision:coordinator"], reviews=[(BOT, "APPROVED", "h2")])
+        self.assertIn(("coordinator", 113, "Item #113 needs your decision (needs-decision:coordinator).", "decision"),
+                      plan.candidates(snap(prs=[p]), set(), IDENTITY))
+
+
 def comment(cid, login, body, minutes):
     at = (NOW + timedelta(minutes=minutes)).isoformat().replace("+00:00", "Z")
     return {"id": cid, "user": {"login": login}, "body": body, "created_at": at, "html_url": f"c/{cid}"}
