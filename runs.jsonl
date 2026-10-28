@@ -247,3 +247,4 @@
 {"at": "2026-10-28T05:43:37+00:00", "event": "start", "item": 129, "pid": 35553, "role": "reviewer", "run_id": "reviewer-20261028T054327Z", "task": "Review PR #129."}
 {"at": "2026-10-28T05:46:11+00:00", "cost_usd": 0.667719, "denials": 1, "denied": ["Bash: python3"], "event": "end", "five_hour": 0.09, "item": 129, "role": "reviewer", "run_id": "reviewer-20261028T054327Z", "seven_day": 0.26, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 18}
 {"at": "2026-10-28T05:46:49+00:00", "event": "start", "item": null, "pid": 37009, "role": "coordinator", "run_id": "coordinator-20261028T054645Z", "task": "Items closed since your last run: #130. Record their goals' progress, close what is done, and chart and schedule what comes next."}
+{"at": "2026-10-28T05:46:51+00:00", "event": "start", "item": 129, "pid": 37089, "role": "architect", "run_id": "architect-20261028T054645Z", "task": "PR #129 needs work: the Reviewer asked for changes."}
