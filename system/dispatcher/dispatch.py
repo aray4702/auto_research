@@ -284,7 +284,7 @@ def daily_pass(dry_run, now=None):
     explained = config["runner"].get("denials", {}).get("explained", [])
     found = (daily.denials(runs, now, explained) +daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
-             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now)
+             + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now, identity["time_zone"])
              + daily.watch_list(watch["body"] if watch else "", {**daily.metrics(runs, now, max(waits)), **flow.metrics(flows, now)}))
     live = gh.api("GET", f"repos/{gh.repo}/branches/main/protection")
     found += daily.protection_breaches(live, identity["branch_protection"])
