@@ -2,6 +2,9 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: exit 130's row covers both `lmt live` and `lmt demo`, and `lmt demo`'s stopping bullet no longer calls it the one command whose Ctrl-C isn't 130; the speaker-name rule needs no new schema version, now that the schema is 1.1 |
+| 2026-10-27 | architect, #83 | Reviewer's findings on #129: `rename` trims a name's outer white space; WebVTT escapes `&` in the voice tag too; `lmt demo` reads the transcript again on each load and needs no `.vtt`; only `lmt eval` needs the `eval` extra |
+| 2026-10-27 | architect, #83 | G3: `lmt rename` and `lmt demo`; speaker names' rules; the WebVTT cue shows the speaker as text as well as in the voice tag; the install command and version 1.0.0. Holds the recommended options on #83, waiting for the Owner's approval |
 | 2026-10-27 | architect, #82 | Reviewer's findings on #125: `source.file` stays a string in 1.1; a silent device warns rather than exiting 3; stdout is flushed per write; what a failed live session keeps |
 | 2026-10-27 | architect, #82 | G2: `lmt live` and its event stream, `lmt eval --set live` and `results/live.json`, transcript JSON 1.1 for live sessions, and exit codes 3 and 130 for live mode. It holds the recommended options on #82, waiting for the Owner's approval |
 | 2026-10-27 | architect, #81 | Reviewer's finding on #89: exit code 6 for `lmt eval --check-readme`'s mismatch, so drift and a bug can't look alike |
@@ -19,7 +22,7 @@ The public API is the command-line interface, its exit codes, the four output fo
 
 ## Commands
 
-Each command's `--help` lists exactly the options below (G1-6). Messages and progress go to stderr. On success, `transcribe` prints the path of each file it wrote to stdout, one per line.
+Each command's `--help` lists exactly the options below (G1-6). Messages and progress go to stderr. On success, `transcribe` and `rename` print the path of each file they wrote to stdout, one per line.
 
 ### `lmt transcribe INPUT`
 
@@ -90,7 +93,7 @@ Every event's fields are required. A minor version only adds fields or event typ
 
 ### `lmt eval`
 
-Needs the `eval` extra (`lmt[eval]`).
+Needs the `eval` extra (`lmt[eval]`). No other command does: `lmt demo --sample` uses the dataset manifests, but not the extra.
 
 | Option | Effect |
 | --- | --- |
@@ -101,9 +104,51 @@ Needs the `eval` extra (`lmt[eval]`).
 | `--update-readme` | After `--set full`, regenerates `README.md`'s results table from `results/full.json`. |
 | `--check-readme` | Writes nothing, and runs no evaluation. Exits 0 if `README.md`'s results table equals what `results/full.json` renders, and 6 if it differs, printing the difference. |
 
+### `lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)
+
+Gives speakers names, then exports again (#83, question 5). `TRANSCRIPT` is a transcript JSON that `lmt` wrote. Each `KEY` is a speaker's id (`S1`) or its current label (`Speaker 1`), matched exactly, and an id is tried first. The text is split at the first `=`. Leading and trailing white space is removed from `NAME` (as Python's `str.strip()` does), and what remains must be an allowed name ("Speaker names", below). That trimmed name is the label written.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `-o`, `--output-dir DIR` | the transcript's directory | Where the outputs go, as `<DIR>/<transcript stem>.<ext>`. |
+| `-f`, `--formats LIST` | `txt,srt,vtt,json` | As for `transcribe`. |
+
+- **What it writes:** the JSON with the new labels, and each of the other formats rendered from it. It replaces existing files of those names without `--overwrite`, since replacing them is what it is for. As for `transcribe`, the files are written to temporary files and renamed into place only when every one is done. So a failed rename changes nothing.
+- **What it changes:** only `speakers[].label`. Ids, times, words, text, `models` and `lmt_version` stay as `transcribe` wrote them.
+- **With no `KEY=NAME`,** it writes nothing, and prints a table to stdout: each speaker's id, label, number of segments, speaking time and first few words. This is how you tell who is who.
+- **The same name twice** is allowed (#83, question 7). Every export shows both speakers by that name, and their ids stay distinct. Merging two ids into one is not part of v1.0.
+- **Errors:** an unknown key, a pair without `=`, or a name that isn't allowed is a usage error (2). A missing or unreadable transcript, one that fails the schema, or one whose `schema_version` has a major part other than 1, is an input error (3).
+
+### `lmt demo [TRANSCRIPT]` (G3, F8)
+
+Serves a page on this computer that shows a transcript, its speakers and its audio together. Clicking a segment plays the audio from it (#83, question 8).
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--audio FILE` | `source.file`, beside the transcript | The recording to play. Any input `transcribe` accepts. |
+| `--sample` | off | Instead of `TRANSCRIPT`, the sample meeting: the first 300 s of AMI's ES2004a (CC BY 4.0). The first run downloads it into `LMT_DATA_DIR`, verifies it, and transcribes it with the default models. Later runs serve it from there, offline. Can't be combined with `TRANSCRIPT`. |
+| `--port N` | 0, a free port the system picks | The local port. |
+| `--no-browser` | off | Prints the URL without opening a browser. |
+| `--offline` | off | As for `transcribe`. Only `--sample`'s first run needs the network. |
+
+- **One of `TRANSCRIPT` and `--sample`** is required.
+- **On start,** it prints the page's URL to stdout, `http://127.0.0.1:<port>/<token>/`, where the token is random for each run, then opens it in the default browser.
+- **It stops** on Ctrl-C or SIGTERM and exits 0, since stopping is how a server ends. Here Ctrl-C is never exit 130, unlike a second Ctrl-C in `lmt live`.
+- **Only this computer can reach it:** it listens on `127.0.0.1` only, and has no option to listen elsewhere (Q8). It answers only requests that carry the token and a `Host` of `127.0.0.1:<port>` or `localhost:<port>`, and only GET and HEAD.
+- **It writes nothing,** except `--sample`'s cache in `LMT_DATA_DIR`. It needs no `.vtt` or other export beside the transcript.
+- **It reads the transcript again** each time the page loads, so after `lmt rename`, reloading the page shows the new names. If the file has become invalid, the page shows an error, stderr gets one `lmt: warning:` line, and the server keeps running.
+- **The page** needs nothing from the network: no fonts, scripts or styles from elsewhere. The routes it uses, and the page itself, are internal and may change in any version. Only the command and its options are public.
+- **Errors:** a missing or unreadable audio file is an input error (3), naming the file and `--audio`. So are an invalid transcript and a port in use. An audio file whose duration differs from `source.duration` by more than 1 s gets one `lmt: warning:` line, and the page is still served.
+
 ### Global options
 
-`lmt --help`, `lmt --version`.
+`lmt --help`, `lmt --version`, which prints `lmt <version>`.
+
+## Install and versions (G3, Q5)
+
+- **The install command,** for v1.0: `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0` (#83, question 9). `uv` is the one prerequisite. It fetches a suitable Python itself if there isn't one.
+- **Versions** follow semantic versioning, from 1.0.0. A release's tag is `v<version>`, and its GitHub release holds the wheel, the sdist and `SHA256SUMS`. `lmt --version` and every transcript's `lmt_version` give the version.
+- **Not on PyPI** in v1.0. Publishing there later adds an install command, and doesn't change this one.
 
 ## Exit codes
 
@@ -116,7 +161,7 @@ Needs the `eval` extra (`lmt[eval]`).
 | 4 | No speech found in the input. |
 | 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. |
 | 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from what `results/full.json` renders. A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
-| 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving. `<stem>.txt` and `<stem>.wav` are kept (above). |
+| 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving. `<stem>.txt` and `<stem>.wav` are kept (above). `lmt demo` exits 0 instead, since Ctrl-C is how it stops. |
 
 Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11), except what a live session keeps ("What a failed session keeps", above).
 
@@ -134,7 +179,7 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 
 - **Text (`.txt`):** one line per segment, `[HH:MM:SS] Speaker 1: text`.
 - **SRT (`.srt`):** one cue per segment, numbered from 1, with times as `HH:MM:SS,mmm`. The cue text is `Speaker 1: text`, wrapped at 42 characters to at most two lines. A longer segment is split into consecutive cues at word boundaries, using the word times.
-- **WebVTT (`.vtt`):** a `WEBVTT` header, then one cue per segment, with times as `HH:MM:SS.mmm`. The speaker is a voice tag, `<v Speaker 1>text`, and long segments are split as in SRT.
+- **WebVTT (`.vtt`):** a `WEBVTT` header, then one cue per segment, with times as `HH:MM:SS.mmm`. The speaker is both a voice tag and visible text, `<v Speaker 1>Speaker 1: text`, since players don't show a voice tag (#83, question 6). `&`, `<` and `>` in text are escaped as `&amp;`, `&lt;` and `&gt;`, and `&` in the voice tag's annotation is escaped as `&amp;` too (a label can't hold `<` or `>`). So `José & Ana` is written `<v José &amp; Ana>José &amp; Ana: text`. Long segments are split as in SRT, counting the visible prefix and not the tag.
 - **JSON (`.json`):** valid against `schema/transcript.schema.json`, as follows.
 
 ### Transcript JSON, version 1.1
@@ -166,6 +211,7 @@ Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case,
 - **Required:** `schema_version`, `source`, `models`, `speakers` and `segments`. Every segment has `start`, `end`, `speaker` and `text` (F3). `words` is optional.
 - **Rules:** segments are sorted by `start`, and 0 ≤ `start` < `end` ≤ `source.duration`. Each `speaker` is the `id` of an entry in `speakers`. Speaker ids are `S1`, `S2`, … in order of first appearance. `models.diarization` is `null` with `--no-diarize`.
 - **Labels:** `label` is what every export shows. It starts as "Speaker N", and renaming (F7, G3) changes only `label`.
+- **Speaker names** (G3): a `label` is 1 to 32 Unicode code points, with no leading or trailing white space (`rename` trims it from what it's given), no control characters, and none of `<`, `>`, `{`, `}` and `=`. These keep every subtitle format valid, and a name with its `: ` within an SRT line of 42 characters. The schema states the rule. Every label `lmt` has written meets it, so the rule needs no new schema version. Two speakers may share a label.
 - **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13). A live session from a device is the exception: its `source.file` is its stem, which holds the start time by default. G2 doesn't require two live runs to be identical.
 - **Compatibility:** a minor version only adds optional fields, and readers ignore fields they don't know. A major version changes or removes fields.
 
