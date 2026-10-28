@@ -77,7 +77,7 @@ class DecideTest(unittest.TestCase):
 
 
 class RunTest(unittest.TestCase):
-    def run_relay(self, handled, channel, held=(67,), dry_run=False, comments=()):
+    def run_relay(self, handled, channel, held=(67,), dry_run=False, comments=(), on_audit=None):
         store, gh = mock.Mock(), mock.Mock(repo="aray4702/auto_research")
         store.read.return_value = list(handled)
         gh.api.side_effect = lambda method, path, body=None, paginate=False: (
@@ -86,7 +86,7 @@ class RunTest(unittest.TestCase):
         with mock.patch.object(relay, "token", return_value="secret"), \
              mock.patch.object(relay, "messages", return_value=channel) as fetch, \
              mock.patch.object(relay, "reply") as replies:
-            lines = relay.run(gh, store, IDENTITY, dry_run, NOW)
+            lines = relay.run(gh, store, IDENTITY, dry_run, NOW, on_audit=on_audit)
         return lines, store, gh, fetch, replies
 
     def test_the_first_run_starts_after_the_newest_message_and_relays_nothing(self):
@@ -111,6 +111,21 @@ class RunTest(unittest.TestCase):
                          [("101", "relayed"), ("102", "refused"), ("103", "seen")], "the stranger's message moves the cursor only")
         self.assertEqual([c.args[2] for c in replies.call_args_list], ["101", "102"])
         self.assertIn("Posted on #67", replies.call_args_list[0].args[3])
+
+    def test_the_owner_asks_for_an_audit_and_gets_the_reports_links(self):
+        ran = []
+        on_audit = lambda kinds: ran.append(kinds) or [(k, f"{k} headline", f"u/{k}") for k in kinds]  # noqa: E731
+        channel = [msg(101, "audit"), msg(102, "<@77> audit product", ), msg(103, "audit", author=STRANGER), msg(104, "audit everything")]
+        channel[1]["mentions"] = [{"id": "77", "bot": True}]
+        lines, store, gh, fetch, replies = self.run_relay([{"message_id": "100"}], channel, on_audit=on_audit)
+        self.assertEqual(ran, [("product", "system"), ("product",)], "only the Owner's, and only the exact request")
+        self.assertEqual(lines[:2], ["run the product and system audit for the Owner", "run the product audit for the Owner"])
+        self.assertEqual([c.args[1]["result"] for c in store.append.call_args_list][:2], ["audit", "audit"])
+        self.assertIn("u/system", replies.call_args_list[0].args[3])
+        self.assertFalse(any(c.args[0] == "POST" for c in gh.api.call_args_list), "nothing posted as the Owner")
+        lines, store, gh, fetch, replies = self.run_relay([{"message_id": "100"}], [msg(101, "audit")], dry_run=True, on_audit=on_audit)
+        self.assertEqual(lines, ["would run the product and system audit for the Owner"])
+        self.assertEqual(len(ran), 2, "a dry run runs nothing")
 
     def test_nothing_new_reads_no_items(self):
         lines, store, gh, fetch, replies = self.run_relay([{"message_id": "100"}], [])
