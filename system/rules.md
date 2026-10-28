@@ -32,7 +32,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 | `state:review` | A plan or design on this issue waits for the Reviewer |
 | `needs-decision:coordinator`, `…:architect`, `…:builder`, `…:owner` | Overlay: held for a decision at that level |
 | `sev:1`, `sev:2`, `sev:3` | Severity. sev:1 = a crash, data loss or broken `main`: revert first, as the next Developer item, then fix the cause |
-| `record:goal`, `record:work-order`, `record:watch-list`, `record:decision-log` | Records. Work selection skips them |
+| `record:goal`, `record:work-order`, `record:watch-list`, `record:decision-log`, `record:audit-product`, `record:audit-system` | Records. Work selection skips them |
 
 - **Order:** scheduled work runs in the work order alone (the `record:work-order` issue). Severe problems and PRs that need work go ahead of it.
 - **Atomic items:** every item is atomic. One run can finish it, it has its own test (or its question, or the approval it needs), and merging it alone keeps `main` green.

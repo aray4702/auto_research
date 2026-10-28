@@ -23,8 +23,13 @@ The Dispatcher is a script (`system/dispatcher/`), not an LLM run. It does every
 
 Full reconcile against GitHub, as the safety net for missed polls.
 
-## Daily (07:30 PT)
+## Audits (07:30 PT, and on demand)
 
+The Owner asks for one with `arsys audit [product|system]` or `audit [product|system]` in the chat. Each run posts two reports (`audit.py`), each a comment on its record issue (`record:audit-product`, `record:audit-system`), and sends one notice with their headlines and links:
+- **Product:** each goal's deadline and items by milestone and state; what waits on the Owner; what merged since the last report; main's gate; the watch list's latest note.
+- **System:** the findings below, new or still holding; open system items; the kill switch, the last reconcile, the builder's last daily run, recent runs, usage and flow.
+
+The findings, each raised once:
 - **Anomaly signals** (blueprint §4.5), each raised once per key with its evidence (`daily.py`):
   - watch-list risks past their thresholds. A row's Signal names a measured metric (`failed_runs_per_day`, `denials_per_day`, `cost_per_day_usd`, `owner_wait_hours`, `median_item_hours`), and its Threshold is a comparison, such as `> 3`. These go to the Coordinator.
   - bumpy items: two or more unfinished runs, or three or more runs, in a week. These go to the Coordinator, to re-plan.
