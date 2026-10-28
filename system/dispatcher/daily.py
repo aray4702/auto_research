@@ -23,11 +23,12 @@ def ends(runs):
     return [r for r in runs if r["event"] == "end"]
 
 
-def denials(runs, now):
-    """The same denial (tool and first words) in three or more runs this week: a permission gap (#44)."""
+def denials(runs, now, explained=()):
+    """The same denial (tool and first words) in three or more runs this week: a permission gap (#44).
+    A denial the rules explain (runner.toml [denials] explained) is no gap, and isn't raised (#138)."""
     seen = {}
     for r in ends(recent(runs, now)):
-        for signature in set(r.get("denied") or []):
+        for signature in set(r.get("denied") or []) - set(explained):
             seen.setdefault(signature, set()).add(r["run_id"])
     return [(f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
              f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}. Grant it by rule, or say in the rules why not.", None)
