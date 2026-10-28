@@ -53,7 +53,26 @@ class SettingsTest(unittest.TestCase):
         config = with_toolchain(["Bash(make test:*)"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "developer")["permissions"]["allow"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "reviewer")["permissions"]["allow"])
+        self.assertIn("Bash(make test:*)", runner.role_settings(config, "architect")["permissions"]["allow"], "it designs the toolchain (#90)")
         self.assertNotIn("Bash(make test:*)", runner.role_settings(config, "coordinator")["permissions"]["allow"])
+
+    def test_uv_runs_only_the_products_own_tools_and_writes_only_where_the_role_may_write(self):
+        product_roles = [r for r, s in CONFIG["runner"]["roles"].items() if s["product_tools"]]
+        self.assertEqual(sorted(product_roles), ["architect", "developer", "reviewer", "tester"])
+        for role in product_roles:
+            allow = runner.role_settings(CONFIG, role)["permissions"]["allow"]
+            self.assertIn("Bash(uv run --frozen pytest)", allow, f"{role} (#90)")
+            for rule in allow:  # a bare `uv run` (or ffmpeg) would get around the deny list (#92)
+                self.assertFalse(rule.startswith("Bash(uv run") and not rule.startswith(("Bash(uv run --frozen pytest",
+                                 "Bash(uv run --frozen ruff check", "Bash(uv run --frozen ruff format", "Bash(uv run --frozen lmt")), f"{role}: {rule}")
+                self.assertFalse(rule.startswith(("Bash(ffmpeg", "Bash(ffprobe")), f"{role}: {rule}")
+            writes = {"Bash(uv lock:*)", "Bash(uv sync:*)", "Bash(uv add:*)", "Bash(uv remove:*)", "Bash(uv pip compile:*)",
+                      "Bash(uv run --frozen pytest:*)", "Bash(uv run --frozen ruff check:*)"}
+            writer = "Write" in CONFIG["runner"]["roles"][role]["tools"]
+            self.assertEqual(writes <= set(allow), writer, f"{role}: write rules only for roles with the Write tool (#92)")
+            if not writer:  # `ruff check --fix` rewrites code and `pytest --basetemp` deletes a directory (#92)
+                open_ended = [r for r in allow if r.startswith(("Bash(uv run --frozen pytest", "Bash(uv run --frozen ruff")) and r.endswith(":*)")]
+                self.assertEqual(open_ended, [], role)
 
     def test_every_word_prefix_rule_can_match_a_command(self):
         # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).

@@ -54,7 +54,8 @@ def role_settings(config, role):
     r, common = config["runner"]["roles"][role], config["runner"]["common"]
     allow = list(common["allow"]) + list(r["allow"])
     if r["product_tools"]:
-        allow += config["toolchain"].get("agents", {}).get("allow", [])
+        agents = config["toolchain"].get("agents", {})
+        allow += agents.get("allow", []) + (agents.get("allow_write", []) if "Write" in r["tools"] else [])
     return {
         "permissions": {"allow": allow, "deny": list(common["deny"]) + list(r.get("deny", []))},
         "autoMemoryEnabled": False,
