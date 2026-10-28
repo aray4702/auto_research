@@ -452,3 +452,4 @@
 {"at": "2026-10-28T21:22:06+00:00", "event": "start", "item": 162, "pid": 48906, "role": "architect", "run_id": "architect-20261028T212200Z", "task": "PR #162 needs work: it conflicts with main."}
 {"at": "2026-10-28T21:24:09+00:00", "cost_usd": 0.222281, "denials": 0, "denied": [], "event": "end", "five_hour": 0.21, "item": 162, "role": "architect", "run_id": "architect-20261028T212200Z", "seven_day": 0.39, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 23}
 {"at": "2026-10-28T21:24:27+00:00", "cost_usd": 1.078578, "denials": 0, "denied": [], "event": "end", "five_hour": 0.21, "item": 188, "role": "reviewer", "run_id": "reviewer-20261028T211949Z", "seven_day": 0.39, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 43}
+{"at": "2026-10-28T21:26:46+00:00", "event": "start", "item": 162, "pid": 51208, "role": "reviewer", "run_id": "reviewer-20261028T212641Z", "task": "Review PR #162."}
