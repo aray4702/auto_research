@@ -12,6 +12,7 @@ nothing. Standard library only.
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -37,10 +38,24 @@ def alive(pid):
     return True
 
 
-def only_merges_since(gh, base, head):
-    """True when every commit from base to head is a merge, so the PR's own changes are unchanged."""
-    compare = gh.api("GET", f"repos/{gh.repo}/compare/{base}...{head}")
-    return compare["status"] == "ahead" and all(len(c["parents"]) > 1 for c in compare["commits"])
+HUNK_LINE_NUMBERS = re.compile(r"^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@", re.M)
+
+
+def own_changes(gh, ref):
+    """A commit's diff against its merge base with main, file by file: a PR's own changes. Each patch is kept whole
+    and in order, context included, less the line numbers in its hunk headers, so main adding or removing lines
+    elsewhere only shifts it. A file without a patch (binary, or too large to show) is compared by its blob."""
+    files = gh.api("GET", f"repos/{gh.repo}/compare/main...{ref}")["files"]
+    return {f["filename"]: (f["status"], HUNK_LINE_NUMBERS.sub("@@", f["patch"]))
+            if f.get("patch") is not None else (f["status"], f.get("sha")) for f in files}
+
+
+def same_changes(gh, approved, head):
+    """True when the PR's own changes at head are what they were at the approved commit: everything since came from
+    main. A merge that resolved a conflict by hand, or any commit of the PR's own, changes them (#118, #127). So
+    does main editing a line next to one of them: that errs toward asking for a re-approval.
+    (Comparing commits instead fails: the commits merged in from main include other PRs' own commits.)"""
+    return own_changes(gh, approved) == own_changes(gh, head)
 
 
 def expired_claims(gh, items, active_items, now):
@@ -74,6 +89,42 @@ def relay_answers(gh, store, identity, dry_run, now):
         return [f"relay failed: {type(e).__name__}: {e}"]
 
 
+def orphaned_asks(gh, identity, now, days=2):
+    """Items closed while held for the Owner, their latest question unanswered: closing (often a PR's
+    `Resolves`) would otherwise hide the question, since only open items are forwarded (#114)."""
+    since = (now - timedelta(days=days)).isoformat().replace("+00:00", "Z")
+    out = []
+    for i in gh.api("GET", f"repos/{gh.repo}/issues?state=closed&labels=needs-decision%3Aowner&since={since}&per_page=100",
+                    paginate=True):
+        if "pull_request" in i or "needs-decision:owner" not in {x["name"] for x in i["labels"]}:
+            continue
+        comments = gh.api("GET", f"repos/{gh.repo}/issues/{i['number']}/comments?per_page=100", paginate=True)
+        found = notify.latest_ask(comments, identity, post.MARKER)
+        if found and not found[2]:
+            out.append((i["number"], found[0]["id"]))
+    return out
+
+
+def reopen_orphans(gh, store, me, identity, notices, dry_run, now):
+    """Reopen each orphaned question's item once per question (`reopen:<ask id>`): closed again, it stays closed."""
+    done = {n["key"] for n in notices}
+    lines = []
+    try:
+        for n, ask_id in orphaned_asks(gh, identity, now):
+            if f"reopen:{ask_id}" in done:
+                continue
+            lines.append(("would " if dry_run else "") + f"reopen #{n}: it closed while its question to the Owner was unanswered")
+            if not dry_run:
+                gh.api("PATCH", f"repos/{gh.repo}/issues/{n}", {"state": "open"})
+                post.cmd_comment(gh, me, n, "Reopened: this item closed while its question to the Owner was still unanswered, and "
+                                 "only open items' questions are forwarded (#114). The next pass forwards it; close it again once "
+                                 "it's answered.")
+                store.append("notices", {"key": f"reopen:{ask_id}", "at": now.isoformat()})
+    except (Exception, SystemExit) as e:  # best-effort, like the relay: never stops a pass (GitHub errors are SystemExit)
+        lines.append(f"reopen check failed: {type(e).__name__}: {e}")
+    return lines
+
+
 def dispatch_pass(command, dry_run, now=None):
     now = now or datetime.now(timezone.utc).replace(microsecond=0)
     config = runner.load_all()
@@ -88,6 +139,7 @@ def dispatch_pass(command, dry_run, now=None):
         return [f"paused: {why}"]
     store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
     lines += relay_answers(gh, store, identity, dry_run, now)
+    lines += reopen_orphans(gh, store, me, identity, store.read("notices"), dry_run, now)
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.
@@ -115,7 +167,7 @@ def dispatch_pass(command, dry_run, now=None):
         for login in (bot, second):
             r = plan.latest_review(pr, login)
             if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
-                pr["fresh"][login] = only_merges_since(gh, r["commit"], pr["head"])
+                pr["fresh"][login] = same_changes(gh, r["commit"], pr["head"])
 
     # The merge queue: one PR at a time.
     for action, n, detail in plan.merge_plan(snap, identity):
@@ -133,8 +185,8 @@ def dispatch_pass(command, dry_run, now=None):
                 subprocess.run(["gh", "pr", "merge", str(n), "--disable-auto", "--repo", gh.repo], check=True, capture_output=True)
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
-            if only_merges_since(gh, detail, pr["head"]):
-                say(f"renew the Reviewer App's approval of PR #{n} (only merges from main since {detail[:7]})")
+            if same_changes(gh, detail, pr["head"]):
+                say(f"renew the Reviewer App's approval of PR #{n} (its own changes are as they were at {detail[:7]})")
                 renewed.add(n)
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
