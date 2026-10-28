@@ -131,6 +131,8 @@ def plists(config):
         }
         if "interval_seconds" in s:
             job["StartInterval"] = s["interval_seconds"]
+        elif "times" in s:  # several times a day: [[hour, minute], ...]
+            job["StartCalendarInterval"] = [{"Hour": h, "Minute": m} for h, m in s["times"]]
         else:
             job["StartCalendarInterval"] = {k.capitalize(): s[k] for k in ("hour", "minute") if k in s}
         out[job["Label"]] = plistlib.dumps(job, sort_keys=True)
