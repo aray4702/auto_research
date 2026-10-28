@@ -31,6 +31,9 @@ jobs:
 
   product:
     uses: ./.github/workflows/product.yml
+    # Only this secret, never `inherit`. GitHub doesn't pass it to pull requests from forks (#96).
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
 
   gate:
     if: always()
