@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-28 | architect, #155 | Reviewer's findings on #156: item 3's `lmt rename` writes only the JSON; the network guard allows only `127.0.0.1`; item 4b runs its offline phase as one process inside one namespace, imports `subtitle_checks` lazily, and lists the directories G3-6 compares; the CI cost is corrected to about 960 minutes; `--tag-checkout` takes the README's tag; U+FEFF joins the name tests |
 | 2026-10-28 | architect, #155 | First version: phase 3.1's five items, with the CLI wiring and fixtures split out as item 0, the demo split into 2a and 2b, and the full-install script split out as 4b |
 
 This is the detail a Developer or the builder needs to build each of G3 stage 1's items in one run. It works inside `spec/acceptance.md` G3, `design/architecture.md` ("Speaker names (G3, F7)", "Demo (G3, F8)", "Packaging and release (G3, Q5)", "CI"), `design/public-api.md`, the Owner's answers 1a–11a on #83, and `design/internal/g1-stage1.md`. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
@@ -36,7 +37,18 @@ The coordinator's five items become eight, for two reasons:
 
 **Every item's local checks:** `uv run --frozen ruff check`, `uv run --frozen pytest`, and `python3 -I system/gate/generic.py --base origin/main`.
 
-**CI cost.** Items 1, 2a and 2b are tier 2 (≈ 26 minutes a run) instead of tier 3, so G3's stage 1 costs about 200 minutes less than "CI" in the architecture estimates. Item 0 adds one tier-3 PR (≈ 150 minutes), and 4b is tier 1.
+**CI cost.** With the architecture's figures ("CI": 4 runs per PR; tier 2 ≈ 26 and tier 3 ≈ 38 minutes a run with `browser`; tier 1 ≈ 12 with G3-7's install), stage 1 costs about 960 minutes:
+
+| Items | Tier | Minutes |
+| --- | --- | --- |
+| 0 | 3 | ≈ 150 |
+| 1, 2a, 2b | 2 | 3 × 104 ≈ 310 |
+| 3 (it touches `pyproject.toml`, `uv.lock` and `product.yml`) | 3 | ≈ 150 |
+| 4a | 3 | ≈ 150 |
+| 4b | 1 | ≈ 50 |
+| 5 | 3 | ≈ 150 |
+
+That is about 250 minutes more than the architecture's "G3's cost" gives for stage 1 (≈ 700). The architecture counts five PRs, with the browser test at tier 2. This design has eight: item 0, 2b and 4b are PRs of their own, and the browser test is tier 3. Running 1, 2a and 2b at tier 2 saves about 144 minutes against running them at tier 3. 2b at tier 3, if it must add `sample_meeting`, adds about 50. So G3's own work comes to about 1,100 minutes, not 850, when the Coordinator plans against the 3,000-minute signal. The jobs that haven't landed yet make the early items cheaper (no `browser` before item 3, no install before 4a), by about 100 minutes in all, so these figures are an upper estimate.
 
 ## What stage 1 assumes from G1's stage 2
 
@@ -87,9 +99,9 @@ The stubs raise `NotBuilt("rename")`, `NotBuilt("demo")` and `NotBuilt("demo --s
 
 ### The network guard
 
-`tests/netguard/sitecustomize.py`, active only when `LMT_NETGUARD_LOG` is set. It wraps `socket.socket.connect` and `connect_ex`: a connection to an address outside `127.0.0.0/8` and `::1` is appended, one line, to the log file, and raises `OSError(errno.ENETUNREACH)`. A caller that swallows the error is still caught, because the test reads the log. Put on `PYTHONPATH` for a subprocess, so it applies to `lmt` without changing it. Item 2a's G3-4 check and item 4b's G3-8 check use it.
+`tests/netguard/sitecustomize.py`, active only when `LMT_NETGUARD_LOG` is set. It wraps `socket.socket.connect` and `connect_ex`: a connection to any address but `127.0.0.1` is appended, one line, to the log file, and raises `OSError(errno.ENETUNREACH)`. That is G3-4's "allowing only `127.0.0.1`", and it is stricter than G3-8's "loopback", so one guard serves both. `lmt` itself connects to nothing, and the tests' own clients run outside the guard. A caller that swallows the error is still caught, because the test reads the log. Put on `PYTHONPATH` for a subprocess, so it applies to `lmt` without changing it. Item 2a's G3-4 check and item 4b's G3-8 check use it.
 
-`tests/test_netguard.py`: a subprocess with the guard connects to a closed loopback port (refused, nothing logged) and to `192.0.2.1:80` (logged, `OSError`).
+`tests/test_netguard.py`: a subprocess with the guard connects to a closed port on `127.0.0.1` (refused, nothing logged), and to `127.0.0.2`, `::1` and `192.0.2.1:80` (each logged, each `OSError`). The guard refuses before the system tries, so these cases don't depend on the machine's interfaces. Only the `::1` case is skipped, saying so, where an IPv6 socket can't be created.
 
 ### The tier exceptions
 
@@ -117,7 +129,7 @@ def speaker_table(transcript) -> str
 def cli_rename(args) -> int
 ```
 
-- **`check_name`:** `name.strip()`, then, in this order: empty ("the name is empty"); longer than 32 code points ("the name is N characters; at most 32"); a character in U+0000–U+001F or U+007F–U+009F ("the name has a control character"); one of `<`, `>`, `{`, `}`, `=` ("the name has '<'"). These are exactly the schema's rule: `str.strip()` and the schema's `\s` agree on every character the control ranges don't already exclude. A unit test runs a list of names through both `check_name` and the schema's pattern and asserts they agree, both ways.
+- **`check_name`:** `name.strip()`, then, in this order: empty ("the name is empty"); longer than 32 code points ("the name is N characters; at most 32"); a character in U+0000–U+001F or U+007F–U+009F ("the name has a control character"); one of `<`, `>`, `{`, `}`, `=` ("the name has '<'"). These are exactly the schema's rule: `str.strip()` and the schema's `\s` agree on every character the control ranges don't already exclude. A unit test runs a list of names through both `check_name` and the schema's pattern and asserts they agree, both ways. The list includes U+FEFF at each end of a name: Python's `\s` and `str.strip()` both leave it, so the two agree.
 - **The error's subject** is the key, never the name, so a name holding a newline can't split the error line. Text echoed from the user (a key, or an argument without `=`) has its control characters written as `\uXXXX`.
 - **`resolve`,** against the transcript as read, before any of this command's renames:
   - a key equal to a speaker's id is that speaker;
@@ -147,6 +159,7 @@ Each test copies the transcript fixture into a temporary directory as `two_speak
   - No pairs: stdout is the table, with the fixture's two speakers, and no file in the directory changes (SHA-256 before and after).
 - **G3-2:** with the rename names, `check_srt` and `check_vtt` pass on the outputs. In the WebVTT, both the voice tag's annotation and the cue text have `&amp;` and no bare `&`, and after `html.unescape`, `webvtt-py`'s `voice` for each cue equals its speaker's label. Every cue's lines in both formats are at most two, of at most 42 characters, unless a line is a single word.
 - **Names the spec doesn't test:** U+2028 and U+2029 pass the rule, which excludes only control characters, but some parsers treat them as line breaks. A test renames to `"A B"` and runs `check_srt` and `check_vtt`. If they fail, the Developer stops and reports it on the item for the Architect, since tightening the rule is a public-API change. The test is never weakened to pass.
+- **U+FEFF in the published schema:** ECMA-262's `\s` includes U+FEFF, but Python's doesn't. So a JavaScript validator of the published schema (F3) rejects a label starting or ending with U+FEFF that `rename` accepts. Item 1 doesn't change the rule. The Architect takes this to the Owner together with the U+2028 result, since either fix changes the schema's pattern.
 - **G3-3:** one test per case, each checking the exit code, one stderr line starting `lmt: error:` that names the key or file, and every file in the directory unchanged by SHA-256. The cases: `S9=Bob` (2); `Bob` (2); `S1=` and `S1="   "` (2); a 33-code-point name after trimming (2); `S1="a<b"` (2); `S1="a\nb"` (2); a missing transcript (3); a file holding `{` (3); the fixture with a segment's `start` removed (3); the fixture with `schema_version` `"2.0"` (3); `-o` to a read-only directory (3). Plus the ambiguous label (2) and the same speaker twice (2).
 - **`check_name` and the schema agree,** on a list that covers each rule's edge, both ways.
 - **G1-6:** one test per option: `-o` writes to another directory and leaves the original's files unchanged; `-f txt,json` writes only those two.
@@ -249,7 +262,7 @@ Plain HTML, JavaScript and CSS, with no build step, no third-party code, and no 
 - **Routes:** the page, `app.js`, `app.css` and `favicon.svg` get 200 with their types. `transcript.json` equals the fixture's bytes. `transcript.vtt` equals `export.vtt.render` of the fixture. `audio.wav`'s `wave` header says 16 kHz, mono, 16-bit, with as many frames as `decode` gives. The four security headers are on every answer, the error answers included.
 - **Ranges:** `bytes=0-99`, `bytes=1000-`, `bytes=-100` and `bytes=0-<past the end>` give 206 and the bytes that slice gives. `bytes=<total>-` gives 416. `bytes=0-1,5-6` gives 200 and the whole file. A HEAD gives the same headers, with no body.
 - **Refusals:** a path without the token, a wrong token, and `/<token>/nothing` give 404. `Host: evil.example:<port>`, `Host: 127.0.0.1:1` and no `Host` give 403. POST, PUT, DELETE, OPTIONS and an invented method, `BREW`, give 405, with `Allow`.
-- **Live re-read:** change both labels with `relabel(path, mapping)`, a test helper that writes through `lmt.export.write` (item 3 swaps it for `lmt rename`). Then `transcript.json` and `transcript.vtt` show the new labels, with no `.vtt` file anywhere in the directory. Replace the file with `{`: both routes give 500, and the page still gives 200. stderr has exactly one `lmt: warning:` line, naming the file. Write the fixture back, and both routes give 200 again.
+- **Live re-read:** change both labels with `relabel(path, mapping)`, a test helper that writes the JSON alone, through `lmt.export.write(…, ["json"], overwrite=True)`. Item 3 swaps it for `lmt rename -f json`, which writes the same file; plain `lmt rename` would also write a `.vtt` beside it. Then `transcript.json` and `transcript.vtt` show the new labels, with no `.vtt` file anywhere in the directory. Replace the file with `{`: both routes give 500, and the page still gives 200. stderr has exactly one `lmt: warning:` line, naming the file. Write the fixture back, and both routes give 200 again.
 - **Errors:** `--audio` naming a missing file (3; stderr names the file and `--audio`); the default audio missing (3); an invalid transcript (3); a port already bound by the test (3); `TRANSCRIPT` with `--sample` (2). A 1-second WAV, written by the test, with the fixture: one `lmt: warning:` line, and it still serves.
 - **No file written, no connection out** (G1-13's checks, once more): with the network guard on `PYTHONPATH` and `LMT_NETGUARD_LOG` set, one run serves every route once and is stopped. Then the snapshot of `HOME`, `TMPDIR`, `XDG_CACHE_HOME`, the working directory and the fixture's directory is unchanged, and the guard's log is empty.
 - **The page's source:** `index.html` has no `<script>` without `src`, no `style=` attribute, and no URL with a scheme or starting `//`. `app.js` contains none of `innerHTML`, `outerHTML`, `insertAdjacentHTML`, `document.write` and `eval(`.
@@ -324,7 +337,7 @@ On the transcript fixture with its clip, through item 2a's `DemoProcess`:
   4. Pause the audio before the next segment.
 - **The keyboard (G3-5):** from the page's start, send Tab until the middle segment's button has focus (`document.activeElement`), then Enter. The same checks as for a click.
 - **The track, after a rename (G3-2, G3-5):**
-  1. Run `lmt rename` on the served copy with the rename names, and reload the page. The list and `#speakers` show the new names.
+  1. Run `lmt rename -f json` on the served copy with the rename names, and reload the page. The list and `#speakers` show the new names.
   2. Wait until `track.readyState === 2`. Read every cue's `startTime`, `endTime` and `getCueAsHTML().textContent` through `execute_script`.
   3. Compare with `webvtt-py`'s parse of `lmt.export.vtt.render(load(copy))`: the same number of cues; the same start and end times, to the millisecond (`round(x * 1000)`); and the same text, `webvtt-py`'s caption text with its tags removed and `html.unescape`d on that side, with lines joined by `\n` on both.
 - **Its own origin, and no errors (G3-5):** `performance.getEntriesByType("navigation")` and `("resource")` each have a `name` starting with the page's origin. `driver.get_log("browser")` has no entry at level `SEVERE`.
@@ -333,7 +346,7 @@ On the transcript fixture with its clip, through item 2a's `DemoProcess`:
   - `#segments` holds no `img` or `script` element;
   - `window.__lmtXss` is `undefined` after 1 s.
 
-In `tests/test_demo_server.py`, the `relabel` helper becomes a call to `lmt rename`, now that both items have landed.
+In `tests/test_demo_server.py`, the `relabel` helper becomes a call to `lmt rename -f json`, now that both items have landed. The `-f json` keeps the directory free of a `.vtt`, which 2a's live re-read test asserts (G3-4: "with no `.vtt` beside it").
 
 ### The screenshot script (`tests/browser/screenshot.py`)
 
@@ -422,7 +435,7 @@ python3 -I .github/scripts/check_install.py --platform {linux-x86_64,macos-arm64
 ```
 
 1. **The command:**
-   - With `--readme`, it takes the command from `check_readme.py --print-install`, and replaces `git+https://github.com/aray4702/auto_research@` with `git+file://<ROOT resolved>@`. It rewrites the string rather than using git's `insteadOf`, because uv can resolve a GitHub URL's tag through GitHub's API and skip git. With `--tag-checkout`, it first runs `git -C ROOT tag -f v<x.y.z> HEAD`, in that checkout only (spec, G3-7).
+   - With `--readme`, it takes the command from `check_readme.py --print-install`, and replaces `git+https://github.com/aray4702/auto_research@` with `git+file://<ROOT resolved>@`. It rewrites the string rather than using git's `insteadOf`, because uv can resolve a GitHub URL's tag through GitHub's API and skip git. With `--tag-checkout`, it first runs `git -C ROOT tag -f <tag> HEAD`, in that checkout only (spec, G3-7). `<tag>` is the one after `@` in the README's line (`v1.0.0`), not `pyproject.toml`'s version, so the redirected URL resolves. Step 3 still compares `lmt --version` with `pyproject.toml`'s version.
    - With `--wheel`, the command is `uv tool install <wheel>`, for `release.yml`.
 2. **A clean environment:** the command runs with `UV_TOOL_DIR=<scratch>/tools`, `UV_TOOL_BIN_DIR=<scratch>/bin`, `UV_CACHE_DIR=<scratch>/cache` (so no cache is reused) and `UV_PYTHON_INSTALL_DIR=<scratch>/python`, and with the working directory `<scratch>`. It must exit 0.
 3. **The version:** `<scratch>/bin/lmt --version` prints `lmt <pyproject.toml's version>`.
@@ -448,23 +461,43 @@ After its existing steps:
 
 ## 4b. The full-install sequence (`.github/scripts/check_full_install.py`)
 
-The steps of G3-6 and G3-8 against an installed `lmt`, so that item 5's workflow only calls it. Standard library, plus `tests/subtitle_checks.py` (G1.2), so it runs from a checkout with `uv run --frozen`, after the install.
+The steps of G3-6 and G3-8 against an installed `lmt`, so that item 5's workflow only calls it. It runs from a checkout with `uv run --frozen`, after the install.
 
 ```
 uv run --frozen python .github/scripts/check_full_install.py --lmt <scratch>/bin/lmt --platform {linux-x86_64,macos-arm64} --work DIR
 ```
 
-1. **Online:**
-   1. `lmt models download`, with `HF_TOKEN` from the environment.
-   2. `lmt demo --sample --no-browser`, with `LMT_DATA_DIR=<work>/data`. Wait for the URL, for up to 30 minutes, since it transcribes. Then GET the page and the audio, and SIGTERM it.
-   3. Snapshot `<work>/data` and the other directories (G3-6: nothing written outside `LMT_DATA_DIR`).
-2. **Offline,** with the network guard (item 0) on `PYTHONPATH` on both runners. On Linux, the commands also run in `sudo unshare --net sh -c 'ip link set lo up && exec setpriv --reuid=<uid> --regid=<gid> --init-groups -- env HOME=… PATH=… … lmt …'`, so loopback works and the command runs as the runner's user (G3-8). `sudo` resets the environment, so `HOME`, `PATH`, `LMT_CACHE_DIR`, `LMT_DATA_DIR`, `PYTHONPATH` and `LMT_NETGUARD_LOG` are passed through `env` explicitly:
-   1. `lmt transcribe tests/fixtures/two_speakers.wav -f txt,srt,vtt,json -o <work>/out` exits 0, and `check_srt` and `check_vtt` pass on its files.
-   2. `lmt rename <work>/out/two_speakers.json S1="José & Ana"` exits 0.
-   3. `lmt demo --sample --no-browser` prints its URL within 10 s. The page and the audio are fetched over loopback, from inside the same namespace on Linux. It is stopped with SIGTERM and exits 0 (G3-6's second run).
-   4. The guard's log is empty, and outside `<work>/data` and `<work>/out` nothing changed.
+**Imports.** The module imports only the standard library at the top, so `test_check_full_install.py` can import it in the `readme` job, which runs `python3 -I -m unittest discover -s .github/scripts` with no venv. `tests/subtitle_checks.py` (G1.2), which needs `srt` and `webvtt-py`, is imported only inside `subtitle_checkers()`, the one function that uses it. That function first puts the checkout's `tests/` (`Path(__file__).resolve().parents[2] / "tests"`) on `sys.path`. The file snapshot is the module's own, a few lines of `os.walk` and `hashlib`, rather than `tests/isolation.py`'s.
 
-Each step prints `PASS` or `FAIL` and goes to the step summary. Exit 1 on any failure. `test_check_full_install.py` (`unittest`) runs the sequence against a fake `lmt`, a small Python script that records its arguments and, for `demo`, serves a fixed page, to test the ordering, the timeouts and the failure reporting. The real run is item 5's first `workflow_dispatch`.
+**The directories.** Under `<work>`: `LMT_CACHE_DIR=<work>/models` and `LMT_DATA_DIR=<work>/data` for every command, and `<work>/out` for the transcripts. Every `lmt` command gets its own fresh, empty `HOME`, `TMPDIR`, `XDG_CACHE_HOME` and working directory, under `<work>/runs/<step>/`, as G1-13's do, with `HF_TOKEN` passed to `models download` alone. The tool's own directory isn't compared: Python's bytecode cache goes there, as for any installed program, and G1-13 compares the same set.
+
+**Steps that run `lmt demo`** (`run_demo`), the same online and offline: start it with `subprocess.Popen`, read the first stdout line within the step's limit, and parse the URL as 2a's `DemoProcess` does. GET the page and `audio.wav` with `http.client` from this same process, each within 10 s, expecting 200 and, for the audio, a body starting `RIFF`. Then `send_signal(SIGTERM)` to the `lmt` process, which is this process's own child, and `wait(10)`. The step passes only if the exit code is 0. A missed limit kills the process with SIGKILL and fails the step, naming the limit.
+
+1. **Online,** in the job's own environment:
+   1. `lmt models download` exits 0.
+   2. Snapshot `<work>/models`, now that the download has finished, so its own writes don't count.
+   3. **G3-6's first run:** `run_demo` on `lmt demo --sample --no-browser`, with a limit of 30 minutes for the URL, since it downloads and transcribes. Afterwards `<work>/data` holds the sample's WAV and one `sample/*/ES2004a.json`. The run's four fresh directories are still empty, and `<work>/models` is unchanged.
+2. **Offline.** The script runs this phase as a second process of itself, `python -I check_full_install.py offline …`, with `sys.executable`, so that every command in it, and every fetch, runs in one network namespace:
+   - **On Linux,** `offline_command()` gives this argv, so no path passes through a shell string:
+     ```
+     sudo -n unshare --net -- sh -c 'ip link set lo up && u=$1 g=$2 && shift 2 && exec setpriv --reuid="$u" --regid="$g" --init-groups -- "$@"' \
+       sh <uid> <gid> env -i HOME=<work>/runs/offline/home PATH=<the job's PATH> PYTHONDONTWRITEBYTECODE=1 \
+       <sys.executable> -I <this script> offline --lmt … --platform … --work …
+     ```
+     `unshare` without `--fork`, `sh`'s `exec`, `setpriv` and `env` each replace themselves, so the phase's Python runs as the runner's user and is `sudo`'s only child. `sudo` exits with its child's code. The phase's own process starts every `lmt` command as its child, with the environment it builds (the directories above, and the guard's two variables), so neither `sudo`'s reset nor its signal relay is in the way.
+   - **On macOS,** the same argv from `env -i` on, with no namespace.
+   - **The outer process** waits for the phase with no limit of its own. Every step inside has one, and the job's `timeout-minutes` is the last resort. The phase writes its results to `<work>/offline.json` and exits 0 only if every step passed. The outer process fails the phase if the file is missing, naming the exit code (such as `sudo` failing), or if the exit code and the file disagree.
+
+   Inside the phase, with the network guard (item 0) on `PYTHONPATH` and `LMT_NETGUARD_LOG=<work>/netguard.log` for every `lmt` command:
+   1. **On Linux, the cut is real:** `socket.create_connection(("192.0.2.1", 80), timeout=2)` from the phase itself fails with `ENETUNREACH`. Otherwise the phase fails, "the namespace has a route out".
+   2. `lmt transcribe <checkout>/tests/fixtures/two_speakers.wav -f txt,srt,vtt,json -o <work>/out` exits 0 within 15 minutes, and `check_srt` and `check_vtt` pass on its files.
+   3. `lmt rename <work>/out/two_speakers.json "S1=José & Ana"` exits 0 within 2 minutes.
+   4. **G3-6's second run:** snapshot `<work>/data`, then `run_demo` on `lmt demo --sample --no-browser`, with a limit of 10 s for the URL. It has no `--offline`, as in G3-8: the network is simply gone, as when a user turns Wi-Fi off. Afterwards its four fresh directories are still empty, and `<work>/data` and `<work>/models` are unchanged, which with the 10 s shows that it served the cache without transcribing again.
+   5. The guard's log is empty or absent.
+
+Each step prints `PASS` or `FAIL`, and the outer process writes every step to the step summary, the offline phase's from its file. Exit 1 on any failure.
+
+`test_check_full_install.py` (`unittest`, standard library only) uses a fake `lmt`, a small Python script that records its arguments, writes placeholder outputs, and for `demo` prints a URL and serves a fixed page and a short `RIFF` body until SIGTERM. It calls the online and offline steps in process, with `subtitle_checkers` replaced by a stub, and covers the order, each limit (a fake that never prints its URL, one that ignores SIGTERM), an exit code other than 0, a file written outside `LMT_DATA_DIR`, a line in the guard's log, and a missing or contradicting `offline.json`. It checks `offline_command()`'s argv for both platforms without running `sudo`. The real run is item 5's first `workflow_dispatch`.
 
 **Test of the item:** the unit tests, in the `readme` job's `unittest discover` (tier 1).
 
@@ -475,7 +508,7 @@ Each step prints `PASS` or `FAIL` and goes to the step summary. Exit 1 on any fa
 ### From the product side
 
 - **`check_install.py`** (4a): the install and G3-7's checks, from the README's command (`--readme ROOT --tag-checkout`) or from a wheel (`--wheel PATH`).
-- **`check_full_install.py`** (4b): G3-6 and G3-8 after the install. It needs `HF_TOKEN` in its environment, a checkout with `uv sync --locked --all-extras` for `tests/subtitle_checks.py` and `ffmpeg`, and, on Linux, passwordless `sudo`, which GitHub's runners have.
+- **`check_full_install.py`** (4b): G3-6 and G3-8 after the install. It needs `HF_TOKEN` in its environment, a checkout with `uv sync --locked --all-extras` for `tests/subtitle_checks.py` and `ffmpeg`, and, on Linux, passwordless `sudo`, `unshare`, `setpriv` and `ip`, which GitHub's `ubuntu-24.04` image has.
 - **The uv version:** `toolchain.toml`'s `[uv] version`.
 - **The results table:** between `README.md`'s `<!-- results:start -->` and `<!-- results:end -->` markers (G1's design, item 6). The install command is `check_readme.py --print-install`'s line.
 
