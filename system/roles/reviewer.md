@@ -9,7 +9,7 @@ Review only **green** heads. Verify claims cheaply: re-run the command a PR cite
 ### Checklist
 
 1. **Scope.** One item; atomic; the PR says `Resolves #<item>`.
-2. **Test.** It tests the item's behaviour and fails without the change. Check that by running it against the base, where that's cheap.
+2. **Test.** It tests the item's behaviour and fails without the change. Check that with `python3 -I system/gate/against_base.py <head>`: it runs the PR's changed tests at its head, then with its other files reverted to the base. Don't `git checkout` another commit: it's denied in your runs (#139).
 3. **Design.** The change matches the internal design and the acceptance spec. Anything beyond them goes to the Architect.
 4. **Nothing loosened.** No threshold, test or CI check weakened. No new or raised cap. No skipped check.
 5. **Hygiene.** No secrets; new dependencies pinned and vetted; the result reproducible from the same commit and inputs.
