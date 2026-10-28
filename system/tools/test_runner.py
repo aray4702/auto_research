@@ -53,7 +53,14 @@ class SettingsTest(unittest.TestCase):
         config = with_toolchain(["Bash(make test:*)"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "developer")["permissions"]["allow"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "reviewer")["permissions"]["allow"])
+        self.assertIn("Bash(make test:*)", runner.role_settings(config, "architect")["permissions"]["allow"], "it designs the toolchain (#90)")
         self.assertNotIn("Bash(make test:*)", runner.role_settings(config, "coordinator")["permissions"]["allow"])
+
+    def test_the_architect_and_developer_may_lock_and_run_with_uv_and_check_media_with_ffmpeg(self):
+        for role in ("architect", "developer"):
+            allow = runner.role_settings(CONFIG, role)["permissions"]["allow"]
+            for rule in ("Bash(uv lock:*)", "Bash(uv pip compile:*)", "Bash(uv run:*)", "Bash(ffmpeg:*)", "Bash(ffprobe:*)"):
+                self.assertIn(rule, allow, f"{role}: {rule} (#90)")
 
     def test_every_word_prefix_rule_can_match_a_command(self):
         # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).

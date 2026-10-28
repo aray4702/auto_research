@@ -1,8 +1,13 @@
 # The product's toolchain (system/conventions.md). No build toolchain yet: the first goal adds it.
 
-# Permission rules added to the Developer's, Reviewer's and Tester's run settings (runner.py, role_settings).
+# Permission rules added to the Architect's, Developer's, Reviewer's and Tester's run settings (runner.py, role_settings).
 [agents]
 allow = [
   # The product's README checker, as CI runs it.
   "Bash(python3 -I .github/scripts/check_readme.py --root .)",
+  # uv, the toolchain (design/architecture.md): resolve, lock and run in the run's own worktree (#90).
+  "Bash(uv --version)", "Bash(uv lock:*)", "Bash(uv pip compile:*)", "Bash(uv tree:*)",
+  "Bash(uv sync:*)", "Bash(uv add:*)", "Bash(uv remove:*)", "Bash(uv run:*)",
+  # ffmpeg and ffprobe: check audio, video and subtitle files (F1, F3) (#90).
+  "Bash(ffmpeg:*)", "Bash(ffprobe:*)",
 ]

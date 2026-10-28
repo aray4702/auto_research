@@ -15,7 +15,7 @@ These are the names and formats the builder chose where the blueprint leaves the
 - **Product code, tests and harness:** placed wherever the first goal's architecture decides.
 - **`.github/workflows/gate.yml`:** the gate, part of the system.
 - **`.github/workflows/product.yml`:** the product's CI jobs, a product file.
-- **`toolchain.toml`** (product file, protected, created by the first goal): the product's toolchain. Its `[agents] allow` list of permission rules (for example `"Bash(make test:*)"`) is added to the Developer's, Reviewer's and Tester's run settings.
+- **`toolchain.toml`** (product file, protected, created by the first goal): the product's toolchain. Its `[agents] allow` list of permission rules (for example `"Bash(make test:*)"`) is added to the Architect's, Developer's, Reviewer's and Tester's run settings.
 - **`system/cli/`:** the Owner's CLI and dashboard, `arsys` (blueprint §7). It's a view of GitHub, `dispatcher/state` and the runner, and keeps no state. Its actions are the Owner's: `answer` posts unmarked as the Owner, `approve` opens the review page for the second account (no token for that account lives on this Mac), and `merge`, `pause`/`resume` and `goal add`/`req add` ask for confirmation. `arsys serve` binds to `127.0.0.1` only. `runner.py apply` links it at `~/.local/bin/arsys`. It isn't called `ar`, which would shadow macOS's archiver.
 - **`system/runner.toml`:** the runner's settings: each role's model, effort, tools and permissions, the run prompt and the launchd schedules. `system/tools/runner.py apply` installs them on this Mac:
   - It installs the schedules as `~/Library/LaunchAgents/com.aray4702.auto-research.*.plist`.
