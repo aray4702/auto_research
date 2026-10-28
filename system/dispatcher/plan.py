@@ -121,21 +121,42 @@ def choose(snap, runs, caps, identity, now, skip_review=(), answered=None):
     return starts, skipped
 
 
+# Standing rule SR1 (system/standing-rules.md) never covers a change to the standing rules or to this check.
+SR1_EXCLUDED = ("system/standing-rules.md", "system/dispatcher/plan.py")
+
+
+def current(pr, login):
+    """Whether login's latest review approves the PR as it is: its head, or a commit from which only merges
+    from main lead to the head (`pr["fresh"]`, filled in by the Dispatcher). A conflict-free refresh keeps an
+    approval; any other push doesn't (#118). GitHub no longer dismisses stale approvals, so this is the check."""
+    r = latest_review(pr, login)
+    return r is not None and r["state"] == "APPROVED" and (r["commit"] == pr["head"] or (pr.get("fresh") or {}).get(login, False))
+
+
+def sr1(pr, bot, second):
+    """SR1: a protected PR merges on its own once the Reviewer App and the Owner's code-owner account have both
+    approved it as it is (#116, #118), unless it changes the standing rules or this check."""
+    return current(pr, bot) and current(pr, second) and not any(f in SR1_EXCLUDED for f in pr["files"])
+
+
 def merge_plan(snap, identity):
     """Merge-queue actions: ('refresh'|'auto-merge'|'ask-owner-to-merge'|'ask-owner-to-approve'|
     'renew'|'ask-owner-to-reapprove', pr, detail)."""
     bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
     prs = [pr for pr in snap["prs"] if pr["author_role"] and not pr["draft"]]
     actions = []
-    in_flight = [pr for pr in prs if pr["auto_merge"]]
+    # Auto-merge on, but the approvals no longer cover the PR as it is (real changes were pushed): turn it off,
+    # since GitHub keeps stale approvals now (#118).
+    stale = [pr for pr in prs if pr["auto_merge"] and not (current(pr, bot) and (not pr["protected"] or current(pr, second)))]
+    actions += [("cancel-auto-merge", pr["number"], pr["head"]) for pr in stale]
+    in_flight = [pr for pr in prs if pr["auto_merge"] and pr not in stale]
 
     def awaiting_owner(pr):
-        # Protected, green, the Reviewer App's approval on its head: only the Owner's approval is missing.
-        app = latest_review(pr, bot)
-        return pr["protected"] and pr["gate"] == "SUCCESS" and app is not None and app["state"] == "APPROVED" and app["commit"] == pr["head"]
+        # Protected, green, the Reviewer App's approval current: only the Owner's approval is missing.
+        return pr["protected"] and pr["gate"] == "SUCCESS" and current(pr, bot)
 
     ready = sorted(
-        (pr for pr in prs if pr["gate"] == "SUCCESS" and (pr["review_decision"] == "APPROVED" or awaiting_owner(pr))),
+        (pr for pr in prs if pr["gate"] == "SUCCESS" and current(pr, bot) and (pr["review_decision"] == "APPROVED" or awaiting_owner(pr))),
         key=lambda pr: pr["number"],
     )
     queue = in_flight or ready
@@ -144,7 +165,8 @@ def merge_plan(snap, identity):
         if nxt["merge_state"] == "BEHIND":
             actions.append(("refresh", nxt["number"], "behind main"))
         elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"] and nxt["review_decision"] == "APPROVED":
-            actions.append(("ask-owner-to-merge" if nxt["protected"] else "auto-merge", nxt["number"], nxt["head"]))
+            mine = nxt["protected"] and not sr1(nxt, bot, second)
+            actions.append(("ask-owner-to-merge" if mine else "auto-merge", nxt["number"], nxt["head"]))
     for pr in prs:
         if pr["gate"] != "SUCCESS" or pr["review_decision"] == "APPROVED":
             continue
@@ -154,8 +176,8 @@ def merge_plan(snap, identity):
         if pr["protected"] and pr["merge_state"] in UP_TO_DATE:
             # Ask the Owner only about a PR GitHub reports as up to date: one behind main would be refreshed,
             # and GitHub reports UNKNOWN for a moment after main moves.
-            if owner and owner["state"] == "APPROVED" and owner["commit"] != pr["head"]:
+            if owner and owner["state"] == "APPROVED" and not current(pr, second):
                 actions.append(("ask-owner-to-reapprove", pr["number"], pr["head"]))
-            elif app and app["state"] == "APPROVED" and app["commit"] == pr["head"] and not owner:
+            elif current(pr, bot) and not owner:
                 actions.append(("ask-owner-to-approve", pr["number"], pr["head"]))
     return actions
