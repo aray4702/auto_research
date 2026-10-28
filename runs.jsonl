@@ -375,3 +375,4 @@
 {"at": "2026-10-28T19:55:08+00:00", "event": "start", "item": 134, "pid": 95202, "role": "reviewer", "run_id": "reviewer-20261028T195456Z", "task": "Review PR #134."}
 {"at": "2026-10-28T19:55:10+00:00", "event": "start", "item": 136, "pid": 95281, "role": "architect", "run_id": "architect-20261028T195456Z", "task": "PR #136 needs work: it conflicts with main."}
 {"at": "2026-10-28T19:56:05+00:00", "cost_usd": 0.291238, "denials": 1, "denied": ["Bash: git merge-tree"], "event": "end", "five_hour": 0.07, "item": 134, "role": "reviewer", "run_id": "reviewer-20261028T195456Z", "seven_day": 0.36, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 16}
+{"at": "2026-10-28T19:57:14+00:00", "cost_usd": 0.449517, "denials": 1, "denied": ["Bash: python3"], "event": "end", "five_hour": 0.07, "item": 136, "role": "architect", "run_id": "architect-20261028T195456Z", "seven_day": 0.36, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 24}
