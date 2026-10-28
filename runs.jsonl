@@ -608,3 +608,4 @@
 {"at": "2026-10-28T23:36:40+00:00", "event": "start", "item": 198, "pid": 7827, "role": "reviewer", "run_id": "reviewer-20261028T233632Z", "task": "Review PR #198."}
 {"at": "2026-10-28T23:37:46+00:00", "cost_usd": 0.207641, "denials": 0, "denied": [], "event": "end", "five_hour": 0.34, "item": 198, "role": "reviewer", "run_id": "reviewer-20261028T233632Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 11}
 {"at": "2026-10-28T23:38:55+00:00", "event": "start", "item": 201, "pid": 8560, "role": "reviewer", "run_id": "reviewer-20261028T233850Z", "task": "Review PR #201."}
+{"at": "2026-10-28T23:40:15+00:00", "cost_usd": 0.316444, "denials": 1, "denied": ["Bash: git merge-tree"], "event": "end", "five_hour": 0.34, "item": 201, "role": "reviewer", "run_id": "reviewer-20261028T233850Z", "seven_day": 0.41, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 18}
