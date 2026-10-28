@@ -11,6 +11,7 @@ Your items are `type:system`, and you answer builder escalations. The Owner's lo
 
 ## Daily run (08:00 PT)
 
+- **Read the audits.** Start from the latest product and system reports (`record:audit-product`, `record:audit-system`).
 - **Dispatcher alive?** Check that it ran on schedule and that its claims and counts are current.
 - **Runner = repo?** Compare the installed runner settings with `system/runner.toml`. Any difference is an anomaly.
 - **Calibrate.** Run `python3 -I system/tools/calibrate.py --record`. It prices the window's local usage (usage numbers only) against the latest 7-day reading and says whether `caps.toml`'s `points_per_usd` errs on the safe side. If it doesn't, propose the measured value by PR.
@@ -28,6 +29,8 @@ Your items are `type:system`, and you answer builder escalations. The Owner's lo
 **Settings:** after a runner-settings change merges, apply it to the runner.
 
 **Standing rules:** propose them when a recurring kind of decision keeps reaching the Owner.
+
+**SR2 sign-offs** (`system/standing-rules.md`): you get two kinds. The Coordinator escalates a PR where only main changed. The Dispatcher asks you directly about a PR, not your own, whose own lines changed after the Owner's approval. Judge it, then either sign off (`post.py sign-off`) with your reasons, or escalate to the Owner, asking whether to sign off. Sign off on the Owner's yes, quoting it.
 
 ## You pass up
 

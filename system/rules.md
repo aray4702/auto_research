@@ -10,7 +10,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 ## How a run works
 
 1. **Claim.** Work only on the item you were started for. The Dispatcher claimed it before starting you. A run the Dispatcher didn't start claims its own first, with `post.py claim`.
-2. **Read** through the tool, every page: `post.py read <n>`, find items with `post.py list`, and read a commit's gate with `post.py gate [ref]`. Run one command at a time: loops are denied.
+2. **Read** through the tool, every page: `post.py read <n>`, find items with `post.py list`, and read a commit's gate with `post.py gate [ref]`. Run one command at a time: a pipe, chain, redirect, substitution or loop is denied whenever any part isn't allowed, so none is granted. Page a file with Read's offset and limit, and filter with Grep.
 3. **Work in your own worktree,** on a branch named `<role>/<item>-<topic>`. Never work in the Owner's checkout.
 4. **Open the PR as soon as the local gate passes** (`python3 -I system/gate/generic.py --base origin/main`), because a run can be cut off. One item per PR, with its test, and `Resolves #<item>` in the body.
 5. **If the item is bigger than one run,** land the ready part as an item of its own and leave the rest open, saying so on the item.
@@ -32,7 +32,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 | `state:review` | A plan or design on this issue waits for the Reviewer |
 | `needs-decision:coordinator`, `…:architect`, `…:builder`, `…:owner` | Overlay: held for a decision at that level |
 | `sev:1`, `sev:2`, `sev:3` | Severity. sev:1 = a crash, data loss or broken `main`: revert first, as the next Developer item, then fix the cause |
-| `record:goal`, `record:work-order`, `record:watch-list`, `record:decision-log` | Records. Work selection skips them |
+| `record:goal`, `record:work-order`, `record:watch-list`, `record:decision-log`, `record:audit-product`, `record:audit-system` | Records. Work selection skips them |
 
 - **Order:** scheduled work runs in the work order alone (the `record:work-order` issue). Severe problems and PRs that need work go ahead of it.
 - **Atomic items:** every item is atomic. One run can finish it, it has its own test (or its question, or the approval it needs), and merging it alone keeps `main` green.
