@@ -9,3 +9,4 @@
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: git diff", "level": "builder", "title": "Recurring permission denial: Bash: git diff"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: git fetch", "level": "builder", "title": "Recurring permission denial: Bash: git fetch"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: git ls-tree", "level": "builder", "title": "Recurring permission denial: Bash: git ls-tree"}
+{"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: git merge-tree", "level": "builder", "title": "Recurring permission denial: Bash: git merge-tree"}
