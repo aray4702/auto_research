@@ -85,13 +85,22 @@ class WriteTest(unittest.TestCase):
         items = gh.calls[-1][2]["body"]
         self.assertIn("## Plan\nnot yet\n\n### Stages\nnone\n\n## Items\n- [x] #81\n- [ ] #88\n\n## Progress", items)
         post.cmd_edit_body(gh, CALLER, 84, "stage S1", replace="## Plan")
-        self.assertIn("## Plan\nstage S1\n\n## Items", gh.calls[-1][2]["body"], "a ## section's ### subsections go with it")
+        self.assertIn("## Plan\nstage S1\n\n### Stages\nnone\n\n## Items", gh.calls[-1][2]["body"],
+                      "a section ends at the next heading of any level: its subsections stay (#112)")
+        post.cmd_edit_body(gh, CALLER, 84, "G1, offline", replace="# Goal G1")
+        whole = gh.calls[-1][2]["body"]
+        self.assertIn("# Goal G1\nG1, offline\n\n## Plan\nnot yet", whole, "the top heading's edit keeps every section (#112)")
+        self.assertIn("## Close on\nevidence", whole)
         post.cmd_edit_body(gh, CALLER, 84, "S1: harness", replace="### Stages")
         self.assertIn("### Stages\nS1: harness\n\n## Items", gh.calls[-1][2]["body"], "a ### section ends at the next ##")
         post.cmd_edit_body(gh, CALLER, 84, "| 19:10 | #81 claimed |", append="## Progress")
         self.assertIn("| 18:57 | opened |\n| 19:10 | #81 claimed |\n\n\n## Close on", gh.calls[-1][2]["body"], "the table stays whole")
         with self.assertRaises(SystemExit):
             post.cmd_edit_body(gh, CALLER, 84, "x", replace="## Missing")
+        listed = {"body": "## Items\n- [ ] #81\n#88 merged first\n\n## Progress\nnone\n"}
+        gh = FakeGitHub({("GET", "repos/o/r/issues/84"): listed})
+        post.cmd_edit_body(gh, CALLER, 84, "- [x] #81", replace="## Items")
+        self.assertIn("## Items\n- [x] #81\n\n## Progress", gh.calls[-1][2]["body"], "a line starting with #88 isn't a heading")
 
     def test_labels_are_added_and_removed_by_name(self):
         gh = FakeGitHub()
@@ -137,6 +146,18 @@ class WriteTest(unittest.TestCase):
         self.assertIn("Needs a decision: owner", gh.calls[1][2]["body"])
         with self.assertRaises(SystemExit):
             post.cmd_escalate(gh, CALLER, 9, "nobody", "?")
+
+    def test_escalating_hands_the_decision_over(self):
+        held = issue(["needs-decision:coordinator", "state:claimed"])
+        gh = FakeGitHub({("GET", "repos/o/r/issues/9"): held})
+        post.cmd_escalate(gh, ("coordinator", "c1"), 9, "builder", "Can't tell.")
+        writes = [(m, p, b) for m, p, b in gh.calls if m != "GET"]
+        self.assertEqual(writes[:2], [("POST", "repos/o/r/issues/9/labels", {"labels": ["needs-decision:builder"]}),
+                                      ("DELETE", "repos/o/r/issues/9/labels/needs-decision%3Acoordinator", None)])
+        for caller, level in ((("builder", "b1"), "owner"), (("coordinator", "c1"), "coordinator"), (CALLER, "owner")):
+            gh = FakeGitHub({("GET", "repos/o/r/issues/9"): held if caller[0] == level else issue(["needs-decision:coordinator"])})
+            post.cmd_escalate(gh, caller, 9, level, "?")
+            self.assertNotIn("DELETE", [m for m, _, _ in gh.calls], f"{caller[0]} to {level}: no label of the caller's own to drop")
 
 
 class ClaimTest(unittest.TestCase):
@@ -282,6 +303,19 @@ class JwtTest(unittest.TestCase):
                 ["openssl", "dgst", "-sha256", "-verify", pub, "-signature", sig, data], capture_output=True, text=True
             )
             self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+
+    def test_a_sign_off_names_both_commits_and_clears_the_sr2_labels(self):
+        a, h = "a" * 40, "b" * 40
+        gh = FakeGitHub({("GET", "repos/o/r/issues/9"): issue(["needs-decision:builder", "type:system"])})
+        post.cmd_sign_off(gh, ("builder", "run-8"), 9, a, h, "main only renamed a helper next to it.")
+        body = gh.calls[0][2]["body"]
+        self.assertIn(post.SIGN_OFF.format(approved=a, head=h), body)
+        self.assertTrue(body.startswith("<!-- role:builder run:run-8 -->"))
+        self.assertEqual(gh.calls[-1][:2], ("DELETE", "repos/o/r/issues/9/labels/needs-decision%3Abuilder"))
+        with self.assertRaises(SystemExit):
+            post.cmd_sign_off(FakeGitHub(), CALLER, 9, a, h, "x")
+        with self.assertRaises(SystemExit):
+            post.cmd_sign_off(FakeGitHub(), ("coordinator", "r"), 9, "abc1234", h, "x")
 
 
 class ParserTest(unittest.TestCase):
