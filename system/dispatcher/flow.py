@@ -82,7 +82,7 @@ def dispatched(stage, item, t):
 
 def record(item, prs, runs, bot, code_owner):
     """One finished item's row: hours per stage; its waiting, for a run the Dispatcher starts, while nothing ran
-    at all; and each stretch of that waiting over IDLE_SPAN_HOURS.
+    at all; and each stretch of that waiting of IDLE_SPAN_HOURS or more.
     runs are every run, (start, end, role, item); the item's own are those on it or its PRs."""
     mine = {item["number"], *(p["number"] for p in prs)}
     own = [(s, e, role) for s, e, role, n in runs if n in mine]
@@ -174,7 +174,7 @@ def bottlenecks(records, now):
 
 def idle_waits(records, now, zone="America/Los_Angeles"):
     """Stretches in which an item waited for a run the Dispatcher starts while nothing ran at all: §4.5's 'waits
-    while a role idles'. Raised on any stretch over IDLE_SPAN_HOURS; short ones are a poll and CI, and summing them
+    while a role idles'. Raised on any stretch of IDLE_SPAN_HOURS or more; short ones are a poll and CI, and summing them
     over a week's items rose with throughput alone (#142)."""
     tz = ZoneInfo(zone)
     spans = sorted(((at(b) - at(a), r["item"], at(a).astimezone(tz), at(b).astimezone(tz))
@@ -183,7 +183,7 @@ def idle_waits(records, now, zone="America/Los_Angeles"):
         return []
     worst = "; ".join(f"#{n} {a:%m-%d %H:%M}–{b:%H:%M %Z} ({d.total_seconds() / 3600:.1f} h)" for d, n, a, b in spans[:5])
     return [(f"idle-span:{week_key(now)}", "builder", "Items waited while nothing ran",
-             f"{len(spans)} stretches this week over {IDLE_SPAN_HOURS * 60:.0f} minutes in which a scheduled item or a PR "
+             f"{len(spans)} stretches this week of {IDLE_SPAN_HOURS * 60:.0f} minutes or more in which a scheduled item or a PR "
              f"for the Reviewer waited with no run going ({worst}). Find what kept runs from starting at those times "
              f"(a cap, the kill switch, the Mac asleep, a missed poll).", None)]
 
