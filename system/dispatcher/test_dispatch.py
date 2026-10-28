@@ -374,6 +374,33 @@ class SR2Test(unittest.TestCase):
         self.assertIsNone(signed("coordinator", "c-9"), "a run the Dispatcher never recorded")
         self.assertIsNone(signed("coordinator", "c-1", approved="b" * 40), "not the commit the Owner approved")
         self.assertIsNone(signed("coordinator", "c-1", login="someone"), "not posted through post.py")
+        quoted = post.with_marker("**Needs a decision: builder.**\n\nI would post:\n"
+                                  + post.SIGN_OFF.format(approved=self.A, head=self.H), "coordinator", "c-1")
+        self.assertIsNone(plan.signed_off(target, [comment(1, owner, quoted, 0)], runs, IDENTITY, post.MARKER),
+                          "a sign-off line quoted further down isn't a sign-off")
+
+    def test_each_level_hands_the_question_on_and_only_the_next_is_started(self):
+        labels = {"needs-decision:coordinator"}
+
+        class GitHub:
+            repo = "o/r"
+
+            def api(self, method, path, body=None, paginate=False):
+                if method == "POST":
+                    labels.update(body.get("labels", []))
+                elif method == "DELETE":
+                    labels.discard(path.rsplit("/", 1)[1].replace("%3A", ":"))
+                return {"labels": [{"name": x} for x in labels], "html_url": "url"}
+
+        def started():
+            p = pr(113, labels=labels, reviews=[(BOT, "APPROVED", "h2")])
+            return [(role, why) for role, n, _, why in plan.candidates(snap(prs=[p]), set(), IDENTITY) if n == 113]
+        post.cmd_escalate(GitHub(), ("coordinator", "c-1"), 113, "builder", "Can't tell.")
+        self.assertEqual(labels, {"needs-decision:builder"})
+        self.assertEqual(started(), [("builder", "decision")])
+        post.cmd_escalate(GitHub(), ("builder", "b-1"), 113, "owner", "Sign off?")
+        self.assertEqual(labels, {"needs-decision:owner"})
+        self.assertEqual(started(), [], "waiting on the Owner: no run is restarted")
 
     def test_own_lines_ignore_the_code_around_them_but_not_their_order(self):
         changes = lambda patch: {"a.py": ("modified", patch)}

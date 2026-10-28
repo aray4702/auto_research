@@ -138,6 +138,18 @@ class WriteTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             post.cmd_escalate(gh, CALLER, 9, "nobody", "?")
 
+    def test_escalating_hands_the_decision_over(self):
+        held = issue(["needs-decision:coordinator", "state:claimed"])
+        gh = FakeGitHub({("GET", "repos/o/r/issues/9"): held})
+        post.cmd_escalate(gh, ("coordinator", "c1"), 9, "builder", "Can't tell.")
+        writes = [(m, p, b) for m, p, b in gh.calls if m != "GET"]
+        self.assertEqual(writes[:2], [("POST", "repos/o/r/issues/9/labels", {"labels": ["needs-decision:builder"]}),
+                                      ("DELETE", "repos/o/r/issues/9/labels/needs-decision%3Acoordinator", None)])
+        for caller, level in ((("builder", "b1"), "owner"), (("coordinator", "c1"), "coordinator"), (CALLER, "owner")):
+            gh = FakeGitHub({("GET", "repos/o/r/issues/9"): held if caller[0] == level else issue(["needs-decision:coordinator"])})
+            post.cmd_escalate(gh, caller, 9, level, "?")
+            self.assertNotIn("DELETE", [m for m, _, _ in gh.calls], f"{caller[0]} to {level}: no label of the caller's own to drop")
+
 
 class ClaimTest(unittest.TestCase):
     NOW = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)
