@@ -9,6 +9,8 @@ responds (builder, coordinator, or owner for a rule breach); item, when set, is 
 import re
 from datetime import datetime, timedelta
 
+from system.dispatcher import usage
+
 FINISHED = "finished"
 KNOWN_STATUSES = {"finished", "cap: turns", "cap: budget", "timeout", "cut-off", "failed"}
 WATCH_ROW = re.compile(r"^\|\s*([^|]+?)\s*\|\s*`?([a-z_]+)`?\s*\|\s*([<>]=?)\s*([0-9.]+)\s*\|")
@@ -25,14 +27,25 @@ def ends(runs):
 
 def denials(runs, now, explained=()):
     """The same denial (tool and first words) in three or more runs this week: a permission gap (#44).
-    A denial the rules explain (runner.toml [denials] explained) is no gap, and isn't raised (#138)."""
+    A denial the rules explain (runner.toml [denials] explained) is no gap, and isn't raised (#138). A
+    compound command's denial (its signature keeps a shell operator) isn't one either but a breach of the
+    one-command rule, raised as its own (#140)."""
     seen = {}
     for r in ends(recent(runs, now)):
         for signature in set(r.get("denied") or []) - set(explained):
             seen.setdefault(signature, set()).add(r["run_id"])
-    return [(f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
-             f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}. Grant it by rule, or say in the rules why not.", None)
-            for sig, ids in sorted(seen.items()) if len(ids) >= 3]
+    out = []
+    for sig, ids in sorted(seen.items()):
+        if len(ids) < 3:
+            continue
+        where = f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}."
+        if set(sig.split()) & set(usage.OPERATORS):
+            out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
+                        f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
+        else:
+            out.append((f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
+                        f"{where} Grant it by rule, or say in the rules why not.", None))
+    return out
 
 
 def bumpy(runs, now, open_items):
