@@ -127,9 +127,10 @@ SR1_EXCLUDED = ("system/standing-rules.md", "system/dispatcher/plan.py")
 
 
 def current(pr, login):
-    """Whether login's latest review approves the PR as it is: its head, or a commit from which only merges
-    from main lead to the head (`pr["fresh"]`, filled in by the Dispatcher). A conflict-free refresh keeps an
-    approval; any other push doesn't (#118). GitHub no longer dismisses stale approvals, so this is the check."""
+    """Whether login's latest review approves the PR as it is: its head, or a commit at which the PR's own changes
+    were what they are at the head (`pr["fresh"]`, filled in by the Dispatcher with `dispatch.same_changes`). A
+    conflict-free refresh keeps an approval; any other push doesn't (#118, #127). GitHub no longer dismisses stale
+    approvals, so this is the check."""
     r = latest_review(pr, login)
     return r is not None and r["state"] == "APPROVED" and (r["commit"] == pr["head"] or (pr.get("fresh") or {}).get(login, False))
 
