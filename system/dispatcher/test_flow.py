@@ -77,6 +77,8 @@ class StagesTest(unittest.TestCase):
         self.assertEqual(got["idle_spans"], [[h(0).isoformat(), h(2.25).isoformat()]])
         got = flow.record(item, [pr], [(h(0.4), h(1), "developer", 8), (h(1.4), h(4), "reviewer", 9)], BOT, OWNER)
         self.assertEqual((got["idle_hours"], got["idle_spans"]), (0.8, []), "0–0.4 and 1–1.4 are each under half an hour")
+        got = flow.record(item, [pr], [(h(0.5), h(1), "developer", 8), (h(1.4), h(4), "reviewer", 9)], BOT, OWNER)
+        self.assertEqual(got["idle_spans"], [[h(0).isoformat(), h(0.5).isoformat()]], "exactly half an hour is kept")
 
     def test_an_unprotected_pr_goes_from_approval_straight_to_merging(self):
         item = {"number": 8, "opened": h(0), "closed": h(3), "labels": []}
@@ -115,7 +117,7 @@ class SignalsTest(unittest.TestCase):
         got = flow.idle_waits([row(1, 1, {"queued": 3}, idle=1.5, spans=[(0, 1.5)]),
                                row(2, 2, {"queued": 1}, idle=0.6, spans=[(3, 3.6)])], NOW)
         self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("idle-span:2026-W44", "builder")])
-        self.assertIn("2 stretches this week over 30 minutes", got[0][3])
+        self.assertIn("2 stretches this week of 30 minutes or more", got[0][3])
         self.assertIn("#1 10-27 01:00–02:30 PDT (1.5 h); #2 10-27 04:00–04:36 PDT (0.6 h)", got[0][3])
         short = [row(n, 1, {"queued": 1}, idle=0.4) for n in range(40)]
         before = {k: v for k, v in row(41, 1, {"queued": 3}, idle=3).items() if k != "idle_spans"}
