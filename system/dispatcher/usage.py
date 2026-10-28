@@ -7,12 +7,10 @@ utilization. The system's own share is its runs' cost times caps.toml's points_p
 
 import json
 import re
-import shlex
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 STATUS = {"success": "finished", "error_max_turns": "cap: turns", "error_max_budget_usd": "cap: budget"}
-COMPOUND = " (compound)"
 
 
 def summarize(lines):
@@ -48,21 +46,9 @@ def summarize(lines):
     return out
 
 
-def compound(command):
-    """Whether a command pipes, chains, redirects, substitutes or runs a second line: a shell operator or
-    line break outside quotes. Such a command is denied when any part isn't allowed, even if its first is."""
-    lexer = shlex.shlex(command.strip(), posix=True, punctuation_chars="();<>|&\n")
-    lexer.whitespace, lexer.whitespace_split = " \t\r", True
-    try:
-        return any(token and set(token) <= set("();<>|&\n") for token in lexer) or "`" in command
-    except ValueError:
-        return False  # unbalanced quotes: unknown, so recorded as a plain command
-
-
 def denial_signature(denial):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
-    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. A
-    compound command is marked as one (#140): its denial is the one-command rule, not a permission gap."""
+    assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
     if tool != "Bash" or not command:
@@ -79,7 +65,32 @@ def denial_signature(denial):
         words.append(word)
         if len(words) == 2:
             break
-    return "Bash: " + (" ".join(words) or "?") + (COMPOUND if compound(command) else "")
+    return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command)])
+
+
+OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
+
+
+def shell_operators(command):
+    """The shell operators on the command's first line, outside quotes, in order and once each (#138):
+    `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept."""
+    line, out, quote, i = command.split("\n", 1)[0], [], None, 0
+    while i < len(line):
+        c = line[i]
+        if quote:
+            quote = None if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif c == "\\":
+            i += 1
+        else:
+            op = next((o for o in OPERATORS if line.startswith(o, i)), None)
+            if op:
+                out += [op] if op not in out else []
+                i += len(op)
+                continue
+        i += 1
+    return out
 
 
 def parse_time(iso):

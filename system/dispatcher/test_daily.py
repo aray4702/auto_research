@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 from system.dispatcher import daily, usage
-from system.tools import post
+from system.tools import post, runner
 
 NOW = datetime(2026, 10, 28, 7, 30, tzinfo=timezone.utc)
 EXPECTED = post.load_identity()["branch_protection"]
@@ -24,21 +24,26 @@ class DenialsTest(unittest.TestCase):
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
     def test_a_compound_command_denied_in_three_runs_is_raised_as_compound_not_a_gap(self):
-        runs = [end(x, denied=["Bash: git show (compound)"]) for x in "abc"]
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "git show HEAD:a.py | sed -n '1,80p'"}})
+        runs = [end(x, denied=[sig]) for x in "abc"]
         got = daily.denials(runs, NOW)
-        self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("compound:Bash: git show", "builder")], "the one-command rule (#140)")
+        self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("compound:Bash: git show |", "builder")], "the one-command rule (#140)")
         self.assertIn("one command at a time", got[0][2])
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
-    def test_compound_commands_are_marked_and_plain_ones_are_not(self):
-        for command, want in [("git show HEAD:a.py | sed -n '1,80p'", "Bash: git show (compound)"),
-                              ("git show HEAD > /tmp/x", "Bash: git show (compound)"),
-                              ("git fetch && git show FETCH_HEAD", "Bash: git fetch (compound)"),
-                              ("git show $(git rev-parse HEAD)", "Bash: git show (compound)"),
-                              ("cat a.py\ncat b.py","Bash: cat (compound)"),
-                              ("for f in a b; do cat $f; done", "Bash: for f (compound)"),
-                              ("git show HEAD:a.py", "Bash: git show"), ("grep -n 'a|b;c>d' x.py", "Bash: grep"),
-                              ("git commit -m 'one\n\ntwo'", "Bash: git commit"), ("git show 'unbalanced", "Bash: git show")]:
+    def test_a_denial_the_rules_explain_is_not_raised(self):
+        runs = [end(x, denied=["Bash: cat << |"]) for x in "abc"]
+        self.assertEqual(daily.denials(runs, NOW, ["Bash: cat << |"]), [])
+        self.assertEqual(len(daily.denials(runs, NOW, ["Bash: cat |"])), 1, "only the exact signature is explained")
+        explained = runner.load_all()["runner"]["denials"]["explained"]
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {
+            "command": "cat <<'EOF' | python3 -I system/tools/post.py comment 138 --body-file -\nText | with; pipes\nEOF"}})
+        self.assertIn(sig, explained, "the rules' cat pipe, #138")
+
+    def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
+        for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
+                              ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
+                              ("echo $(cat key) && ls; date", "Bash: echo $( && ;"), ("cat a\\|b", "Bash: cat")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
 
     def test_signatures_keep_only_the_tool_and_first_two_words(self):
