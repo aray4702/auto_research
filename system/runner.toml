@@ -28,6 +28,7 @@ allow = [
   "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git fetch:*)",
   "Bash(git switch:*)", "Bash(git checkout:*)", "Bash(git branch:*)", "Bash(git add:*)", "Bash(git commit:*)",
   "Bash(git push:*)", "Bash(git merge:*)", "Bash(git rev-parse:*)", "Bash(git ls-files:*)", "Bash(git grep:*)",
+  "Bash(git merge-tree:*)",  # does a PR merge cleanly; writes objects only, no ref or file (#180)
   "Bash(python3 -I system/tools/post.py:*)", "Bash(python3 -I system/gate/generic.py:*)",
   "Bash(python3 -I system/gate/against_base.py:*)",  # a PR's tests at its head and its base (#139)
   "Bash(python3 -I -m unittest:*)",
