@@ -14,4 +14,14 @@ Each rule records:
 
 ## Granted
 
-None yet. The Project table hands down no decisions from the start.
+### SR1: a protected PR merges once the Reviewer and the Owner have approved its head
+
+- **Who decides:** the Dispatcher, mechanically (`plan.sr1`, used by `merge_plan`).
+- **What:** it turns on auto-merge for a protected PR, as it does for an unprotected one. The Owner's code-owner approval stays the decision; only the merge click goes.
+- **Conditions, all checked by the script:**
+  1. the gate is green on the PR's head;
+  2. the Reviewer App's latest review is APPROVED, on the current head;
+  3. the Owner's code-owner account's latest review is APPROVED, on the current head;
+  4. it's next in the merge queue and up to date with `main`, as for any PR;
+  5. it doesn't touch `system/standing-rules.md` or `system/dispatcher/plan.py`, which hold this rule and its check. Those the Owner still merges by hand.
+- **Granted:** by the Owner, 2026-10-27, about 20:43 PT, in the local session: "Standing rule: approve = merge (Recommended)", after asking "let Dispatcher to merge #113 and #103" ([#116](https://github.com/aray4702/auto_research/issues/116)).
