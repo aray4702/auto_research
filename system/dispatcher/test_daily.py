@@ -40,6 +40,13 @@ class DenialsTest(unittest.TestCase):
             "command": "cat <<'EOF' | python3 -I system/tools/post.py comment 138 --body-file -\nText | with; pipes\nEOF"}})
         self.assertIn(sig, explained, "the rules' cat pipe, #138")
 
+    def test_a_plain_ls_outside_the_worktree_is_explained_and_a_compound_ls_is_not(self):
+        explained = runner.load_all()["runner"]["denials"]["explained"]
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls ~/Library/Logs/auto_research"}})
+        self.assertIn(sig, explained, "--restricted keeps runs in their worktree, #182")
+        compound = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls system | head"}})
+        self.assertEqual(len(daily.denials([end(x, denied=[compound]) for x in "abc"], NOW, explained)), 1, "still the one-command rule")
+
     def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
         for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
                               ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
