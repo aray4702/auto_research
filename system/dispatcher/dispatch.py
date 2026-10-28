@@ -59,19 +59,26 @@ def same_changes(gh, approved, head):
 
 
 def sign_off_question(pr, approved):
-    """The SR2 question (#150), asked once on the PR: the Coordinator judges, then the builder, then the Owner."""
+    """The SR2 question (#150), asked once on the PR. Own lines unchanged: the Coordinator judges, then the builder,
+    then the Owner. Own lines changed (on a PR the builder didn't write): the builder, then the Owner."""
     n, head = pr["number"], pr["head"]
-    return (f"**SR2.** The Owner approved this PR at `{approved}`. Since then only main changed: the PR's own added and "
-            f"removed lines are the same, in order, but main edited code next to them, so that approval no longer counts "
-            f"by itself.\n\n"
-            f"Judge whether main's changes around those lines change what the Owner approved: compare "
-            f"`compare/{approved}...{head}` and read main's commits that touched the same places.\n"
-            f"- **They don't:** `post.py sign-off {n} --approved {approved} --head {head}` with your reasons as the "
+    if pr.get("same_lines"):
+        what = (f"Since then only main changed: the PR's own added and removed lines are the same, in order, but main "
+                f"edited code next to them, so that approval no longer counts by itself.\n\n"
+                f"Judge whether main's changes around those lines change what the Owner approved: compare "
+                f"`compare/{approved}...{head}` and read main's commits that touched the same places.\n")
+    else:
+        what = (f"Since then the PR's own lines changed, and the Reviewer approved the new head.\n\n"
+                f"Judge whether the changes stay within what the Owner approved (for example, fixes the Reviewer asked "
+                f"for) or change what it does in a way the Owner should see: compare `compare/{approved}...{head}`.\n")
+    return (f"**SR2.** The Owner approved this PR at `{approved}`. {what}"
+            f"- **Within it:** `post.py sign-off {n} --approved {approved} --head {head}` with your reasons as the "
             f"body. SR1 then merges it in its turn.\n"
             f"- **You can't tell** (Coordinator): `post.py escalate {n} --level builder` with what you found.\n"
             f"- **You can't tell** (builder): `post.py escalate {n} --level owner`, asking whether to sign off. On "
             f"the Owner's yes, sign off quoting it; otherwise the Owner approves the PR again on GitHub.\n\n"
-            f"Only a sign-off from a Coordinator or builder run on this PR counts (`system/standing-rules.md`).")
+            f"Only a sign-off from a run on this PR, by a role SR2 lets judge this kind of change, counts "
+            f"(`system/standing-rules.md`).")
 
 
 def expired_claims(gh, items, active_items, now):
@@ -186,9 +193,9 @@ def dispatch_pass(command, dry_run, now=None):
                 approved, head = own_changes(gh, r["commit"]), own_changes(gh, pr["head"])
                 pr["fresh"][login] = approved == head
                 if login == second and pr["protected"] and not pr["fresh"][login]:
-                    # SR2 (#150): the PR's own lines unchanged, only the code around them: a sign-off may carry the approval.
+                    # SR2 (#150): a sign-off may carry the approval, from whoever may judge this kind of change.
                     pr["same_lines"] = plan.own_lines(approved) == plan.own_lines(head)
-                    if pr["same_lines"]:
+                    if plan.sr2_signers(pr):
                         comments = gh.api("GET", f"repos/{gh.repo}/issues/{pr['number']}/comments?per_page=100", paginate=True)
                         pr["sign_off"] = plan.signed_off(pr, comments, runs, identity, post.MARKER)
                         if pr["sign_off"] and pr["sign_off"] != pr["head"]:
@@ -216,10 +223,11 @@ def dispatch_pass(command, dry_run, now=None):
                 if not dry_run:
                     post.cmd_review(identity, me, n, "APPROVE",
                                     f"Renewed after a refresh from main: the PR's own changes are unchanged since the approval of {detail[:7]}.")
-        elif action == "ask-coordinator-to-sign-off":
-            say(f"ask the Coordinator to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
+        elif action in ("ask-coordinator-to-sign-off", "ask-builder-to-sign-off"):
+            level = action.split("-")[1]
+            say(f"ask the {'Coordinator' if level == 'coordinator' else level} to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
             if not dry_run:
-                post.cmd_escalate(gh, me, n, "coordinator", sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
+                post.cmd_escalate(gh, me, n, level, sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 
