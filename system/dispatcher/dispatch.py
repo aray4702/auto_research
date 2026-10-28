@@ -37,10 +37,19 @@ def alive(pid):
     return True
 
 
-def only_merges_since(gh, base, head):
-    """True when every commit from base to head is a merge, so the PR's own changes are unchanged."""
-    compare = gh.api("GET", f"repos/{gh.repo}/compare/{base}...{head}")
-    return compare["status"] == "ahead" and all(len(c["parents"]) > 1 for c in compare["commits"])
+def own_changes(gh, ref):
+    """The lines a commit adds and removes against its merge base with main, file by file: a PR's own changes.
+    A file without a patch (binary, or too large to show) is compared by its blob."""
+    files = gh.api("GET", f"repos/{gh.repo}/compare/main...{ref}")["files"]
+    return {f["filename"]: (f["status"], sorted(line for line in f["patch"].splitlines() if line[:1] in "+-"))
+            if f.get("patch") is not None else (f["status"], f.get("sha")) for f in files}
+
+
+def same_changes(gh, approved, head):
+    """True when the PR's own changes at head are what they were at the approved commit: everything since came from
+    main. A merge that resolved a conflict by hand, or any commit of the PR's own, changes them (#118, #127).
+    (Comparing commits instead fails: the commits merged in from main include other PRs' own commits.)"""
+    return own_changes(gh, approved) == own_changes(gh, head)
 
 
 def expired_claims(gh, items, active_items, now):
@@ -115,7 +124,7 @@ def dispatch_pass(command, dry_run, now=None):
         for login in (bot, second):
             r = plan.latest_review(pr, login)
             if r and r["state"] == "APPROVED" and r["commit"] and r["commit"] != pr["head"]:
-                pr["fresh"][login] = only_merges_since(gh, r["commit"], pr["head"])
+                pr["fresh"][login] = same_changes(gh, r["commit"], pr["head"])
 
     # The merge queue: one PR at a time.
     for action, n, detail in plan.merge_plan(snap, identity):
@@ -133,7 +142,7 @@ def dispatch_pass(command, dry_run, now=None):
                 subprocess.run(["gh", "pr", "merge", str(n), "--disable-auto", "--repo", gh.repo], check=True, capture_output=True)
         elif action == "renew":
             pr = next(p for p in snap["prs"] if p["number"] == n)
-            if only_merges_since(gh, detail, pr["head"]):
+            if same_changes(gh, detail, pr["head"]):
                 say(f"renew the Reviewer App's approval of PR #{n} (only merges from main since {detail[:7]})")
                 renewed.add(n)
                 if not dry_run:

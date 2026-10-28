@@ -60,7 +60,8 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
             out.append((role, n, f"The Owner answered your question on #{n}. Act on the answer, then remove needs-decision:owner.", "answered"))
     for pr in agent_prs:
         review = latest_review(pr, bot)
-        reviewed_head = review is not None and review["commit"] == pr["head"]
+        # Its approval still covers the PR after a conflict-free refresh: no new review (#127).
+        reviewed_head = review is not None and (review["commit"] == pr["head"] or current(pr, bot))
         if pr["gate"] == "SUCCESS" and not reviewed_head and pr["number"] not in skip_review and free(pr["number"], pr["labels"]):
             out.append(("reviewer", pr["number"], f"Review PR #{pr['number']}.", "review"))
     # Decisions are dispatched on records too: a plan review's changes reach the Coordinator as
@@ -155,9 +156,13 @@ def merge_plan(snap, identity):
         # Protected, green, the Reviewer App's approval current: only the Owner's approval is missing.
         return pr["protected"] and pr["gate"] == "SUCCESS" and current(pr, bot)
 
+    def needs_owner(pr):
+        # Protected and not mergeable under SR1: it waits for the Owner, so it goes behind the PRs that can merge (#127).
+        return pr["protected"] and not sr1(pr, bot, second)
+
     ready = sorted(
         (pr for pr in prs if pr["gate"] == "SUCCESS" and current(pr, bot) and (pr["review_decision"] == "APPROVED" or awaiting_owner(pr))),
-        key=lambda pr: pr["number"],
+        key=lambda pr: (needs_owner(pr), pr["number"]),
     )
     queue = in_flight or ready
     if queue:
@@ -165,13 +170,19 @@ def merge_plan(snap, identity):
         if nxt["merge_state"] == "BEHIND":
             actions.append(("refresh", nxt["number"], "behind main"))
         elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"] and nxt["review_decision"] == "APPROVED":
-            mine = nxt["protected"] and not sr1(nxt, bot, second)
-            actions.append(("ask-owner-to-merge" if mine else "auto-merge", nxt["number"], nxt["head"]))
+            if not needs_owner(nxt):
+                actions.append(("auto-merge", nxt["number"], nxt["head"]))
+            elif current(nxt, second):  # current approvals, but a path SR1 leaves to the Owner
+                actions.append(("ask-owner-to-merge", nxt["number"], nxt["head"]))
+            # Otherwise the Owner's approval isn't current: the loop below asks them to re-approve.
     for pr in prs:
-        if pr["gate"] != "SUCCESS" or pr["review_decision"] == "APPROVED":
+        if pr["gate"] != "SUCCESS":
             continue
         app, owner = latest_review(pr, bot), latest_review(pr, second)
-        if app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
+        # GitHub keeps stale approvals now, so APPROVED alone no longer means there's nothing to ask (#127).
+        if pr["review_decision"] == "APPROVED" and current(pr, bot) and (not pr["protected"] or current(pr, second)):
+            continue
+        if pr["review_decision"] != "APPROVED" and app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
             actions.append(("renew", pr["number"], app["commit"]))
         if pr["protected"] and pr["merge_state"] in UP_TO_DATE:
             # Ask the Owner only about a PR GitHub reports as up to date: one behind main would be refreshed,
