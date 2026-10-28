@@ -160,7 +160,7 @@ def launch(args, config, gh, store, p, run_id, cmd, dispatcher, ended):
         timeout_s = caps["roles"][args.role]["timeout_minutes"] * 60
         on_start = lambda pid: store.append("runs", {**base, "event": "start", "at": now_utc().isoformat(), "pid": pid, "task": args.task})
         outcome = execute(cmd, p["worktree"], environment(config, args.role, run_id), p["log"], timeout_s, on_start)
-        summary = usage.summarize(p["log"].read_text(errors="replace").splitlines())
+        summary = usage.summarize(p["log"].read_text(errors="replace").splitlines(), str(p["worktree"]))
         if outcome == "timeout":
             summary["status"] = "timeout"
         store.append("runs", {**base, "event": "end", "at": now_utc().isoformat(), **summary})

@@ -29,7 +29,7 @@ def denials(runs, now, explained=()):
     """The same denial (tool and first words) in three or more runs this week: a permission gap (#44).
     A denial the rules explain (runner.toml [denials] explained) is no gap, and isn't raised (#138). A
     compound command's denial (its signature keeps a shell operator) isn't one either but a breach of the
-    one-command rule, raised as its own (#140)."""
+    one-command rule, raised as its own (#140); nor is one that reaches outside the worktree (#177)."""
     seen = {}
     for r in ends(recent(runs, now)):
         for signature in set(r.get("denied") or []) - set(explained):
@@ -39,7 +39,10 @@ def denials(runs, now, explained=()):
         if len(ids) < 3:
             continue
         where = f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}."
-        if set(sig.split()) & set(usage.OPERATORS):
+        if usage.OUTSIDE in sig.split():
+            out.append((f"outside:{sig}", "builder", f"Recurring denial outside the worktree: {sig} — the rules keep runs inside it",
+                        f"{where} Not a permission gap: --restricted denies any path outside a run's worktree. Find why runs still reach outside it, and fix that.", None))
+        elif set(sig.split()) & set(usage.OPERATORS):
             out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
                         f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
         else:
