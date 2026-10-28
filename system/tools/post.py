@@ -48,7 +48,7 @@ RUN_ID = re.compile(r"^[\w.:-]{1,80}$")
 CLAIM_EXPIRY = re.compile(r"<!-- claim-expires:(?P<at>[0-9T:+-]+) -->")
 LEVELS = ("coordinator", "architect", "builder", "owner")
 SHA = re.compile(r"^[0-9a-f]{40}$")
-# Read back by plan.SIGN_OFF: change both together.
+# Read back by merge_rules.SIGN_OFF: change both together.
 SIGN_OFF = "**SR2 sign-off:** the Owner's approval of `{approved}` covers `{head}`."
 SIGNERS = ("coordinator", "builder")
 CLAIMED = "state:claimed"
