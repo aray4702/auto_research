@@ -60,7 +60,11 @@ class DenialsTest(unittest.TestCase):
     def test_a_second_line_is_marked_so_a_multiline_denial_is_raised_as_compound(self):
         for command, want in [("git fetch origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
                               ("git fetch origin main\n", "Bash: git fetch"), ("git fetch \\\n  origin main", "Bash: git fetch"),
-                              ("cat > a.md <<'EOF'\nx\nEOF", "Bash: cat > <<"), ("git log | head\ndate", "Bash: git log | ⏎")]:
+                              ("cat > a.md <<'EOF'\nx\nEOF", "Bash: cat > <<"), ("git log | head\ndate", "Bash: git log | ⏎"),
+                              ('git commit -m "Fix x\n\nCo-Authored-By: y"', "Bash: git commit"),
+                              ('gh pr create --body "a\nb \\" c\nd" | cat', "Bash: gh pr |"),
+                              ("git fetch \\\n  origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
+                              ("cat <<EOF > a.md\ngh x\nEOF\ngh pr diff 187", "Bash: cat << > ⏎")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
         runs = [end(x, denied=["Bash: git fetch ⏎"]) for x in "abc"]
         self.assertEqual([k for k, *_ in daily.denials(runs, NOW)], ["compound:Bash: git fetch ⏎"], "#178: not a git fetch gap")
