@@ -74,6 +74,11 @@ class SettingsTest(unittest.TestCase):
                 open_ended = [r for r in allow if r.startswith(("Bash(uv run --frozen pytest", "Bash(uv run --frozen ruff")) and r.endswith(":*)")]
                 self.assertEqual(open_ended, [], role)
 
+    def test_every_role_may_list_a_commits_files(self):
+        # A :* rule matches whole words, so git ls-files doesn't cover git ls-tree (#179).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git ls-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
     def test_every_word_prefix_rule_can_match_a_command(self):
         # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).
         for role in CONFIG["runner"]["roles"]:
