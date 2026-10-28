@@ -7,3 +7,4 @@
 {"at": "2026-10-28T14:30:03+00:00", "key": "idle:2026-W44", "level": "builder", "title": "Items waited while nothing ran"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: ?", "level": "builder", "title": "Recurring permission denial: Bash: ?"}
 {"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: git diff", "level": "builder", "title": "Recurring permission denial: Bash: git diff"}
+{"at": "2026-10-28T21:06:10+00:00", "key": "denial:Bash: git fetch", "level": "builder", "title": "Recurring permission denial: Bash: git fetch"}
