@@ -46,6 +46,13 @@ class AgainstBaseTest(unittest.TestCase):
                                 "test_triple.py": REAL_TEST.replace("calc", "triple").replace("double(2), 4", "triple(2), 6")})
         self.assertTrue(ok, lines)
 
+    def test_a_helper_under_tests_is_not_run_as_a_test(self):
+        in_tests = "import sys\nfrom pathlib import Path\nsys.path.insert(0, str(Path(__file__).resolve().parents[1]))\n"
+        ok, lines = self.check({"calc.py": FIXED, "tests/test_calc.py": in_tests + REAL_TEST, "tests/helpers.py": "TWO = 2\n"})
+        self.assertTrue(ok, lines)
+        self.assertIn("pass at head, fail at base: tests/test_calc.py", lines)
+        self.assertFalse([line for line in lines if "helpers.py" in line], lines)
+
     def test_no_test_changed_is_a_skip(self):
         self.assertEqual(self.check({"calc.py": FIXED}), (True, ["SKIP: the PR changes no test file"]))
 
