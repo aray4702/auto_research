@@ -154,12 +154,12 @@ def builder_daily(runs):
 
 def missed_builder_daily(runs, now, zone):
     """A finding when the builder's daily run (08:00) hasn't started for more than a day, once runs have history:
-    a skipped run isn't retried (it doesn't start while another builder run is active)."""
+    the poll's catch-up (plan.daily_due, #186) didn't start it either."""
     last, first = builder_daily(runs), min((datetime.fromisoformat(r["at"]) for r in runs), default=None)
     if first is None or now - first < timedelta(hours=26) or (last and now - last < timedelta(hours=26)):
         return []
     day = now.astimezone(ZoneInfo(zone)).date().isoformat()
     since = f"since {local(last, zone)}" if last else "ever"
     return [(f"builder-daily-missed:{day}", "builder", "The builder's daily run hasn't started for over a day",
-             f"Last start of a builder run with the task \"{BUILDER_DAILY}…\": {since}. The 08:00 job doesn't start while another "
-             f"builder run is active, and isn't retried (builder-daily.log). Run it now, and make a skipped run start later.", None)]
+             f"Last start of a builder run with the task \"{BUILDER_DAILY}…\": {since}. Neither the 08:00 job (builder-daily.log) "
+             f"nor the poll's catch-up from 08:30 started it: read the poll's `held:` lines for the cap that held it.", None)]
