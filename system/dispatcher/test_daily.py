@@ -23,6 +23,14 @@ class DenialsTest(unittest.TestCase):
         self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("denial:Bash: gh pr", "builder")], "3 runs, as #44 sets")
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
+    def test_a_compound_command_denied_in_three_runs_is_raised_as_compound_not_a_gap(self):
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "git show HEAD:a.py | sed -n '1,80p'"}})
+        runs = [end(x, denied=[sig]) for x in "abc"]
+        got = daily.denials(runs, NOW)
+        self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("compound:Bash: git show |", "builder")], "the one-command rule (#140)")
+        self.assertIn("one command at a time", got[0][2])
+        self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
+
     def test_a_denial_the_rules_explain_is_not_raised(self):
         runs = [end(x, denied=["Bash: cat << |"]) for x in "abc"]
         self.assertEqual(daily.denials(runs, NOW, ["Bash: cat << |"]), [])
