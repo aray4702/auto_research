@@ -21,6 +21,7 @@ You turn goals into ordered, atomic work and keep the records that steer it.
 - **Re-planning.** Re-plan around a bumpy item when the Dispatcher flags one (stopped, blocked, more than one run, a role idling while it waits).
 - **Releases.** Propose a `type:release` when a goal or stage is done, or the Owner asks.
 - **Sign-offs** under standing rules (`system/standing-rules.md`), within their conditions.
+  - **SR2:** the Dispatcher asks on a PR whose Owner approval predates a refresh from main that touched code next to the PR's own lines. Read what main changed there. If it leaves what the Owner approved intact, sign off (`post.py sign-off`) with your reasons. If you can't tell, escalate to the builder with what you found. Never sign off to unblock the queue.
 
 ## You decide
 
