@@ -1,7 +1,8 @@
 """The Owner's answers from Discord (blueprint §6). Each poll the Dispatcher reads the escalation channel
 through a bot and posts the Owner's answer to a forwarded question on its item, as the Owner (unmarked,
 as `arsys answer` does), with a link back to the message. Only the Owner's Discord account, only an item
-held at needs-decision:owner, and only answers: nothing else the Owner can do is reachable from the chat.
+held at needs-decision:owner, and only answers, plus one read-only request: `audit [product|system]` runs the
+audits and replies with the reports' links (audit.py). Nothing else the Owner can do is reachable from the chat.
 
 Off while identity.toml [escalation] leaves any discord_* setting empty. The bot token lives only in the
 keychain and is never printed. Requests are outgoing only, so the Mac needs no public endpoint.
@@ -12,6 +13,8 @@ import json
 import re
 import subprocess
 import urllib.request
+
+from system.dispatcher import audit
 
 API = "https://discord.com/api/v10"
 AGENT = "DiscordBot (https://github.com/aray4702/auto_research, 1)"
@@ -61,15 +64,23 @@ def from_system(message):
     return bool((message or {}).get("webhook_id") or ((message or {}).get("author") or {}).get("bot"))
 
 
-def decide(message, cfg, held):
-    """(item, answer) to relay, or (None, why not). A why of None means no reply at all: the system's own
-    messages, and anyone but the Owner, who learns nothing from the bot."""
+def owner_text(message, cfg):
+    """The text of the Owner's own message, less any leading mentions of bots; None for anyone else's or the system's."""
     if from_system(message) or (message.get("author") or {}).get("id") != cfg["owner_discord_user_id"]:
-        return None, None
+        return None
     content = (message.get("content") or "").strip()
     bots = {u.get("id") for u in message.get("mentions") or [] if u.get("bot")}
     while (m := MENTION.match(content)) and m[1] in bots:  # "@auto_research #67 1" reads as "#67 1"
         content = content[m.end():]
+    return content
+
+
+def decide(message, cfg, held):
+    """(item, answer) to relay, or (None, why not). A why of None means no reply at all: the system's own
+    messages, and anyone but the Owner, who learns nothing from the bot."""
+    content = owner_text(message, cfg)
+    if content is None:
+        return None, None
     if not content:
         return None, "the message arrived empty. Turn on the bot's Message Content intent (Developer Portal → Bot)."
     lead, ref = LEADING.match(content), message.get("referenced_message")
@@ -105,9 +116,10 @@ def posted(comment, cfg, message_id, owner):
             and text.endswith(f"\n\n(from Discord: {link(cfg, message_id)})"))
 
 
-def run(gh, store, identity, dry_run, now):
+def run(gh, store, identity, dry_run, now, on_audit=None):
     """Relay the Owner's new Discord answers; each message is handled once (relays.jsonl). The first run
-    records where the channel is and relays nothing older."""
+    records where the channel is and relays nothing older. on_audit(kinds) runs the audits the Owner asks for
+    and returns [(kind, headline, url)]."""
     cfg = settings(identity)
     if not cfg:
         return []
@@ -127,6 +139,17 @@ def run(gh, store, identity, dry_run, now):
                                         paginate=True)}
     lines, recorded = [], None
     for m in new:
+        kinds = audit.requested(owner_text(m, cfg)) if on_audit else None
+        if kinds:
+            lines.append(f"{would}run the {' and '.join(kinds)} audit for the Owner")
+            if dry_run:
+                continue
+            # Recorded first: a pass that dies mid-audit doesn't run it again on every poll.
+            store.append("relays", {"message_id": m["id"], "result": "audit", "kinds": list(kinds), "at": now.isoformat()})
+            done = on_audit(kinds)
+            reply(secret, channel, m["id"], "\n".join(f"**{k.capitalize()} audit:** {h}\n<{u}>" for k, h, u in done) or "No report was posted.")
+            recorded = m["id"]
+            continue
         item, said = decide(m, cfg, held)
         if item:
             lines.append(f"{would}relay the Owner's Discord answer to #{item}")

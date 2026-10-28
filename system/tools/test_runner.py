@@ -166,6 +166,9 @@ class LaunchdTest(unittest.TestCase):
         self.assertEqual(poll["StartInterval"], 120)
         self.assertEqual(poll["ProgramArguments"][:2], [CONFIG["runner"]["runner"]["python"], "-I"])
         self.assertEqual(jobs["com.aray4702.auto-research.builder-daily"]["StartCalendarInterval"], {"Hour": 8, "Minute": 0})
+        audits = jobs["com.aray4702.auto-research.dispatcher-daily"]
+        self.assertEqual(audits["StartCalendarInterval"], [{"Hour": 7, "Minute": 30}, {"Hour": 19, "Minute": 30}], "twice daily (#159)")
+        self.assertEqual(audits["ProgramArguments"][-1], "audit")
 
     def test_check_finds_missing_changed_stray_and_unapplied(self):
         with tempfile.TemporaryDirectory() as d:
