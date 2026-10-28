@@ -2,3 +2,4 @@
 {"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: cat", "level": "builder", "title": "Recurring permission denial: Bash: cat"}
 {"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: git checkout", "level": "builder", "title": "Recurring permission denial: Bash: git checkout"}
 {"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: git show", "level": "builder", "title": "Recurring permission denial: Bash: git show"}
+{"at": "2026-10-28T14:30:03+00:00", "key": "denial:Bash: python3", "level": "builder", "title": "Recurring permission denial: Bash: python3"}
