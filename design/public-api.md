@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-27 | architect, #81 | Reviewer's finding on #89: exit code 6 for `lmt eval --check-readme`'s mismatch, so drift and a bug can't look alike |
 | 2026-10-27 | architect, #81 | First version, for G1. It holds the recommended options on #81, waiting for the Owner's approval |
 
 The public API is the command-line interface, its exit codes, the four output formats, the transcript JSON schema, and the results file. There is no public Python API in v1 (#81, question 9): `lmt`'s modules are internal and may change freely. The Owner approves every change to this file. From v1.0 (G3), changes follow semantic versioning: removing or changing anything here is a major change, and adding is a minor one.
@@ -54,7 +55,7 @@ Needs the `eval` extra (`lmt[eval]`).
 | `--set full` | Runs `--set ci` twice and compares the two runs (G1-12). Then it scores LS full, AMI full and the one-hour recording, and writes `results/full.json`. |
 | `--out DIR` | Where the results files go. The default is `results/`. |
 | `--update-readme` | After `--set full`, regenerates `README.md`'s results table from `results/full.json`. |
-| `--check-readme` | Writes nothing, and runs no evaluation. Exits 0 if `README.md`'s results table equals what `results/full.json` renders, and 1 otherwise, printing the difference. |
+| `--check-readme` | Writes nothing, and runs no evaluation. Exits 0 if `README.md`'s results table equals what `results/full.json` renders, and 6 if it differs, printing the difference. |
 
 ### Global options
 
@@ -70,6 +71,7 @@ Needs the `eval` extra (`lmt[eval]`).
 | 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. |
 | 4 | No speech found in the input. |
 | 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. |
+| 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from what `results/full.json` renders. A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
 | 130 | Interrupted (Ctrl-C). Partial outputs are deleted. |
 
 Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11).
