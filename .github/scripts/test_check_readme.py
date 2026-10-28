@@ -106,10 +106,10 @@ class ReadmeTest(unittest.TestCase):
         self.git("add", "-A")
         self.git("commit", "-q", "-m", "change")
 
-    def run_checks(self):
+    def run_checks(self, *flags):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
-            code = check_readme.main(["--root", str(self.root)])
+            code = check_readme.main(["--root", str(self.root), *flags])
         return code, out.getvalue()
 
     def assertFails(self, readme, criterion, files=None):
@@ -227,6 +227,23 @@ class ReadmeTest(unittest.TestCase):
         readme = GOOD + "\n```text\n[not a link](missing.md)\n```\n\n[mail](mailto:a@example.invalid)\n"
         self.commit(readme)
         self.assertEqual(self.run_checks()[0], 0)
+
+    def test_no_install_skips_the_blocks(self):
+        # Both blocks would fail; tier 0 runs neither.
+        self.commit(GOOD, {"FAIL_UV": "", "FAIL_GATE": ""})
+        code, out = self.run_checks("--no-install")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("PASS"), 3, out)
+        self.assertIn("SKIP S1-3", out)
+        self.assertIn("SKIP S1-4", out)
+
+    def test_no_install_still_runs_the_static_checks(self):
+        self.commit(GOOD.replace("# Local Meeting Transcriber", "# voice-app example"))
+        self.assertEqual(self.run_checks("--no-install")[0], 1)
+        self.commit(GOOD.replace("## What it is", "## About"))
+        self.assertEqual(self.run_checks("--no-install")[0], 1)
+        self.commit(GOOD.replace("(blueprint.md)", "(docs/blueprint.md)"))
+        self.assertEqual(self.run_checks("--no-install")[0], 1)
 
 
 class RealReadmeTest(unittest.TestCase):
