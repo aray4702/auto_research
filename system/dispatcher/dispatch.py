@@ -15,14 +15,13 @@ import argparse
 import os
 import subprocess
 import sys
-import urllib.parse
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from system.dispatcher import audit, daily, flow, github_state, killswitch, merge_rules, notify, plan, relay, state, usage  # noqa: E402
-from system.tools import post, runner  # noqa: E402
+from system.tools import post, runner, tracker  # noqa: E402
 
 
 def article(word):
@@ -334,8 +333,7 @@ def daily_pass(dry_run, now=None, collect=None):
 def record_issue(gh, me, kind, dry_run):
     """The open record issue an audit's reports go on (created on first use), or None in a dry run before then."""
     label, title = audit.RECORD[kind]
-    found = [i for i in gh.api("GET", f"repos/{gh.repo}/issues?state=open&labels={urllib.parse.quote(label)}&per_page=100", paginate=True)
-             if "pull_request" not in i and label in {x["name"] for x in i["labels"]}]
+    found = tracker.record_issues(gh, label)
     if found:
         return found[0]
     if dry_run:

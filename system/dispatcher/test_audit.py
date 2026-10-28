@@ -1,10 +1,12 @@
-"""Tests for the product and system audits' reports (audit.py): pure functions, nothing touches the network."""
+"""Tests for the product and system audits' reports (audit.py) and their record issues: nothing touches the network."""
 
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
-from system.dispatcher import audit
+from system.dispatcher import audit, dispatch
+from system.tools import tracker
 
 NOW = datetime(2026, 10, 28, 20, 0, tzinfo=timezone.utc)
 ZONE = "America/Los_Angeles"
@@ -28,6 +30,30 @@ class RequestTest(unittest.TestCase):
         self.assertEqual(audit.requested("audit all"), ("product", "system"))
         for text in ("audits", "audit the product", "#84 1", "please audit", "", None):
             self.assertIsNone(audit.requested(text), text)
+
+
+class RecordTest(unittest.TestCase):
+    def test_the_record_labels_are_defined_in_the_tracker(self):
+        defined = {label["name"] for label in tracker.load_config()["labels"]}
+        for label, _ in audit.RECORD.values():
+            self.assertIn(label, defined)
+
+    def test_a_fresh_record_is_found_without_the_label_filter(self):
+        # GitHub's ?labels= filter lags behind a new issue: a second audit right after the first
+        # must find the record the first one opened, not open another.
+        class Repo:
+            repo = "o/r"
+
+            def __init__(self):
+                self.issues = [{"number": 7, "labels": [{"name": "record:audit-system"}]}]
+
+            def api(self, method, path, body=None, paginate=False):
+                assert method == "GET" and path.startswith("repos/o/r/issues?"), (method, path)
+                assert "labels=" not in path, path
+                return list(self.issues)
+
+        with mock.patch.object(dispatch.post, "cmd_issue_create", side_effect=AssertionError("duplicate record")):
+            self.assertEqual(dispatch.record_issue(Repo(), ("builder", "r"), "system", dry_run=False)["number"], 7)
 
 
 class ProductTest(unittest.TestCase):
