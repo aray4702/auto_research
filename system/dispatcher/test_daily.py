@@ -88,7 +88,7 @@ class WatchListTest(unittest.TestCase):
 class ProtectionTest(unittest.TestCase):
     LIVE = {"required_status_checks": {"strict": True, "checks": [{"context": "gate", "app_id": 15368}]},
             "enforce_admins": {"enabled": True},
-            "required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": True,
+            "required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": False,
                                               "require_code_owner_reviews": True},
             "allow_force_pushes": {"enabled": False}, "allow_deletions": {"enabled": False}}
 
