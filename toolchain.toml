@@ -1,8 +1,22 @@
 # The product's toolchain (system/conventions.md). No build toolchain yet: the first goal adds it.
 
-# Permission rules added to the Developer's, Reviewer's and Tester's run settings (runner.py, role_settings).
+# Permission rules for the roles that take the product's tools (runner.py, role_settings): `allow` reaches the
+# Architect, Developer, Reviewer and Tester; `allow_write` only those of them with the Write tool.
 [agents]
 allow = [
   # The product's README checker, as CI runs it.
   "Bash(python3 -I .github/scripts/check_readme.py --root .)",
+  # uv, the toolchain (#89): read the tree, and run only the product's own tools from disk. Never a bare
+  # `uv run`, which would run any command, the denied ones included (#92). pytest and ruff only in exact
+  # forms here: their arguments can write (`ruff check --fix`) or delete (`pytest --basetemp=<dir>`).
+  "Bash(uv --version)", "Bash(uv tree --frozen:*)", "Bash(uv lock --check:*)",
+  "Bash(uv run --frozen pytest)", "Bash(uv run --frozen pytest -q)",
+  "Bash(uv run --frozen ruff check)", "Bash(uv run --frozen ruff check .)",
+  "Bash(uv run --frozen lmt:*)",  # writes only where -o/--out points; downloads only pinned models (#89)
+]
+# Commands that change pyproject.toml, uv.lock or files the run names (#92). No ffmpeg or ffprobe here or
+# above: they read and write URLs and any path, so the product's tests run them instead.
+allow_write = [
+  "Bash(uv lock:*)", "Bash(uv sync:*)", "Bash(uv add:*)", "Bash(uv remove:*)", "Bash(uv pip compile:*)",
+  "Bash(uv run --frozen pytest:*)", "Bash(uv run --frozen ruff check:*)", "Bash(uv run --frozen ruff format:*)",
 ]
