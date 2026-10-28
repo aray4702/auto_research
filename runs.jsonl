@@ -265,3 +265,4 @@
 {"at": "2026-10-28T06:04:51+00:00", "event": "start", "item": 136, "pid": 46362, "role": "reviewer", "run_id": "reviewer-20261028T060446Z", "task": "Review PR #136."}
 {"at": "2026-10-28T06:06:16+00:00", "cost_usd": 0.248246, "denials": 0, "denied": [], "event": "end", "five_hour": 0.11, "item": 136, "role": "reviewer", "run_id": "reviewer-20261028T060446Z", "seven_day": 0.26, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 11}
 {"at": "2026-10-28T14:31:47+00:00", "event": "start", "item": 138, "pid": 2209, "role": "builder", "run_id": "builder-20261028T143140Z", "task": "Item #138 needs your decision (needs-decision:builder)."}
+{"at": "2026-10-28T14:33:58+00:00", "event": "start", "item": 104, "pid": 2693, "role": "coordinator", "run_id": "coordinator-20261028T143352Z", "task": "Item #104 needs your decision (needs-decision:coordinator)."}
