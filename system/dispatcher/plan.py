@@ -5,10 +5,14 @@ rest, then the work order in sequence; while a work-order item is busy, only par
 start. The merge queue and the standing rules' checks are in merge_rules.py, which SR1 never covers.
 """
 
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from system.dispatcher import usage
 from system.dispatcher.merge_rules import current, latest_review
 
 CLAIMED = "state:claimed"
+DAILY_GRACE = timedelta(minutes=30)  # the launchd job's own start comes first; the poll only catches up (#186)
 TYPE_ROLE = {
     "type:fix": "developer", "type:feature": "developer", "type:investigation": "developer",
     "type:definition": "architect", "type:release": "coordinator",
@@ -23,8 +27,25 @@ def held(labels):
     return CLAIMED in labels or "state:blocked" in labels or any(x.startswith("needs-decision:") for x in labels)
 
 
-def candidates(snap, active_items, identity, skip_review=(), answered=None):
-    """(role, item, task, why) in dispatch order. Nothing already claimed or running is offered."""
+def daily_due(schedule, runs, now, zone):
+    """The builder's daily task, when its scheduled run hasn't started today and is DAILY_GRACE past its time, else
+    None. The 08:00 job doesn't start while another builder run is active (a cap), and launchd never retries it (#186)."""
+    if not schedule or not schedule.get("enabled"):
+        return None
+    cmd = schedule["command"]
+    task = cmd[cmd.index("--task") + 1]
+    local = now.astimezone(ZoneInfo(zone))
+    due = local.replace(hour=schedule["hour"], minute=schedule["minute"], second=0, microsecond=0)
+    if local < due + DAILY_GRACE:
+        return None
+    started = any(r["event"] == "start" and r["role"] == "builder" and (r.get("task") or "") == task
+                  and datetime.fromisoformat(r["at"]).astimezone(local.tzinfo).date() == local.date() for r in runs)
+    return None if started else task
+
+
+def candidates(snap, active_items, identity, skip_review=(), answered=None, daily=None):
+    """(role, item, task, why) in dispatch order. Nothing already claimed or running is offered. daily: the
+    builder's overdue daily task (daily_due), offered after PR work: it is scheduled, and already late."""
     bot = identity["reviewer_app"]["bot_login"]
     free = lambda n, labels: n not in active_items and CLAIMED not in labels
     issues = [i for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])]
@@ -47,6 +68,8 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
             why.append("it conflicts with main")
         if why and free(pr["number"], pr["labels"]):
             out.append((pr["author_role"], pr["number"], f"PR #{pr['number']} needs work: {', '.join(why)}.", "pr-work"))
+    if daily:
+        out.append(("builder", None, daily, "daily-catch-up"))
     # The Owner answered a question: start the role that asked it, on its item (records included).
     for n, role in sorted((answered or {}).items()):
         labels = next((i["labels"] for i in snap["issues"] if i["number"] == n),
@@ -57,7 +80,11 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
         review = latest_review(pr, bot)
         # Its approval still covers the PR after a conflict-free refresh: no new review (#127).
         reviewed_head = review is not None and (review["commit"] == pr["head"] or current(pr, bot))
-        if pr["gate"] == "SUCCESS" and not reviewed_head and pr["number"] not in skip_review and free(pr["number"], pr["labels"]):
+        # A PR held for a decision waits for it: reviewing it again only starves the decision, which
+        # comes later in this order and on the same item (#192). It's reviewed once the label is gone.
+        waiting = any(x.startswith("needs-decision:") for x in pr["labels"])
+        if (pr["gate"] == "SUCCESS" and not reviewed_head and not waiting and pr["number"] not in skip_review
+                and free(pr["number"], pr["labels"])):
             out.append(("reviewer", pr["number"], f"Review PR #{pr['number']}.", "review"))
     # Decisions are dispatched on records too: a plan review's changes reach the Coordinator as
     # needs-decision:coordinator on the goal issue (a record:goal). Triage and the work order skip records.
@@ -101,11 +128,12 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
     return out
 
 
-def choose(snap, runs, caps, identity, now, skip_review=(), answered=None):
+def choose(snap, runs, caps, identity, now, skip_review=(), answered=None, daily_schedule=None):
     """(starts, skipped): the candidates that fit the caps now, simulating each start in turn."""
     active_items = {r.get("item") for r in usage.active(runs) if r.get("item")}
+    daily = daily_due(daily_schedule, runs, now, identity["time_zone"])
     starts, skipped, simulated = [], [], list(runs)
-    for role, item, task, why in candidates(snap, active_items, identity, skip_review, answered):
+    for role, item, task, why in candidates(snap, active_items, identity, skip_review, answered, daily):
         if item and any(s[1] == item for s in starts):
             continue
         ok, reasons, _ = usage.may_start(caps, simulated, role, now, identity["time_zone"])

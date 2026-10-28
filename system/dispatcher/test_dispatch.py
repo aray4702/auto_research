@@ -146,6 +146,16 @@ class CandidatesTest(unittest.TestCase):
         self.assertEqual([c[3] for c in plan.candidates(s, set(), IDENTITY)], ["review"])
         self.assertEqual(plan.candidates(s, set(), IDENTITY, skip_review={5}), [])
 
+    def test_a_pr_held_for_a_decision_starts_the_decider_not_the_reviewer(self):
+        # #192: the Reviewer escalated #188 to the Architect; the review candidate came first on the same
+        # item, so each tick restarted the Reviewer and the Architect never started.
+        held = snap(prs=[pr(5, labels=["needs-decision:architect"])])
+        got = plan.choose(held, [], CAPS, IDENTITY, NOW)[0]
+        self.assertEqual([(r, i, w) for r, i, _, w in got], [("architect", 5, "decision")])
+        self.assertEqual(plan.candidates(snap(prs=[pr(5, labels=["needs-decision:owner"])]), set(), IDENTITY), [])
+        # The Architect answers and removes the label: the Reviewer picks it up again.
+        self.assertEqual([c[3] for c in plan.candidates(snap(prs=[pr(5)]), set(), IDENTITY)], ["review"])
+
     def test_changes_requested_on_the_head_sends_it_back_to_its_author(self):
         s = snap(prs=[pr(5, role="builder", reviews=[(BOT, "CHANGES_REQUESTED", "h2")])])
         self.assertEqual([(c[0], c[3]) for c in plan.candidates(s, set(), IDENTITY)], [("builder", "pr-work")])
@@ -182,6 +192,40 @@ class ChooseTest(unittest.TestCase):
         starts, skipped = plan.choose(s, [], CAPS, IDENTITY, NOW)
         self.assertEqual([(r, i) for r, i, _, _ in starts], [("developer", 1), ("reviewer", 21)])
         self.assertEqual([(r, i) for r, i, _, _ in skipped], [("developer", 2), ("coordinator", None)])
+
+
+class DailyCatchUpTest(unittest.TestCase):
+    """#186: the 08:00 builder job is refused while another builder run is active; the poll starts it later."""
+    SCHEDULE = tomllib.loads((ROOT / "system" / "runner.toml").read_text())["schedules"]["builder-daily"]
+    TASK = SCHEDULE["command"][-1]
+
+    def at(self, hour, minute=0):  # PT, 2026-10-28 (PDT, UTC-7)
+        return datetime(2026, 10, 28, hour + 7, minute, tzinfo=timezone.utc)
+
+    def start(self, role, hour, task, run_id="r"):
+        return {"event": "start", "run_id": run_id, "role": role, "item": None, "at": self.at(hour).isoformat(), "task": task}
+
+    def test_due_after_the_grace_until_it_starts_today(self):
+        zone = IDENTITY["time_zone"]
+        self.assertIsNone(plan.daily_due(self.SCHEDULE, [], self.at(8, 29), zone), "the launchd job goes first")
+        self.assertEqual(plan.daily_due(self.SCHEDULE, [], self.at(8, 30), zone), self.TASK)
+        yesterday = {**self.start("builder", 9, self.TASK), "at": (self.at(9) - timedelta(days=1)).isoformat()}
+        self.assertEqual(plan.daily_due(self.SCHEDULE, [yesterday], self.at(14), zone), self.TASK)
+        other = self.start("builder", 7, "Item #186 needs your decision (needs-decision:builder).")
+        self.assertEqual(plan.daily_due(self.SCHEDULE, [other], self.at(14), zone), self.TASK)
+        self.assertIsNone(plan.daily_due(self.SCHEDULE, [self.start("builder", 8, self.TASK)], self.at(14), zone))
+        self.assertIsNone(plan.daily_due({**self.SCHEDULE, "enabled": False}, [], self.at(14), zone))
+        self.assertIsNone(plan.daily_due(None, [], self.at(14), zone))
+
+    def test_held_while_a_builder_run_is_active_then_started(self):
+        busy = [self.start("builder", 7, "Item #186 needs your decision (needs-decision:builder).", "b1")]
+        starts, skipped = plan.choose(snap(), busy, CAPS, IDENTITY, self.at(9), daily_schedule=self.SCHEDULE)
+        self.assertEqual(starts, [])
+        self.assertEqual([(r, i, w) for r, i, w, _ in skipped], [("builder", None, "daily-catch-up")])
+        done = busy + [{"event": "end", "run_id": "b1", "role": "builder", "item": None, "at": self.at(9).isoformat()}]
+        starts, _ = plan.choose(snap(), done, CAPS, IDENTITY, self.at(9, 2), daily_schedule=self.SCHEDULE)
+        self.assertEqual(starts, [("builder", None, self.TASK, "daily-catch-up")])
+        self.assertTrue(self.TASK.startswith(dispatch.audit.BUILDER_DAILY), "the audit must count the catch-up as a daily run")
 
 
 class MergePlanTest(unittest.TestCase):
@@ -544,6 +588,7 @@ class DryRunTest(unittest.TestCase):
         with mock.patch.object(post, "GitHub", FakeGitHub), \
              mock.patch("system.dispatcher.state.Store", side_effect=lambda *a: stores.append(FakeStore()) or stores[-1]), \
              mock.patch.object(dispatch, "spawn") as spawn, \
+             mock.patch.object(plan, "daily_due", return_value=None), \
              mock.patch.object(dispatch.relay, "run", return_value=[]):  # never Discord from a test (test_relay.py)
             lines = dispatch.dispatch_pass("reconcile", dry_run=True, now=NOW)
         self.assertEqual(lines, [
@@ -553,6 +598,16 @@ class DryRunTest(unittest.TestCase):
         ])
         spawn.assert_not_called()
         self.assertEqual(stores[0].appended, [])
+
+    def test_a_pass_catches_up_the_builders_daily_run(self):
+        # NOW is 20:00 PT and no daily run has started today (#186): it takes the second slot, ahead of triage.
+        with mock.patch.object(post, "GitHub", FakeGitHub), \
+             mock.patch("system.dispatcher.state.Store", FakeStore), \
+             mock.patch.object(dispatch, "spawn"), \
+             mock.patch.object(dispatch.relay, "run", return_value=[]):
+            lines = dispatch.dispatch_pass("poll", dry_run=True, now=NOW)
+        self.assertEqual(lines[1:], [f"would start a builder run (daily-catch-up): {DailyCatchUpTest.TASK}",
+                                     "held: a coordinator run (triage+closed): 2 runs are active; the cap is 2"])
 
 
 class HeldForTheOwner(FakeGitHub):
