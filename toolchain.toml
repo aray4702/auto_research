@@ -1,4 +1,4 @@
-# The product's toolchain (system/conventions.md). No build toolchain yet: the first goal adds it.
+# The product's toolchain (system/conventions.md): Python 3.11 (.python-version) and uv, with uv.lock.
 
 # Permission rules for the roles that take the product's tools (runner.py, role_settings): `allow` reaches the
 # Architect, Developer, Reviewer and Tester; `allow_write` only those of them with the Write tool.
@@ -20,3 +20,7 @@ allow_write = [
   "Bash(uv lock:*)", "Bash(uv sync:*)", "Bash(uv add:*)", "Bash(uv remove:*)", "Bash(uv pip compile:*)",
   "Bash(uv run --frozen pytest:*)", "Bash(uv run --frozen ruff check:*)", "Bash(uv run --frozen ruff format:*)",
 ]
+
+# The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
+[uv]
+version = "0.13.6"

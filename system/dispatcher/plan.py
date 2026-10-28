@@ -80,7 +80,11 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None, dail
         review = latest_review(pr, bot)
         # Its approval still covers the PR after a conflict-free refresh: no new review (#127).
         reviewed_head = review is not None and (review["commit"] == pr["head"] or current(pr, bot))
-        if pr["gate"] == "SUCCESS" and not reviewed_head and pr["number"] not in skip_review and free(pr["number"], pr["labels"]):
+        # A PR held for a decision waits for it: reviewing it again only starves the decision, which
+        # comes later in this order and on the same item (#192). It's reviewed once the label is gone.
+        waiting = any(x.startswith("needs-decision:") for x in pr["labels"])
+        if (pr["gate"] == "SUCCESS" and not reviewed_head and not waiting and pr["number"] not in skip_review
+                and free(pr["number"], pr["labels"])):
             out.append(("reviewer", pr["number"], f"Review PR #{pr['number']}.", "review"))
     # Decisions are dispatched on records too: a plan review's changes reach the Coordinator as
     # needs-decision:coordinator on the goal issue (a record:goal). Triage and the work order skip records.
