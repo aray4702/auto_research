@@ -40,10 +40,27 @@ class DenialsTest(unittest.TestCase):
             "command": "cat <<'EOF' | python3 -I system/tools/post.py comment 138 --body-file -\nText | with; pipes\nEOF"}})
         self.assertIn(sig, explained, "the rules' cat pipe, #138")
 
-    def test_a_plain_ls_outside_the_worktree_is_explained_and_a_compound_ls_is_not(self):
-        explained = runner.load_all()["runner"]["denials"]["explained"]
+    def test_file_tools_are_explained_only_while_every_role_has_them_without_limit(self):
+        config = runner.load_all()["runner"]
+        for tool in ("Glob", "Grep", "Read"):
+            sig = usage.denial_signature({"tool_name": tool, "tool_input": {"pattern": "*", "path": "/elsewhere"}})
+            self.assertIn(sig, config["denials"]["explained"], "outside the worktree, --restricted denies it (#185)")
+            self.assertIn(tool, config["common"]["allow"], "else a denial could be a real gap")
+            self.assertFalse([d for d in config["common"]["deny"] if d.startswith(tool)], "else a denial could be a real gap")
+            for role in config["roles"].values():
+                self.assertIn(tool, role["tools"], "else a denial could be a real gap")
+        self.assertIn("--restricted", config["runner"]["flags"])
+
+    def test_a_plain_ls_is_explained_only_while_every_role_may_run_it_and_a_compound_ls_is_not(self):
+        config = runner.load_all()["runner"]
+        explained = config["denials"]["explained"]
         sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls ~/Library/Logs/auto_research"}})
-        self.assertIn(sig, explained, "--restricted keeps runs in their worktree, #182")
+        self.assertIn(sig, explained, "outside the worktree, --restricted denies it (#182)")
+        self.assertIn("Bash(ls:*)", config["common"]["allow"], "else a denial could be a real gap")
+        self.assertFalse([d for d in config["common"]["deny"] if d.startswith("Bash(ls")], "else a denial could be a real gap")
+        for role in config["roles"].values():
+            self.assertIn("Bash", role["tools"], "else a denial could be a real gap")
+        self.assertIn("--restricted", config["runner"]["flags"])
         compound = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls system | head"}})
         self.assertEqual(len(daily.denials([end(x, denied=[compound]) for x in "abc"], NOW, explained)), 1, "still the one-command rule")
 
