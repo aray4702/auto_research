@@ -2,13 +2,13 @@
 
 Dispatch order (blueprint §4.3): severe problems first, then open PRs that need work, then the
 rest, then the work order in sequence; while a work-order item is busy, only parallel-safe items
-start. Merging is one PR at a time, by auto-merge (blueprint §4.4).
+start. The merge queue and the standing rules' checks are in merge_rules.py, which SR1 never covers.
 """
 
 from system.dispatcher import usage
+from system.dispatcher.merge_rules import current, latest_review
 
 CLAIMED = "state:claimed"
-UP_TO_DATE = ("CLEAN", "BLOCKED", "HAS_HOOKS", "UNSTABLE")
 TYPE_ROLE = {
     "type:fix": "developer", "type:feature": "developer", "type:investigation": "developer",
     "type:definition": "architect", "type:release": "coordinator",
@@ -21,11 +21,6 @@ DECISION_ROLE = {
 
 def held(labels):
     return CLAIMED in labels or "state:blocked" in labels or any(x.startswith("needs-decision:") for x in labels)
-
-
-def latest_review(pr, login):
-    reviews = [r for r in pr["reviews"] if r["login"] == login and r["state"] in ("APPROVED", "CHANGES_REQUESTED")]
-    return reviews[-1] if reviews else None
 
 
 def candidates(snap, active_items, identity, skip_review=(), answered=None):
@@ -60,12 +55,13 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None):
             out.append((role, n, f"The Owner answered your question on #{n}. Act on the answer, then remove needs-decision:owner.", "answered"))
     for pr in agent_prs:
         review = latest_review(pr, bot)
-        reviewed_head = review is not None and review["commit"] == pr["head"]
+        # Its approval still covers the PR after a conflict-free refresh: no new review (#127).
+        reviewed_head = review is not None and (review["commit"] == pr["head"] or current(pr, bot))
         if pr["gate"] == "SUCCESS" and not reviewed_head and pr["number"] not in skip_review and free(pr["number"], pr["labels"]):
             out.append(("reviewer", pr["number"], f"Review PR #{pr['number']}.", "review"))
     # Decisions are dispatched on records too: a plan review's changes reach the Coordinator as
     # needs-decision:coordinator on the goal issue (a record:goal). Triage and the work order skip records.
-    for i in snap["issues"]:
+    for i in snap["issues"] + snap["prs"]:  # a PR too: SR2 asks the Coordinator on the PR itself (#150)
         for label, role in DECISION_ROLE.items():
             if label in i["labels"] and free(i["number"], i["labels"]):
                 out.append((role, i["number"], f"Item #{i['number']} needs your decision ({label}).", "decision"))
@@ -119,65 +115,3 @@ def choose(snap, runs, caps, identity, now, skip_review=(), answered=None):
         starts.append((role, item, task, why))
         simulated.append({"event": "start", "run_id": f"planned-{len(starts)}", "role": role, "item": item, "at": now.isoformat()})
     return starts, skipped
-
-
-# Standing rule SR1 (system/standing-rules.md) never covers a change to the standing rules or to this check.
-SR1_EXCLUDED = ("system/standing-rules.md", "system/dispatcher/plan.py")
-
-
-def current(pr, login):
-    """Whether login's latest review approves the PR as it is: its head, or a commit from which only merges
-    from main lead to the head (`pr["fresh"]`, filled in by the Dispatcher). A conflict-free refresh keeps an
-    approval; any other push doesn't (#118). GitHub no longer dismisses stale approvals, so this is the check."""
-    r = latest_review(pr, login)
-    return r is not None and r["state"] == "APPROVED" and (r["commit"] == pr["head"] or (pr.get("fresh") or {}).get(login, False))
-
-
-def sr1(pr, bot, second):
-    """SR1: a protected PR merges on its own once the Reviewer App and the Owner's code-owner account have both
-    approved it as it is (#116, #118), unless it changes the standing rules or this check."""
-    return current(pr, bot) and current(pr, second) and not any(f in SR1_EXCLUDED for f in pr["files"])
-
-
-def merge_plan(snap, identity):
-    """Merge-queue actions: ('refresh'|'auto-merge'|'ask-owner-to-merge'|'ask-owner-to-approve'|
-    'renew'|'ask-owner-to-reapprove', pr, detail)."""
-    bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
-    prs = [pr for pr in snap["prs"] if pr["author_role"] and not pr["draft"]]
-    actions = []
-    # Auto-merge on, but the approvals no longer cover the PR as it is (real changes were pushed): turn it off,
-    # since GitHub keeps stale approvals now (#118).
-    stale = [pr for pr in prs if pr["auto_merge"] and not (current(pr, bot) and (not pr["protected"] or current(pr, second)))]
-    actions += [("cancel-auto-merge", pr["number"], pr["head"]) for pr in stale]
-    in_flight = [pr for pr in prs if pr["auto_merge"] and pr not in stale]
-
-    def awaiting_owner(pr):
-        # Protected, green, the Reviewer App's approval current: only the Owner's approval is missing.
-        return pr["protected"] and pr["gate"] == "SUCCESS" and current(pr, bot)
-
-    ready = sorted(
-        (pr for pr in prs if pr["gate"] == "SUCCESS" and current(pr, bot) and (pr["review_decision"] == "APPROVED" or awaiting_owner(pr))),
-        key=lambda pr: pr["number"],
-    )
-    queue = in_flight or ready
-    if queue:
-        nxt = queue[0]
-        if nxt["merge_state"] == "BEHIND":
-            actions.append(("refresh", nxt["number"], "behind main"))
-        elif nxt["merge_state"] in ("CLEAN", "HAS_HOOKS") and not nxt["auto_merge"] and nxt["review_decision"] == "APPROVED":
-            mine = nxt["protected"] and not sr1(nxt, bot, second)
-            actions.append(("ask-owner-to-merge" if mine else "auto-merge", nxt["number"], nxt["head"]))
-    for pr in prs:
-        if pr["gate"] != "SUCCESS" or pr["review_decision"] == "APPROVED":
-            continue
-        app, owner = latest_review(pr, bot), latest_review(pr, second)
-        if app and app["state"] == "APPROVED" and app["commit"] != pr["head"]:
-            actions.append(("renew", pr["number"], app["commit"]))
-        if pr["protected"] and pr["merge_state"] in UP_TO_DATE:
-            # Ask the Owner only about a PR GitHub reports as up to date: one behind main would be refreshed,
-            # and GitHub reports UNKNOWN for a moment after main moves.
-            if owner and owner["state"] == "APPROVED" and not current(pr, second):
-                actions.append(("ask-owner-to-reapprove", pr["number"], pr["head"]))
-            elif current(pr, bot) and not owner:
-                actions.append(("ask-owner-to-approve", pr["number"], pr["head"]))
-    return actions
