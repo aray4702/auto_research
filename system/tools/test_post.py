@@ -72,6 +72,27 @@ class WriteTest(unittest.TestCase):
         bodies = [body["body"] for _, _, body in gh.calls]
         self.assertTrue(all(b.startswith("<!-- role:developer run:run-7 -->\n") for b in bodies), bodies)
 
+    def test_a_record_is_edited_in_part_without_resending_it(self):
+        record = ("<!-- role:coordinator run:c1 -->\n**18:57 PT:** opened.\n\n# Goal G1\n\n## Plan\nnot yet\n\n"
+                  "### Stages\nnone\n\n## Items\n- [ ] #81\n\n"
+                  "## Progress\n| At | Note |\n| --- | --- |\n| 18:57 | opened |\n\n\n## Close on\nevidence\n")
+        gh = FakeGitHub({("GET", "repos/o/r/issues/84"): {"body": record}})
+        post.cmd_edit_body(gh, CALLER, 84, "**19:10 PT:** #81 claimed.", prepend=True)
+        top = gh.calls[-1][2]["body"]
+        self.assertTrue(top.startswith("<!-- role:developer run:run-7 -->\n**19:10 PT:** #81 claimed.\n**18:57 PT:** opened."), top)
+        self.assertEqual(top.count("<!-- role:"), 1, "the old marker is replaced, not kept")
+        post.cmd_edit_body(gh, CALLER, 84, "- [x] #81\n- [ ] #88", replace="## Items")
+        items = gh.calls[-1][2]["body"]
+        self.assertIn("## Plan\nnot yet\n\n### Stages\nnone\n\n## Items\n- [x] #81\n- [ ] #88\n\n## Progress", items)
+        post.cmd_edit_body(gh, CALLER, 84, "stage S1", replace="## Plan")
+        self.assertIn("## Plan\nstage S1\n\n## Items", gh.calls[-1][2]["body"], "a ## section's ### subsections go with it")
+        post.cmd_edit_body(gh, CALLER, 84, "S1: harness", replace="### Stages")
+        self.assertIn("### Stages\nS1: harness\n\n## Items", gh.calls[-1][2]["body"], "a ### section ends at the next ##")
+        post.cmd_edit_body(gh, CALLER, 84, "| 19:10 | #81 claimed |", append="## Progress")
+        self.assertIn("| 18:57 | opened |\n| 19:10 | #81 claimed |\n\n\n## Close on", gh.calls[-1][2]["body"], "the table stays whole")
+        with self.assertRaises(SystemExit):
+            post.cmd_edit_body(gh, CALLER, 84, "x", replace="## Missing")
+
     def test_labels_are_added_and_removed_by_name(self):
         gh = FakeGitHub()
         post.cmd_label(gh, 3, ["state:ready"], ["needs-decision:owner"])
