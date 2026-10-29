@@ -34,3 +34,4 @@
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: uv pip", "level": "builder", "title": "Recurring permission denial: Bash: uv pip"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: uv run", "level": "builder", "title": "Recurring permission denial: Bash: uv run"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "bumpy:289:3", "level": "coordinator", "title": "Bumpy item #289"}
+{"at": "2026-10-29T14:30:04+00:00", "key": "failure:failed: launcher: CalledProcessError", "level": "builder", "title": "New kind of failure: failed: launcher: CalledProcessError"}
