@@ -1,0 +1,5 @@
+[00:00:00] Speaker 1: Shall we get started with the quarterly review today?
+[00:00:04] José & Ana: Yes, the Q&A <draft> is ready.
+[00:00:07] Speaker 1: First the budget: we spent less than planned on hardware this quarter, mostly because the new laptops arrived late, so that line moves into next quarter along with the support contract and the training we postponed.
+[00:00:21] José & Ana: Here is the link: https://example.com/meetings/2026-q4/review-notes/ and that's all from us.
+[01:02:05] Speaker 1: That's all for today.
