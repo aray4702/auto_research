@@ -1,5 +1,6 @@
 """tests/isolation.py, G1-13's isolation and file compare (design/internal/g1-stage2.md, P7b), with no model."""
 
+import errno
 import hashlib
 import json
 import os
@@ -132,7 +133,8 @@ class TestWrap:
         elif not isolated:
             pytest.skip("wrap can't isolate here: no passwordless sudo, unshare or setpriv")
         assert completed.returncode == 0, completed.stderr
-        assert completed.stdout.startswith("OSError "), completed.stdout
+        # No route fails at once with ENETUNREACH; outside a namespace 192.0.2.1 times out, also an OSError.
+        assert completed.stdout.split() == ["OSError", "OSError", str(errno.ENETUNREACH)], completed.stdout
 
 
 def test_run_isolated_runs_lmt(env, tmp_path):
