@@ -24,6 +24,9 @@ allow_write = [
   # The licence inventory's installs (#220): the lock as a requirements file, and only its hash-pinned wheels,
   # unpacked under --target without building anything. Never a bare `uv pip install`.
   "Bash(uv export --frozen:*)", "Bash(uv pip install --no-deps --require-hashes --no-build --target:*)",
+  # The product's own dataset tool: it downloads only the manifests' pinned URLs and writes only to the data
+  # cache and the fixture paths (design/internal/g1-slice.md S1, #269).
+  "Bash(uv run --frozen python -m lmt.eval.datasets:*)",
 ]
 
 # The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
