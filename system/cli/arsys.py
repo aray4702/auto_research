@@ -115,18 +115,26 @@ def propose_requirements_change(config, edit, title, branch, body):
 
 def serve(config, port):
     # Per tab. None, not 0.0: monotonic time starts near zero on a freshly booted machine.
+    shared = {"at": None, "data": None}  # the Overview tabs share one read (#253)
+
+    def overview(path):
+        if shared["at"] is None or time.monotonic() - shared["at"] > 30:
+            shared["data"], shared["at"] = data.collect(config), time.monotonic()
+        return views.html_page(shared["data"], path)
     pages = {"/": lambda: views.progress_page(data.progress(config)), "/roles": lambda: views.roles_page(data.roles(config)),
-             "/overview": lambda: views.html_page(data.collect(config))}
+             **{path: (lambda path=path: overview(path)) for path, _ in views.OVERVIEW}}
     cache = {path: {"at": None, "page": ""} for path in pages}
+    alias = {"/index.html": "/", "/overview": "/waiting"}  # a saved link to the old Overview still opens
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/favicon.svg":
                 body, kind = views.ICON_SVG.encode(), "image/svg+xml"
-            elif self.path in ("/index.html", *pages):
-                c = cache["/" if self.path == "/index.html" else self.path]
+            elif alias.get(self.path, self.path) in pages:
+                path = alias.get(self.path, self.path)
+                c = cache[path]
                 if c["at"] is None or time.monotonic() - c["at"] > 30:  # reading never slows the agents: at most one refresh per 30 s
-                    c["page"], c["at"] = pages["/" if self.path == "/index.html" else self.path](), time.monotonic()
+                    c["page"], c["at"] = pages[path](), time.monotonic()
                 body, kind = c["page"].encode(), "text/html; charset=utf-8"
             else:
                 self.send_error(404)
