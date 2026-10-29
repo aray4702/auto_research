@@ -848,3 +848,4 @@
 {"at": "2026-10-29T04:56:05+00:00", "cost_usd": 2.115313, "denials": 1, "denied": ["Bash: git stash"], "event": "end", "five_hour": 0.28, "item": 259, "role": "developer", "run_id": "developer-20261029T044644Z", "seven_day": 0.48, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 75}
 {"at": "2026-10-29T04:57:58+00:00", "event": "start", "item": 259, "pid": 72039, "role": "reviewer", "run_id": "reviewer-20261029T045753Z", "task": "Review PR #259."}
 {"at": "2026-10-29T04:59:26+00:00", "cost_usd": 0.362272, "denials": 0, "denied": [], "event": "end", "five_hour": 0.29, "item": 259, "role": "reviewer", "run_id": "reviewer-20261029T045753Z", "seven_day": 0.48, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 22}
+{"at": "2026-10-29T05:02:27+00:00", "event": "start", "item": 259, "pid": 73096, "role": "builder", "run_id": "builder-20261029T050221Z", "task": "Item #259 needs your decision (needs-decision:builder)."}
