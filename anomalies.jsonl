@@ -19,3 +19,4 @@
 {"at": "2026-10-28T21:06:10+00:00", "key": "builder-daily-missed:2026-10-28", "level": "builder", "title": "The builder's daily run hasn't started for over a day"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: ffmpeg", "level": "builder", "title": "Recurring permission denial: Bash: ffmpeg"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: gh api", "level": "builder", "title": "Recurring permission denial: Bash: gh api"}
+{"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: gh pr", "level": "builder", "title": "Recurring permission denial: Bash: gh pr"}
