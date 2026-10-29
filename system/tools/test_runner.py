@@ -49,6 +49,11 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("Bash(mkdir -p:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
         self.assertNotIn("Bash(mkdir -p:*)", settings["permissions"]["allow"])
 
+    def test_every_role_may_check_a_merge_without_making_one(self):
+        # A :* rule matches whole words, so git merge doesn't cover git merge-tree (#180).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git merge-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
     def test_every_role_may_compare_a_prs_revisions(self):
         # Reviewers and the Coordinator (SR2) ask whether a PR's own commits changed or only main (#181).
         for role in CONFIG["runner"]["roles"]:
@@ -96,6 +101,11 @@ class SettingsTest(unittest.TestCase):
             self.assertEqual((allowed(export), allowed(install)), (writer, writer), role)
             for cmd in never:  # a build runs a package's code; an unhashed install takes any package
                 self.assertFalse(allowed(cmd), f"{role}: {cmd}")
+
+    def test_every_role_may_list_a_commits_files(self):
+        # A :* rule matches whole words, so git ls-files doesn't cover git ls-tree (#179).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git ls-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
 
     def test_every_word_prefix_rule_can_match_a_command(self):
         # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).
