@@ -686,3 +686,4 @@
 {"at": "2026-10-29T01:15:41+00:00", "cost_usd": 0.397052, "denials": 0, "denied": [], "event": "end", "five_hour": 0.05, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T011426Z", "seven_day": 0.43, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 25}
 {"at": "2026-10-29T01:16:47+00:00", "event": "start", "item": 199, "pid": 57587, "role": "builder", "run_id": "builder-20261029T011641Z", "task": "Item #199 needs your decision (needs-decision:builder)."}
 {"at": "2026-10-29T01:18:40+00:00", "cost_usd": 0.510819, "denials": 1, "denied": ["Bash: git merge-tree"], "event": "end", "five_hour": 0.06, "item": 199, "role": "builder", "run_id": "builder-20261029T011641Z", "seven_day": 0.43, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 25}
+{"at": "2026-10-29T01:19:03+00:00", "event": "start", "item": 199, "pid": 58239, "role": "reviewer", "run_id": "reviewer-20261029T011857Z", "task": "Review PR #199."}
