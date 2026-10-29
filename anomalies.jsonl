@@ -26,3 +26,4 @@
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: git rm", "level": "builder", "title": "Recurring permission denial: Bash: git rm"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: git stash", "level": "builder", "title": "Recurring permission denial: Bash: git stash"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: grep", "level": "builder", "title": "Recurring permission denial: Bash: grep"}
+{"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: python3 -I -c", "level": "builder", "title": "Recurring permission denial: Bash: python3 -I -c"}
