@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #289 | Reviewer's 01:32 findings on #304: P2 splits into P2a (the runner, on fakes) and P2b (the `eval-ci` job, and the command in the README), and P8 needs only P2a; the three RTFs' timing bases are stated, in P2a and in the README table's note (P8), with `public-api.md`'s wording asked of the Owner in #328; a two-speaker turn's 13.5 s counts the gaps between its own utterances, in whole samples; P7's guard test covers G3's `LMT_NETGUARD_ALLOW=127.0.0.1` cases, and `g3-stage1.md` points to it |
 | 2026-10-29 | architect, #289 | Reviewer's findings on #304: P9 builds #286 as `g1-slice.md` decides it (#303), by reference; G1-8c's rounding argument restated for WER, and DER equal to its bound after rounding goes to the Architect; P4's time limit is its own `run_bounded`; G1-4's default formats are tagged through P3; FFmpeg's log is already off |
 | 2026-10-29 | architect, #289 | First version: ten Developer items on top of the slice, G1-2's design and #110, with the two-speaker clip's rule for #123 |
 
@@ -14,28 +15,29 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | Item | What | Needs | Files it creates or changes | Tier |
 | --- | --- | --- | --- | --- |
 | **P1** | Decode before the models; a truncated WAV is an input error | — | `src/lmt/pipeline.py`, `src/lmt/audio.py`, `tests/test_pipeline.py`, `tests/test_audio.py` | 3 |
-| **P2** | `lmt eval --set ci`, and the `eval-ci` job's double run and bounds (G1-5, G1-8c, G1-12's CI half) | #110 (PR #298) | `src/lmt/eval/runner.py` (new), `src/lmt/eval/worker.py` (new), `src/lmt/eval/cli.py`, `tests/test_eval_runner.py` (new), `tests/fixtures/eval/fake_worker.py` (new), `tests/test_eval_ci.py` (new), `.github/workflows/product.yml` (`eval-ci` only) | 3 |
-| **P3** | One test per CLI option and per bad input (G1-6); no language option (G1-7) | P1 | `tests/test_g1_6.py` (new), `tests/test_cli.py`, `tests/test_models.py` (tags), `tests/test_readme_table.py` (tag) | 2 |
+| **P2a** | `lmt eval --set ci`: the runner, the worker and the option, on fakes (G1-6's `--set ci` and `--out`) | #110 (PR #298, merged) | `src/lmt/eval/runner.py` (new), `src/lmt/eval/worker.py` (new), `src/lmt/eval/cli.py`, `tests/test_eval_runner.py` (new), `tests/fixtures/eval/fake_worker.py` (new) | 3 |
+| **P2b** | The `eval-ci` job's double run and bounds (G1-5, G1-8c, G1-12's CI half), and the command in the README | P2a | `tests/test_eval_ci.py` (new), `.github/workflows/product.yml` (`eval-ci` only), `README.md` (`## Checks`), `.github/scripts/check_readme.py` (`PRODUCT_COMMANDS`) | 3 |
+| **P3** | One test per CLI option and per bad input (G1-6); no language option (G1-7) | P1 | `tests/test_g1_6.py` (new), `tests/test_cli.py`, `tests/test_models.py` (tags) | 2 |
 | **P4** | Bad input never crashes it (G1-11) | P1, E1 (#296/#299) | `tests/bad_inputs.py` (new), `tests/test_g1_11.py` (new), `tests/test_decode_fuzz.py` (new) | 2 |
 | **P5** | The two-speaker product run and G1-3's test | #123's two-speaker clip | `tests/conftest.py`, `tests/test_g1_3.py` (new) | 2 |
 | **P6** | The exports' checks (G1-4) | P5 | `tests/subtitle_checks.py` (new), `tests/test_g1_4.py` (new), `.github/workflows/product.yml` (`test-models` only) | 3 |
 | **P7** | The network and files (G1-13) | P5 | `tests/isolation.py` (new), `tests/netguard/sitecustomize.py` (new), `tests/test_netguard.py` (new), `tests/test_g1_13.py` (new) | 2 |
-| **P8** | `lmt eval --set full` and `--update-readme`, on fakes (G1-6's last two options) | P2 | `src/lmt/eval/runner.py`, `src/lmt/eval/cli.py`, `tests/test_eval_full.py` (new) | 3 |
+| **P8** | `lmt eval --set full` and `--update-readme`, on fakes (G1-6's last two options), and the README table's RTF note | P2a | `src/lmt/eval/runner.py`, `src/lmt/eval/cli.py`, `src/lmt/eval/readme.py`, `tests/test_eval_full.py` (new), `tests/test_readme_table.py` | 3 |
 | **P9** | `lmt.transcript.load`, `jsonschema` at run time, and the code for #286 as `g1-slice.md` decides it | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
 | **P10** | The registry: `complete = true` for each criterion whose checks have passed on `main` | the items it marks | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 |
 
-**Parallel-safe,** by the files above, except two pairs. P1 and P3 both rely on decode coming first, so P3 waits for P1. P2 and P6 both edit `product.yml`, in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
+**Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. The one pair that may run at the same time and share a file is P2b and P6, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
 
 **Order, for G1's CI deadline (2026-10-30, end of day).** The shortest path to the most criteria met. Two Developer runs at a time (`system/caps.toml`):
 
-1. **P1 ∥ P2.** P2 needs #110's PR #298 merged first. P2 is the first measurement of G1-8c, the criterion most likely to need a product fix or an Owner question, so it goes early. P1 is small.
-2. **P3 ∥ P4** (P4 once E1 has merged). G1-7 needs only P3; G1-11 needs P4.
-3. **#123's two-speaker clip**, then **P5**, then **P6 ∥ P7**. These carry G1-3, G1-4 and G1-13. **Recommendation to the Coordinator:** #123 lands the two-speaker clip first, as an item of its own (rules, "If the item is bigger than one run"), with LS full, AMI full and the one-hour recording after it, since only stage 3 needs those.
-4. **P8**, which completes G1-6.
+1. **P1 ∥ P2a.** Both are small and need nothing unmerged.
+2. **P2b ∥ P3.** P2b is the first measurement of G1-8c, the criterion most likely to need a product fix or an Owner question, so it goes as soon as P2a merges. If it is held for the Architect, only the `eval-ci` job's check waits: P2a's runner and `--set ci` are already on `main`, and P8 doesn't need P2b. G1-7 needs only P3.
+3. **P4 ∥ P8** (P4 once E1 has merged). G1-11 needs P4; P8 completes G1-6.
+4. **#123's two-speaker clip**, then **P5**, then **P6 ∥ P7**. These carry G1-3, G1-4 and G1-13. **Recommendation to the Coordinator:** #123 lands the two-speaker clip first, as an item of its own (rules, "If the item is bigger than one run"), with LS full, AMI full and the one-hour recording after it, since only stage 3 needs those.
 5. **P10**, once the others have passed on `main`. If the deadline nears first, it marks what has passed, and a second P10 run marks the rest.
 6. **P9** whenever a run is free: no G1 criterion waits on it, but G3's stage 1 does.
 
-**What the deadline can carry.** It's 01:10 PT on 2026-10-29. Every item is one Developer run, and most are tier 2 or 3, so roughly an hour of CI each, plus review and the Owner's merge where the path is protected. All ten fit by the end of 2026-10-30 if #110 merges this morning and #123's two-speaker clip by the evening. The criteria at risk are: G1-3, G1-4 and G1-13, behind #123; and G1-8c, if its first reading misses a bound. Next most exposed is G1-6, which waits for P8 behind P2.
+**What the deadline can carry.** It's 09:46 PT on 2026-10-29. Every item is one Developer run, and most are tier 2 or 3, so roughly an hour of CI each, plus review and the Owner's merge where the path is protected. All eleven fit by the end of 2026-10-30 if #123's two-speaker clip merges by the evening of 2026-10-29 (#110 has merged). The criteria at risk are: G1-3, G1-4 and G1-13, behind #123; and G1-5 and G1-8c, if G1-8c's first reading misses a bound. Next most exposed is G1-6, which waits for P8 behind P2a.
 
 **Every item's local checks:** `uv run --frozen ruff check`, `uv run --frozen pytest`, `uv run --frozen pytest -m models` where it has model tests and the models are in `LMT_CACHE_DIR`, and `python3 -I system/gate/generic.py --base origin/main`. Each tagged test carries its criterion (`criteria.md` §1). Each PR shows `criteria.py --ref refs/pull/<n>/merge` giving its criteria `partial`, with no failed check.
 
@@ -49,9 +51,11 @@ This is what a Developer needs to build each item below in one run. It finishes 
 
 **Test of the item:** those tests, in the `test` job, and G1-1's test still passing in `test-models`.
 
-## P2. `lmt eval --set ci` and the `eval-ci` job
+## P2a and P2b. `lmt eval --set ci` and the `eval-ci` job
 
-### The runs
+Two items, so that G1-8c's first reading can't hold back the runner. **P2a** builds the runs ("The runs") and their test, `tests/test_eval_runner.py`, in the `test` job. **P2b** builds the `eval-ci` job's steps ("The `eval-ci` job") and `tests/test_eval_ci.py`, on P2a's runner. Each is tested on its own, as "Tests" says.
+
+### The runs (P2a)
 
 Each scored file goes through **the product run**, in a process of its own, as the spec's "Terms" define it: LibriSpeech utterances with `--no-diarize`, and AMI with no option. The architecture has each stage's output "computed once per file and reused". So the same process also records ASR's words and diarization's turns, which give Whisper alone and pyannote alone (`architecture.md`, "Evaluation harness").
 
@@ -74,13 +78,14 @@ def evaluate(set_name: str, *, out_dir: Path, determinism=None) -> dict    # wri
 ```
 
 - **`run_product`.** Diarization is on when the item has reference turns (`item.ref_turns is not None`), which holds for AMI and not for LibriSpeech. The process is `[sys.executable, *WORKER, <stages file>, "transcribe", str(item.audio)]`, plus `--no-diarize` when diarization is off. It runs in a new empty directory under `work_dir`, with stdout to `DEVNULL` and stderr to a file there. `wall_seconds` runs from just before `Popen` to `os.wait4(pid, 0)`'s return: process start to exit, model loading included (spec, RTF). `peak_rss_bytes` is `wait4`'s `ru_maxrss`, × 1024 on Linux, as is on macOS. That is the counter `/usr/bin/time -l` prints, which G1-10 names. A non-zero exit raises `InputError(str(item.audio), f"lmt transcribe exited {code}: {stderr's last line}")`. The transcript is `<dir>/<audio stem>.json`.
-- **`hypotheses`.** `product`: `hypothesis_from_transcript(doc)`, with the run's `wall_seconds` and `peak_rss_bytes`. `whisper-alone`: the words' texts joined by single spaces, no turns, `wall_seconds = asr_seconds`. `pyannote-alone`, only when diarization ran: the raw turns as `score.Turn`s, no text, `wall_seconds = diarize_seconds`. The two stages run side by side within the product run (`PARALLEL`), so their times are measured under each other's load. That's recorded as it is: CI never fails on RTF.
+- **`hypotheses`.** `product`: `hypothesis_from_transcript(doc)`, with the run's `wall_seconds` and `peak_rss_bytes`. `whisper-alone`: the words' texts joined by single spaces, no turns, `wall_seconds = asr_seconds`. `pyannote-alone`, only when diarization ran: the raw turns as `score.Turn`s, no text, `wall_seconds = diarize_seconds`.
+- **The three RTFs' timing bases differ, and that is stated, not measured away.** The product's is the spec's: process start to exit. Whisper alone's and pyannote alone's is their own stage's time within that same run: the model's loading and its inference, without interpreter start, imports, decode or export. When diarization runs, the two stages run side by side (`PARALLEL`), so each is timed under the other's load. Measuring the alones the product's way would mean running each model again in a process of its own, against `architecture.md`'s "each stage's output is computed once per file and reused", and doubling the Mac's full run. So the basis is stated where readers see the figures: the README table's note (P8), and, by the Owner's decision, the results format in `public-api.md` (#328). No item here waits on #328. CI never fails on RTF (G1-9), so no check depends on it.
 - **`evaluate`.** It calls `datasets.fetch(set_name)`, which downloads, caches and verifies the set (G1-5's "downloads and caches"). Then it runs every item in order, one at a time, in a `tempfile.TemporaryDirectory()`, with one stderr line per item: `lmt: eval: <dataset> <id> (<i>/<n>) <wall> s`. It calls `score.score(items, hyps)`, then `report.build(set_name, figures, models, determinism, out_dir=out_dir)` and `report.write(out_dir / f"{set_name}.json", …)`. `models` is the first diarized run's transcript `models`, or the first run's when none is diarized. It writes nothing but the results file, and the temporary directory goes when it's done.
 - **The figures** for `ci`, in `score`'s order: LS-ci `product` and `whisper-alone` (WER and RTF); AMI-ci `product` (WER, DER and RTF), `whisper-alone` (WER and RTF) and `pyannote-alone` (DER and RTF). That is G1-5's list: WER on both, DER on AMI-ci, RTF for each system.
 
 **`src/lmt/eval/cli.py`:** `--set ci` creates `--out` if needed (`mkdir(parents=True, exist_ok=True)`), then calls `runner.evaluate("ci", out_dir=Path(args.out))`, and prints the results file's path to stdout. `--set full` stays `NotBuilt` until P8.
 
-### The `eval-ci` job
+### The `eval-ci` job (P2b)
 
 On top of #110's steps, which restore the data cache and run `pytest -m data`:
 
@@ -92,23 +97,27 @@ On top of #110's steps, which restore the data cache and run `pytest -m data`:
 6. #110's `pytest -m data --criteria-out=criteria-eval-ci.json` step moves here, after the two runs, with `env: LMT_EVAL_CI_FIRST: ${{ runner.temp }}/ci-1.json`. So one pytest run writes the job's one record.
 7. Before #110's record upload, an upload of both results files, `if: ${{ !cancelled() }}`, named `eval-ci-results` (the same pinned `actions/upload-artifact`).
 
+**The command in the README** (`g1-stage1.md` §1a, "The stage-2 item that adds the `eval-ci` run adds the command"): `README.md`'s `## Checks` names `uv run --frozen lmt eval --set ci` as inline code, outside fenced code, and `check_readme.py`'s `PRODUCT_COMMANDS` gains that string. S1-4's check then finds it in both the README and `product.yml`. The `readme` job runs that check on the PR.
+
 **Time.** One run is 20 LibriSpeech processes, each loading the model (≈ 10 s) for about 8 s of audio, plus AMI-ci's 300 s at an RTF near 0.5. That's about 7 minutes, so the two come to about 15, inside the job's 45-minute timeout. The PR shows the job's time. If it passes 1.5 times the architecture's 34-minute tier-3 estimate, the Developer says so on the item.
 
 ### Tests
 
-- **`tests/test_eval_runner.py`** (the `test` job, no model):
+- **`tests/test_eval_runner.py`** (P2a; the `test` job, no model):
   - The runner runs `tests/fixtures/eval/fake_worker.py` in place of the worker, on fake items built from `tests/fixtures/eval/ls/` and `ami/` (#109's fixtures). The fake copies the fixture's hypothesis transcript into its directory as `<stem>.json`. It writes stages whose words are that transcript's words, and whose turns are its segments' turns.
   - The results file's figures are then the hand-computed ones: LS WER 0.263158 for `product` and `whisper-alone`, and AMI DER 0.117647 for `product` and `pyannote-alone`. Every figure's `rtf` and `wall_seconds` is a number, and `peak_rss_bytes` is a number for `product` only.
   - Diarization is off exactly for the LibriSpeech items: the fake records its argv. A fake that exits 4 makes `evaluate` raise exit 3, naming the item. `--set ci` and `--out DIR` through `cli.main` write `DIR/ci.json` and print its path (tagged `G1-6`).
   - `worker.main` runs in process, with `asr.load` and `diarize.load` faked as in `tests/test_pipeline.py`. Its stages file holds the fakes' words and turns, and its exit code is `cli.main`'s. With a fake ASR that finds no words, it exits 4 and writes no stages file.
-- **`tests/test_eval_ci.py`**, marked `data`, reads the job's two files: `$LMT_EVAL_CI_FIRST` and `results/ci.json`. Without the variable it skips, saying so, except under `CI`, where it fails.
+- **`tests/test_eval_ci.py`** (P2b), marked `data`, reads the job's two files: `$LMT_EVAL_CI_FIRST` and `results/ci.json`. Without the variable it skips, saying so, except under `CI`, where it fails.
   - **G1-5 and G1-12** (tagged both): both files exist with `set` `"ci"`, they hold the figures listed above with those values non-null, and `report.same_accuracy(first, second)` is true. On failure it prints both stripped files' unified diff.
   - **G1-8c** (tagged): from `results/ci.json`'s `product` figures, LS-ci WER ≤ 0.050, AMI-ci WER ≤ 0.250 and AMI-ci DER ≤ 0.250. Each bound is a constant whose comment cites the spec. `score._figure` rounds `wer` and `der` to 6 decimal places, so rounding can lower a value by up to 5 × 10⁻⁷. The two rates need different rules for that:
     - **WER** is `E/N`, whole errors over `N` reference words. If `E/N > 1/20`, then `20E ≥ N + 1`, so it exceeds 0.05 by at least `1/(20N)`. That is more than 5 × 10⁻⁷, and survives rounding, only while `N < 100,000`. For 0.25 the margin is `1/(4N)`, so `N < 500,000`. LS-ci's 20 utterances and AMI-ci's 300 s hold on the order of a thousand reference words between them, far below both. So for WER, the rounded value `≤` its bound is exactly the spec's inclusive test. A comment beside the WER bounds states this, and that it must be redone if a CI subset ever nears 100,000 reference words.
     - **DER** is a ratio of durations, with no such spacing: a true 0.2500004 rounds to 0.250000. So AMI-ci's DER passes only when the rounded value is **below** 0.250. A rounded value equal to 0.250 fails, with the message "DER equals its bound after rounding, so a pass can't be told from a miss", and goes to the Architect as a miss does (below). That can't pass a miss. It can hold back a true pass of exactly 0.250, which the Architect then settles.
   - Every figure goes to the test's output and to `$GITHUB_STEP_SUMMARY`, pass or fail.
 
-**Test of the item:** the tests above, in the `test` and `eval-ci` jobs of the PR (tier 3), with the summary's figures and `criteria-eval-ci` giving G1-5 and G1-8c `passed`. **If G1-8c misses a bound,** or its DER equals the bound after rounding, while the double run passes, the Developer reports the figures on the item and holds it for the Architect (`needs-decision:architect`), without changing the bounds or the subset. The Architect then decides between a product fix and the spec's route: a subset bound proposed to the Owner, only if the full set meets G1-8, which needs the Mac's run.
+**Test of P2a:** `tests/test_eval_runner.py`, in the PR's `test` job (tier 3, for `src/lmt/eval/`). Its PR shows G1-6 `partial`, with every check passing.
+
+**Test of P2b:** `tests/test_eval_ci.py` in the PR's `eval-ci` job (tier 3, for `product.yml`), with the summary's figures and `criteria-eval-ci` giving G1-5 and G1-8c `passed`, and the `readme` job passing. **If G1-8c misses a bound,** or its DER equals the bound after rounding, while the double run passes, the Developer reports the figures on the item and holds it for the Architect (`needs-decision:architect`), without changing the bounds or the subset. The Architect then decides between a product fix and the spec's route: a subset bound proposed to the Owner, only if the full set meets G1-8, which needs the Mac's run.
 
 ## P3. G1-6's tests, and G1-7's
 
@@ -126,7 +135,7 @@ On top of #110's steps, which restore the data cache and run `pytest -m data`:
 | `--overwrite` | An existing output is replaced. Without the option, it exits 2 and the file is unchanged. |
 | `-v`, `--verbose` | Six stage lines on stderr, and none without it. |
 
-The other commands' options are tagged where their tests already are: `models download --model`, `list --bytes` and `verify` in `tests/test_models.py`; `eval --check-readme` in `tests/test_readme_table.py`; and `--version` and `--help` already in `tests/test_cli.py`. P3 also tags `tests/test_cli.py`'s `test_default_formats` `G1-4`, for P6 (below). `eval --set ci` and `--out` are P2's, and `--set full` and `--update-readme` P8's.
+The other commands' options are tagged where their tests already are: `models download --model`, `list --bytes` and `verify` in `tests/test_models.py`; and `--version` and `--help` already in `tests/test_cli.py`. P3 also tags `tests/test_cli.py`'s `test_default_formats` `G1-4`, for P6 (below). `eval --set ci` and `--out` are P2a's; `--set full`, `--update-readme` and the tag on `eval --check-readme` in `tests/test_readme_table.py` are P8's, which edits that file.
 
 **Bad input,** through `lmt transcribe` in a subprocess (`conftest.run_lmt`), with no model needed since P1:
 
@@ -189,12 +198,13 @@ def run_bounded(argv, *, cwd, timeout=120) -> subprocess.CompletedProcess
 
 ### The two-speaker clip's rule (for #123)
 
-`g1-stage1.md` §5b describes the clip but doesn't fix which utterances it uses. This rule fixes them now, before anything is measured on the clip. #123 applies it, and records the result in a comment in `sets.toml` as S1 did, with the clip's resulting duration: at least 55.5 s, and longer when a turn's last utterance runs past 13.5 s. The rule stands whatever that duration is, since it is fixed before measurement:
+`g1-stage1.md` §5b describes the clip but doesn't fix which utterances it uses. This rule fixes them now, before anything is measured on the clip. #123 applies it, and records the result in a comment in `sets.toml` as S1 did, with the clip's resulting duration: at least 55.5 s (item 4), and longer when a turn's last utterance runs past 13.5 s. The rule stands whatever that duration is, since it is fixed before measurement:
 
 1. **The speakers.** From `LibriSpeech/SPEAKERS.TXT` (a member to add to the archive source), the test-clean speaker with the lowest id whose sex is `F`, and the one with the lowest id whose sex is `M`.
-2. **The turns** alternate, F, M, F, M. Each speaker's utterances are taken in ascending id order, continuing from where that speaker's previous turn stopped. A turn is the shortest run of them that lasts at least 13.5 s.
-3. **The pieces** are the turns' utterances in order, joined with `gap = 0.5`, by S1's recipe.
-4. **The references.** `tests/fixtures/two_speakers.rttm` has one `SPEAKER two_speakers 1 <start> <duration> <NA> <NA> <LibriSpeech speaker id> <NA> <NA>` line per piece, at its offset in the clip, with times to the millisecond. `two_speakers.txt` holds the texts in order, as `clip.txt` does.
+2. **The turns** alternate, F, M, F, M. Each speaker's utterances are taken in ascending id order, continuing from where that speaker's previous turn stopped. A turn is the shortest run of them that lasts at least 13.5 s, as item 4 measures it.
+3. **The pieces** are the turns' utterances in order, each whole (`start = 0.0`, `end` = its duration), joined with `gap = 0.5`, by S1's recipe.
+4. **How long a turn lasts:** from its first piece's start to its last piece's end in the clip. That is its utterances' durations plus the 0.5 s gaps *between its own utterances*, so a turn of `k` utterances counts `k − 1` gaps. The gap after a turn's last utterance, before the next speaker, isn't counted. An utterance's duration is its decoded sample count at 16 kHz over 16,000. So the test is exact in whole samples: the sum of its `k` utterances' sample counts, plus `8,000 × (k − 1)`, is at least 216,000. The clip is then the four turns plus the three 0.5 s gaps between them, at least 4 × 13.5 + 3 × 0.5 = 55.5 s.
+5. **The references.** `tests/fixtures/two_speakers.rttm` has one `SPEAKER two_speakers 1 <start> <duration> <NA> <NA> <LibriSpeech speaker id> <NA> <NA>` line per piece, at its offset in the clip, with times to the millisecond. `two_speakers.txt` holds the texts in order, as `clip.txt` does.
 
 ## P6. The exports' checks (G1-4)
 
@@ -239,7 +249,12 @@ def run_isolated(argv, *, env, cwd) -> Isolated     # CompletedProcess fields, p
 
 `run_isolated` runs `python -m lmt <argv>`. Where `sudo -n true` succeeds and `unshare` and `setpriv` are on `PATH` (the CI runner), it wraps the run: `sudo -n unshare --net -- setpriv --reuid=<uid> --regid=<gid> --clear-groups -- env -i <env as K=V …> <sys.executable> -m lmt <argv>`, with `isolated = True`. So the run has no network interface but a down loopback, and runs as the runner's own user. Elsewhere it runs `lmt` with `env` alone, and sets `isolated = False`.
 
-**`tests/test_netguard.py`** (the `test` job). A subprocess with the guard: a connection to `127.0.0.1` is logged and refused; with `LMT_NETGUARD_ALLOW=127.0.0.1`, a connection to a closed local port is refused by the system and not logged; `192.0.2.1:80` is logged, and so is `::1` (skipped, saying so, where an IPv6 socket can't be made). Where `run_isolated` isolates, a child that calls `socket.create_connection(("192.0.2.1", 80), timeout=3)` inside it fails with `OSError`. That shows the namespace has no route.
+**`tests/test_netguard.py`** (the `test` job). It is the guard's one test, G1's and G3's (`g3-stage1.md`, "The network guard"). The guard refuses before the system tries, so no case depends on the machine's interfaces. A subprocess with the guard:
+- **With the default empty allowance,** connections to `127.0.0.1`, `::1` and `192.0.2.1:80` are each logged and refused.
+- **With `LMT_NETGUARD_ALLOW=127.0.0.1`** (G3's setting), a connection to a closed port on `127.0.0.1` is refused by the system (`ECONNREFUSED`) and not logged, and connections to `127.0.0.2`, `::1` and `192.0.2.1:80` are each logged and refused with `ENETUNREACH`.
+- Only the `::1` cases are skipped, saying so, where an IPv6 socket can't be made.
+
+Where `run_isolated` isolates, a child that calls `socket.create_connection(("192.0.2.1", 80), timeout=3)` inside it fails with `OSError`. That shows the namespace has no route.
 
 **`tests/test_g1_13.py`**, marked `models`, tagged `G1-13`:
 
@@ -254,13 +269,15 @@ def run_isolated(argv, *, env, cwd) -> Isolated     # CompletedProcess fields, p
 
 ## P8. `lmt eval --set full` and `--update-readme`
 
-G1-6 needs a test of every documented option, and these two are `eval`'s last. The Owner's run of them is stage 3's. They're built now, on P2's runner, and tested on fakes.
+G1-6 needs a test of every documented option, and these two are `eval`'s last. The Owner's run of them is stage 3's. They're built now, on P2a's runner, and tested on fakes.
 
 - **`runner.evaluate_full(out_dir, *, update_readme)`.** It runs `evaluate("ci", …)` twice, into a temporary directory, then sets `determinism = {"runs": 2, "identical": report.same_accuracy(first, second)}` (G1-12's Mac half). Then it runs `evaluate("full", out_dir=out_dir, determinism=determinism)`, over the sets #123 adds (LS full, AMI full and the one-hour recording), one file at a time (G1-9). With `update_readme`, it ends with `readme.update(Path("README.md"), out_dir / "full.json")`. A tree with uncommitted changes gives `dirty: true`, so `readme.render` refuses the update with exit 3, after `full.json` is written.
 - **`cli.py`:** `--set full` calls it and prints `full.json`'s path.
-- **`tests/test_eval_full.py`** (the `test` job, tagged `G1-6`), with `datasets.fetch` faked for `ci` and `full`, and P2's fake worker. `--set full` writes `full.json` with `determinism` `{"runs": 2, "identical": true}`. With the fake changed to give different words on the second `ci` run, `identical` is `false`. `--set full --update-readme`, in a temporary git repository with a committed README, rewrites the table between the markers, and `--check-readme` then exits 0.
+- **The README table's RTF note** (P2a, "The three RTFs' timing bases"). `readme.render` adds one paragraph after the table, when the file has figures: "RTF is wall-clock time over audio duration. For the product, it runs from process start to exit, model loading included. Whisper alone and pyannote alone come from that same run: each is its own stage's model loading and inference, without start-up, decoding or export, and, with diarization on, while the other stage runs beside it. So the three RTFs aren't like for like." The placeholder's render doesn't change, so the committed README still passes `--check-readme`.
+- **`tests/test_readme_table.py`:** its expected string for a file with figures gains the note, and its `--check-readme` test is tagged `G1-6`.
+- **`tests/test_eval_full.py`** (the `test` job, tagged `G1-6`), with `datasets.fetch` faked for `ci` and `full`, and P2a's fake worker. `--set full` writes `full.json` with `determinism` `{"runs": 2, "identical": true}`. With the fake changed to give different words on the second `ci` run, `identical` is `false`. `--set full --update-readme`, in a temporary git repository with a committed README, rewrites the table between the markers, and `--check-readme` then exits 0.
 
-**Test of the item:** that test, in the `test` job.
+**Test of the item:** those tests, and the `readme` job's `--check-readme`, on the PR.
 
 ## P9. `lmt.transcript.load`, `jsonschema` at run time, and #286's code
 
@@ -292,10 +309,10 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 | --- | --- | --- |
 | G1-3 | P5 | `tests/test_g1_3.py` |
 | G1-4 | P3 and P6 | `tests/test_g1_4.py`, `tests/test_cli.py` (`test_default_formats`) |
-| G1-5 | P2 | `tests/test_eval_ci.py` |
-| G1-6 | P3, P2 and P8 | `tests/test_cli.py`, `tests/test_g1_6.py`, `tests/test_models.py`, `tests/test_readme_table.py`, `tests/test_eval_runner.py`, `tests/test_eval_full.py` |
+| G1-5 | P2b | `tests/test_eval_ci.py` |
+| G1-6 | P3, P2a and P8 | `tests/test_cli.py`, `tests/test_g1_6.py`, `tests/test_models.py`, `tests/test_readme_table.py`, `tests/test_eval_runner.py`, `tests/test_eval_full.py` |
 | G1-7 | P3 and #110, with the Reviewer's reading of `public-api.md` on this PR | `tests/test_asr.py`, `tests/test_manifests.py`, `tests/test_cli.py` |
-| G1-8c | P2 | `tests/test_eval_ci.py` |
+| G1-8c | P2b | `tests/test_eval_ci.py` |
 | G1-11 | P4 | `tests/test_g1_11.py`, `tests/test_decode_fuzz.py` |
 | G1-13 | P7 (its `owner` line stays) | `tests/test_g1_13.py` |
 
@@ -307,7 +324,7 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 
 ## Risks
 
-- **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2, above). The bounds don't move.
+- **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move.
 - **Determinism of the double run.** ASR and diarization run side by side. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3.
 - **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
 - **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
