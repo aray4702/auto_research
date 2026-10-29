@@ -102,7 +102,7 @@ class ProgressViewTest(unittest.TestCase):
         page = views.progress_page(self.page_data())
         self.assertIn('<a href="/" aria-current=page>Progress</a>', page, "Progress is the default tab (#246)")
         self.assertIn('<a href="/roles">Roles</a>', page)
-        self.assertIn('<a href="/overview">Overview</a>', page)
+        self.assertIn('<a href="/waiting">Waiting on you</a>', page)
         self.assertIn("<th>End</th>", page)
         self.assertIn("Transcribe &lt;b&gt;a&lt;/b&gt; recording", page)
         self.assertNotIn("<b>a</b>", page)
