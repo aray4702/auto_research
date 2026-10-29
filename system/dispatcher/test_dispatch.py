@@ -155,6 +155,10 @@ class CandidatesTest(unittest.TestCase):
                          [("developer", 22, "PR #22 needs work: it conflicts with main.")])
         green = dict(snap(prs=prs), main_gate="SUCCESS")
         self.assertEqual([(i, w) for _, i, _, w in plan.candidates(green, set(), IDENTITY)], [(20, "pr-work"), (22, "pr-work")])
+        # The PR that fixes main is red for its own reason: it is still offered, or main stays red with no run on it.
+        fix = dict(snap(issues=[issue(5, "type:fix", "sev:1")], prs=[pr(24, gate="FAILURE", resolves=[5])]), main_gate="FAILURE")
+        self.assertEqual([(r, i, t) for r, i, t, _ in plan.candidates(fix, set(), IDENTITY)],
+                         [("developer", 24, "PR #24 needs work: its gate is red.")])
 
     def test_claimed_running_and_records_are_never_offered(self):
         s = snap(issues=[issue(1, "type:fix", "sev:1", "state:claimed"), issue(2, "type:fix", "sev:1"), issue(13, "record:decision-log")])
