@@ -185,6 +185,25 @@ class CandidatesTest(unittest.TestCase):
         s = snap(issues=[issue(2, "state:triage")])
         self.assertEqual([c[3] for c in plan.candidates(s, set(), IDENTITY, daily="Daily run")], ["daily-catch-up", "triage"])
 
+    def test_an_answered_review_goes_back_to_the_reviewer_not_the_author(self):
+        # #257: on #250 the Developer answered a requested change by comment, with the head unchanged, and was
+        # restarted every poll (7 runs) while the Reviewer never was.
+        at = lambda m: (NOW + timedelta(minutes=m)).isoformat()
+        p = pr(250, reviews=[(BOT, "CHANGES_REQUESTED", "h2")])
+        p["reviews"][0]["at"] = at(0).replace("+00:00", "Z")
+        started = lambda runs: [(r, w) for r, i, _, w in plan.choose(snap(prs=[p]), runs, CAPS, IDENTITY, NOW + timedelta(minutes=30))[0] if i == 250]
+        self.assertEqual(started([]), [("developer", "pr-work")], "not answered yet: the author works on it")
+        before = [{"event": "start", "run_id": "d-0", "role": "developer", "item": 250, "at": at(-5)},
+                  {"event": "end", "run_id": "d-0", "role": "developer", "item": 250, "at": at(3)}]
+        self.assertEqual(started(before), [("developer", "pr-work")], "a run that started before the review didn't see it")
+        answered = [{"event": "start", "run_id": "d-1", "role": "developer", "item": 250, "at": at(10)},
+                    {"event": "end", "run_id": "d-1", "role": "developer", "item": 250, "at": at(12)}]
+        self.assertEqual(started(answered), [("reviewer", "review")], "answered: the Reviewer reads the answer")
+        running = [{"event": "start", "run_id": "d-2", "role": "developer", "item": 250, "at": at(10)}]
+        self.assertEqual(started(running), [], "still working on it: nothing else starts on the PR")
+        p["reviews"].append({"login": BOT, "state": "CHANGES_REQUESTED", "commit": "h2", "at": at(20).replace("+00:00", "Z")})
+        self.assertEqual(started(answered), [("developer", "pr-work")], "the Reviewer asked again: back to the author")
+
     def test_changes_requested_on_the_head_sends_it_back_to_its_author(self):
         s = snap(prs=[pr(5, role="builder", reviews=[(BOT, "CHANGES_REQUESTED", "h2")])])
         self.assertEqual([(c[0], c[3]) for c in plan.candidates(s, set(), IDENTITY)], [("builder", "pr-work")])
