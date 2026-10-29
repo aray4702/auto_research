@@ -10,6 +10,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from lmt import cli
 
 PUBLIC_API = Path(__file__).resolve().parents[1] / "design" / "public-api.md"
@@ -65,6 +67,7 @@ def parser_options(parser, path=()):
 
 
 class HelpAndVersionTest(unittest.TestCase):
+    @pytest.mark.criterion("G1-6")
     def test_help_exits_0_for_lmt_and_every_subcommand(self):
         for argv in ([], ["transcribe"], ["models"], ["models", "download"], ["models", "list"],
                      ["models", "verify"], ["eval"]):
@@ -73,6 +76,7 @@ class HelpAndVersionTest(unittest.TestCase):
                 self.assertEqual(code, 0, err)
                 self.assertIn("usage: lmt", out)
 
+    @pytest.mark.criterion("G1-6")
     def test_module_entry_point_help(self):
         r = subprocess.run([sys.executable, "-m", "lmt", "--help"], capture_output=True, text=True, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
@@ -85,11 +89,13 @@ class HelpAndVersionTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip().splitlines()[-1], "[]")
 
+    @pytest.mark.criterion("G1-6")
     def test_version(self):
         code, out, _ = run("--version")
         self.assertEqual((code, out), (0, "lmt 0.1.0\n"))
 
 
+@pytest.mark.criterion("G1-6")
 class OptionTableTest(unittest.TestCase):
     """G1-6: the parser's options are exactly public-api.md's, both ways."""
 
@@ -114,6 +120,7 @@ class OptionTableTest(unittest.TestCase):
                 self.assertFalse(LATER_GOAL.search(heading))
 
 
+@pytest.mark.criterion("G1-6")
 class UsageErrorTest(unittest.TestCase):
     def assertUsageError(self, argv, subject):
         code, out, err = run(*argv)

@@ -36,10 +36,17 @@ The runner is headless Claude Code (`claude -p`, version 2.1.303) on the Owner's
 
 ## Models
 
-Every LLM role uses **Claude Opus 5.5** (`claude-opus-5-5`, $4/$20 per MTok), with effort set explicitly because its default is `medium`:
+Every LLM role uses **Claude Opus 5.5** (`claude-opus-5-5`, $4/$20 per MTok), except the Coordinator, with effort set explicitly because its default is `medium`:
 
 - **`high`:** Architect, Developer, Reviewer and Builder.
 - **`medium`:** Coordinator and Tester.
+
+**The Coordinator on Sonnet 5.5** (`claude-sonnet-5-5`, $2/$10 per MTok) is a 24-hour trial from its merge (#251). The Owner asked to tune each role's model and effort for cost. The run records to 2026-10-28 20:25 PT show the Coordinator's work is bookkeeping, 67 triage/close passes at $0.55 each. The other roles stay on Opus at high:
+- the Reviewer is the one independent check;
+- builder runs approve protected PRs in the Owner's place (SR3);
+- the Architect and the Developer write the designs and the product.
+
+Their totals come from run counts, not from the price per run. #251's criteria decide whether the trial is kept or reverted.
 
 Claude Fable 5.1 costs 2.5× as much. It is a later lever, for example on an item that failed twice, if measurements show Opus falling short.
 
