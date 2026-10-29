@@ -833,3 +833,4 @@
 {"at": "2026-10-29T03:55:10+00:00", "event": "start", "item": 258, "pid": 57361, "role": "reviewer", "run_id": "reviewer-20261029T035504Z", "task": "Review PR #258."}
 {"at": "2026-10-29T04:39:06+00:00", "cost_usd": 0.435058, "denials": 1, "denied": ["Bash: python3 -m unittest"], "event": "end", "five_hour": 0.26, "item": 258, "role": "reviewer", "run_id": "reviewer-20261029T035504Z", "seven_day": 0.48, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 24}
 {"at": "2026-10-29T04:40:01+00:00", "event": "start", "item": 250, "pid": 61890, "role": "builder", "run_id": "builder-20261029T043956Z", "task": "Item #250 needs your decision (needs-decision:builder)."}
+{"at": "2026-10-29T04:40:18+00:00", "cost_usd": 3.017902, "denials": 1, "denied": ["Bash: ls"], "event": "end", "five_hour": 0.26, "item": 122, "role": "developer", "run_id": "developer-20261029T035019Z", "seven_day": 0.48, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 78}
