@@ -7,6 +7,7 @@
 | 2026-10-28 | architect, #82 | `public-api.md` now documents `lmt live` (G2): G1-6's table test skips the sections marked "(G2)", and G2's `lmt live` item adds the subcommand to `cli.py` |
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: the table test's skip and the `cli.py` exception also cover G3's `lmt rename` and `lmt demo`, which G3's items add |
 | 2026-10-28 | architect, #206 | §1a's `pyproject.toml` gains the wheel's `packages` and ruff's `include`, as #188 built them (the Owner's answer 1 on #188); `.github/scripts/` joins `include` in #222 |
+| 2026-10-29 | architect, #123 | §5b's open points for the Developer: the two-speaker clip's rule is `g1-stage2.md`'s (#304); `pin --write-members`; LS full's own source and every-utterance form; AMI full as one dataset with per-meeting lists; the one-hour recording as a `concat` dataset of AMI full |
 
 This is the detail a Developer needs to build each of G1 stage 1's items in one run. It works inside `spec/acceptance.md` G1, `design/architecture.md` and `design/public-api.md`, and the Owner's answers 1a–14a on #81 and #105. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
@@ -610,6 +611,27 @@ These are needed by stage 2 (the fixture clips) and stage 3 (the full sets), not
 - **The fixture clips are committed,** with their references, so tests don't need the network. A test rebuilds them from the cache when the CI subset is there (`data`), and compares their SHA-256 with the committed files. Their FLAC, MP3, M4A, MP4 and MOV encodings need ffmpeg, so they belong to stage 2's decode item.
 
 **Test of the item:** the manifest tests cover the new entries (16 AMI meetings, 2,620 LibriSpeech utterances); a unit test of the concatenation recipe on small WAVs (offsets, gaps, cut, references); and the `data` test of the fixture clips.
+
+### 5b's open points, decided (#123)
+
+#307 (#305) built `pin`, `{source, start, end}` slices, `cut`, `concat` and `place_references`. These are the Developer's four questions on #123. None changes a criterion: the sets, the cut at 3,600 s and the clips are as `spec/acceptance.md` gives them.
+
+1. **The two-speaker clip's utterances** are fixed by `g1-stage2.md`, "The two-speaker clip's rule (for #123)" (PR #304), and by nothing here. The one-utterance-per-turn, 12–18 s rule proposed on #123 isn't adopted. Its references are as that rule says: `tests/fixtures/two_speakers.rttm`, one line per piece, and `tests/fixtures/two_speakers.txt`, the texts as `clip.txt` has them. The `[[fixture]]` gains `rttm` and `rttm_sha256` (both or neither; the RTTM is built from the pieces' offsets and checked as the reference is). `LibriSpeech/SPEAKERS.TXT` and the clip's FLAC and `.trans.txt` members join `librispeech-test-clean`, so the `data` test rebuilds the clip after `fetch ci`.
+2. **`pin --write-members <source id>`** writes what `pin` hashed into `src/lmt/eval/manifests/sources.toml`, and nowhere else:
+   - It needs `--member`, and the URL must be one of that source's `urls`, with the downloaded size and SHA-256 equal to its entry. Otherwise it writes nothing and exits 3.
+   - It replaces that source's `[[source.member]]` tables (from its `[[source]]` to the next `[[source]]` or the end) with one `path`, `sha256` pair per member, in the archive's order. Every other line is left byte for byte.
+   - It writes to a temporary file beside `sources.toml`, runs `load_manifests` on the result, and renames it into place only if that passes.
+   - Its unit test uses a small served archive and a temporary manifest directory: the source's members are replaced; the rest of the file is unchanged; a URL or hash that doesn't match writes nothing.
+3. **LS full** has a source of its own, `librispeech-test-clean-full`: the same URLs, SHA-256 and size as `librispeech-test-clean`, `keep = false`, and all 2,707 members (2,620 `.flac`, 87 `.trans.txt`), written by `pin --write-members`. `fetch_source` extracts every listed member, so `fetch ci` stays at its own members. In `sets.toml`, LS full has no `utterances`: for `kind = "librispeech"`, a missing `utterances` means every `.flac` member of the source, in sorted id order, each with its `.trans.txt` member. (An empty list is still an error.) The manifest test checks 2,620.
+4. **AMI full** is one `[[dataset]] name = "AMI full"`, `set = "full"`, `kind = "ami"`. `meetings` lists the spec's 16 in order. `audio` and `rttm` are lists parallel to `meetings`, of the source ids `ami-<meeting>` and `ami-rttm-<meeting>` (ES2004a's ids stay). `words = "ami-annotations-1.6.2"`, which gains the other 60 `words/<meeting>.<speaker>.words.xml` members. Every `ami` dataset uses the list form, so AMI-ci becomes `audio = ["ami-ES2004a"]` and `rttm = ["ami-rttm-ES2004a"]` in the same PR. The loader checks that the lists are the same length as `meetings`, and allows `crop` only with one meeting. Each meeting is one item.
+5. **The one-hour recording** is `[[dataset]] name = "one-hour"` (§4's name), `set = "full"`, `kind = "concat"`, with these fields:
+   - `of = "AMI full"`;
+   - `concat`: one slice per meeting of `of`, in its order, `{source = <its audio id>, start = 0, end = <frames / 16000>}`, the exact decimal. The loader checks the sources against `of`;
+   - `gap = 0.0`, since the spec says only "concatenated";
+   - `cut = 3600.0`;
+   - `derived_sha256`.
+
+   It is one item, `derived/one-hour/one-hour.wav`. Only pieces whose offset is before the cut are read, which are EN2002a and EN2002b. Each piece's words and turns are its meeting's, from `of`'s recipes. They are placed with `place_references` and cropped at the cut as AMI-ci's are. `fetch full` builds it after AMI full and checks `derived_sha256`. It isn't committed.
 
 ## 6. The README results table (#111)
 
