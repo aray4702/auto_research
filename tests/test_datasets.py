@@ -297,7 +297,8 @@ def recipe(wav, out):
     mp4 = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1:d=57",
            "-map", "0:a:0", "-map", "1:v:0", "-map_metadata", "-1", "-fflags", "+bitexact",
            "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1", "-c:a", "aac", "-profile:a", "aac_low",
-           "-b:a", "128k", "-ar", "48000", "-ac", "1", "-c:v", "mpeg4", "-pix_fmt", "yuv420p"]
+           "-b:a", "128k", "-ar", "48000", "-ac", "1", "-c:v", "mpeg4", "-pix_fmt", "yuv420p",
+           "-max_interleave_delta", "0"]
     return {
         "flac": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
                  "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "flac",

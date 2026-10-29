@@ -29,6 +29,6 @@ encodings = [      # each file is tests/fixtures/clip.<format>, made by the reci
   {format = "flac", sha256 = "a28a55475f7806021f358fa4086b9b6dbf6e326aac4045c8d325fd1827f79080"},
   {format = "mp3",  sha256 = "79352818a4fd0d1f32731a03a615fbcb3d250b25cb893357f522d9c6a0301520"},
   {format = "m4a",  sha256 = "d061ea3e8b256479939b081c8ed5ba270a6d31d4c2c8b151473d21cba8f76ec0"},
-  {format = "mp4",  sha256 = "7e6c47834099d1c46cf0597aa359ee769619a57bf2d1ac63a5fcdc281a818b10"},
-  {format = "mov",  sha256 = "218797e1116ce56566b07db2ccfd3a7cffbfa59a68ab0bb72aef070d78ec61a4"},
+  {format = "mp4",  sha256 = "473288729ea4a30578e42d030f96cebb08d69422244fd364b68b269edfe443c9"},
+  {format = "mov",  sha256 = "a29ebcb52a3657aac89f44f0ee49e06b62c2123acd988faa353579f53b9b3019"},
 ]
