@@ -20,6 +20,8 @@ CAPS = tomllib.loads((Path(__file__).resolve().parents[1] / "caps.toml").read_te
 # temporary setting in caps.toml for the G1-1 push (#84).
 CAPS["concurrency"] = {"max_runs": 2, "max_runs_per_role": 1}
 CAPS["claude"]["weekly_points"] = 20
+# The Owner moves the headroom thresholds (#331), so readings at them come from caps.toml, not fixed numbers.
+HOLD, PAUSE = CAPS["claude"]["hold_new_runs_at_five_hour"], CAPS["claude"]["pause_at_seven_day"]
 NOW = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)  # 2026-10-26 20:00 PDT
 
 
@@ -174,7 +176,7 @@ class MayStartTest(unittest.TestCase):
         self.assertIn("architect runs today", reasons[0])
         busy = runs + [start("live", "architect", NOW)]
         self.assertIn("a architect run is already active", usage.may_start(caps, busy, "architect", NOW)[1], "concurrency still holds")
-        heavy = runs + [end("x", "developer", NOW, five_hour=0.6)]
+        heavy = runs + [end("x", "developer", NOW, five_hour=HOLD)]
         self.assertFalse(usage.may_start(caps, heavy, "architect", NOW)[0], "the 5-hour hold still holds")
 
     def test_weekly_points_warn_then_stop(self):
@@ -201,11 +203,13 @@ class MayStartTest(unittest.TestCase):
         self.assertIn("weekly points", reasons[0])
 
     def test_owner_headroom_holds_and_pauses(self):
-        busy = [end("x", "developer", NOW, five_hour=0.6)]
+        below = [end("x", "developer", NOW, five_hour=HOLD - 0.01, seven_day=PAUSE - 0.01)]
+        self.assertTrue(usage.may_start(CAPS, below, "coordinator", NOW)[0])
+        busy = [end("x", "developer", NOW, five_hour=HOLD)]
         ok, reasons, _ = usage.may_start(CAPS, busy, "coordinator", NOW)
         self.assertFalse(ok)
         self.assertIn("5-hour", reasons[0])
-        full_week = [end("x", "developer", NOW, seven_day=0.95)]
+        full_week = [end("x", "developer", NOW, seven_day=PAUSE)]
         self.assertIn("7-day", usage.may_start(CAPS, full_week, "coordinator", NOW)[1][0])
 
 
