@@ -144,7 +144,7 @@ def test_diarize_gives_sorted_turns(fake):
     annotation[Segment(0.125, 1.5), "b"] = "SPEAKER_00"  # overlapping turns stay
     annotation[Segment(0.125, 1.5), "c"] = "SPEAKER_02"
     FakePipeline.annotation = annotation
-    samples = numpy.linspace(-1, 1, 16_000, dtype=numpy.float32)
+    samples = numpy.linspace(-1, 1, 5 * 16_000, dtype=numpy.float32)
 
     turns = diarize.load(fake[0]).diarize(samples)
 
@@ -152,11 +152,27 @@ def test_diarize_gives_sorted_turns(fake):
                      Turn(0.125, 2.0, "SPEAKER_01"), Turn(3.5, 4.25, "SPEAKER_00")]
     ((file, kwargs),) = FakePipeline.instances[0].calls
     assert file["sample_rate"] == 16000
-    assert file["waveform"].shape == (1, 16_000)
+    assert file["waveform"].shape == (1, 5 * 16_000)
     assert numpy.array_equal(file["waveform"][0].numpy(), samples)
     assert kwargs == {"num_speakers": None, "min_speakers": None, "max_speakers": None}  # no speaker count
     assert torch.get_num_threads() == diarize.THREADS
     assert torch.are_deterministic_algorithms_enabled()
+
+
+def test_diarize_clips_the_turns_to_the_audio(fake):
+    annotation = Annotation()
+    annotation[Segment(-0.01, 0.5)] = "SPEAKER_00"
+    annotation[Segment(0.75, 1.02)] = "SPEAKER_01"
+    annotation[Segment(1.0, 1.015)] = "SPEAKER_00"  # wholly past the end: dropped
+    FakePipeline.annotation = annotation
+    diarizer = diarize.load(fake[0])
+
+    turns = diarizer.diarize(numpy.zeros(16_000, numpy.float32))
+
+    assert turns == [Turn(0.0, 0.5, "SPEAKER_00"), Turn(0.75, 1.0, "SPEAKER_01")]
+    assert diarizer.raw == [Turn(-0.01, 0.5, "SPEAKER_00"), Turn(0.75, 1.02, "SPEAKER_01"),
+                            Turn(1.0, 1.015, "SPEAKER_00")]
+    assert diarizer.clipped == pytest.approx(0.02)
 
 
 def test_diarize_passes_the_speaker_options(fake):
@@ -177,7 +193,7 @@ def read_clip():
 
 
 @pytest.mark.models
-def test_the_clip_diarizes_within_its_duration_without_network(monkeypatch):
+def test_the_clip_diarizes_within_its_duration_without_network(monkeypatch, capsys):
     """The speaker count isn't asserted: that is G1-3's, on the two-speaker clip."""
     monkeypatch.setenv("HF_HUB_OFFLINE", "0")  # so teardown undoes ensure()'s
     manifest = models.load_manifest()
@@ -190,8 +206,16 @@ def test_the_clip_diarizes_within_its_duration_without_network(monkeypatch):
         raise OSError("the diarization stage tried the network")
 
     monkeypatch.setattr(socket.socket, "connect", no_network)
-    turns = diarize.load(dirs).diarize(samples)
+    diarizer = diarize.load(dirs)
+    turns = diarizer.diarize(samples)
 
+    # The guard on clipping (builder, #285): pyannote's frame grid may overshoot the audio by up to one frame
+    # step, never more. A larger overshoot is a different fault.
+    step = diarizer._pipeline._segmentation.model.receptive_field.step
+    with capsys.disabled():  # into CI's log, whether the test passes or fails
+        print(f"\nRaw turns: first {diarizer.raw[0]}, last {diarizer.raw[-1]}; duration {duration:.6f} s; "
+              f"clipped at most {diarizer.clipped:.6f} s; frame step {step:.6f} s")
+    assert diarizer.clipped <= step
     assert turns
     assert all(0 <= t.start < t.end <= duration for t in turns)
     assert turns == sorted(turns, key=lambda t: (t.start, t.end, t.speaker))
