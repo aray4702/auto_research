@@ -7,10 +7,10 @@ import tempfile
 from pathlib import Path
 
 from lmt.errors import InputError, NotBuilt, UsageError
-from lmt.export import json
+from lmt.export import json, srt, txt, vtt
 
 FORMATS = ("txt", "srt", "vtt", "json")
-RENDERERS = {"json": json.render}  # S5 registers txt, srt and vtt
+RENDERERS = {"txt": txt.render, "srt": srt.render, "vtt": vtt.render, "json": json.render}
 
 
 def render(transcript, fmt: str) -> str:
