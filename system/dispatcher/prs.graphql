@@ -1,5 +1,6 @@
 query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
+    defaultBranchRef { target { ... on Commit { checkSuites(first: 20) { nodes { app { databaseId } checkRuns(first: 10, filterBy: {checkName: "gate"}) { nodes { name status conclusion } } } } } } }
     pullRequests(states: OPEN, first: 50, orderBy: {field: CREATED_AT, direction: ASC}) {
       nodes {
         number title body isDraft headRefOid headRefName mergeStateStatus reviewDecision
