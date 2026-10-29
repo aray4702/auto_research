@@ -3,8 +3,10 @@ dispatcher/state branch and this Mac's runner; nothing is kept. Reads only.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from system.cli import progress as progress_table
 from system.dispatcher import github_state, killswitch, merge_rules, notify, plan, state, usage
 from system.tools import post, runner
 
@@ -156,3 +158,55 @@ def collect(config, gh=None, store=None, now=None, with_runner=True):
         "runner": runner_view(config) if with_runner else None,
         "merges": merges_by_owner_account(gh, identity),
     }
+
+
+def progress(config, gh=None, store=None, root=None):
+    """The Progress tab (#241): the requirements and spec on this checkout of main, every issue and PR, the runs."""
+    identity = config["identity"]
+    gh = gh or post.GitHub(identity["repo"])
+    store = store or state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    root = Path(root or Path(__file__).resolve().parents[2])
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=all&per_page=100", paginate=True)  # PRs too
+    issues = {x["number"]: {"title": x["title"], "body": x.get("body") or "", "state": x["state"].upper(),
+                            "labels": {lab["name"] for lab in x["labels"]}, "closed_at": x.get("closed_at")}
+              for x in everything if "pull_request" not in x}
+    prs = [{"number": x["number"], "body": x.get("body") or ""} for x in everything if "pull_request" in x]
+    out = progress_table.table((root / "project_requirements.md").read_text(), (root / "spec" / "acceptance.md").read_text(),
+                               issues, prs, store.read("runs"))
+    out.update(now=datetime.now(timezone.utc).isoformat(), repo=identity["repo"], time_zone=identity["time_zone"])
+    return out
+
+
+def roles(config, gh=None, store=None, now=None):
+    """The Roles tab (#246): each role's current runs and what they work on, or since when it has been idle."""
+    identity = config["identity"]
+    gh = gh or post.GitHub(identity["repo"])
+    store = store or state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    now = now or datetime.now(timezone.utc)
+    runs = store.read("runs")
+    seen = {}
+
+    def item(n):
+        if n is None:
+            return {"number": None, "kind": None, "title": "a general pass"}
+        if n not in seen:
+            x = gh.api("GET", f"repos/{gh.repo}/issues/{n}")
+            seen[n] = {"number": n, "kind": "pull" if "pull_request" in x else "issues", "title": x["title"]}
+        return seen[n]
+    active = usage.active(runs)
+    per_role = usage_view(config["caps"], runs, now, identity["time_zone"])["per_role"]
+    out = []
+    for role in config["runner"]["roles"]:
+        ends = [r for r in runs if r["event"] == "end" and r["role"] == role]
+        last = ends[-1] if ends else None
+        out.append({
+            "role": role,
+            "working": [{**item(r.get("item")), "since": r["at"], "run_id": r["run_id"], "task": r.get("task") or ""}
+                        for r in active if r["role"] == role],
+            "last": {**item(last.get("item")), "at": last["at"], "status": last.get("status") or ""} if last else None,
+            "today": per_role.get(role, {}).get("today", 0), "cap": per_role.get(role, {}).get("cap"),
+        })
+    until = (config["caps"].get("override") or {}).get("no_daily_run_caps_until")
+    lifted = until if until and now < datetime.fromisoformat(until) else None  # the Owner's override (caps.toml)
+    return {"now": now.isoformat(), "repo": identity["repo"], "time_zone": identity["time_zone"], "roles": out,
+            "caps_lifted_until": lifted}

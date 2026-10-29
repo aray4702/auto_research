@@ -14,6 +14,7 @@
 | 1.8     | 2026-10-27 | architect, from the Owner's answers (#82, 22:40 PT) | G2's criteria CI checks are due 2026-10-30, and its checks on the Owner's Mac (Q10's run and the microphone reading) 2026-10-31; §10: capturing system audio directly is a later goal, so live mode records the microphone or a chosen input device |
 | 1.9     | 2026-10-27 | architect, from the Owner's answers (#83, 22:57 PT) | G3 is due 2026-10-30 for the criteria CI checks and 2026-10-31 for the Owner's readings and the release; v1.0 is G1 and G3, and live mode (G2) follows as v1.1; the short demo, Q5's CI runners, the install command, the published sample audio and the Hugging Face token |
 | 1.10    | 2026-10-28 | architect, from the Owner's answer (#84, answer 1, 13:54 PT) | The goals' dates move. G1: the criteria CI checks are due 2026-10-30, and the checks on the Owner's Mac and the checks by eye 2026-10-31. G2: the criteria CI checks 2026-10-31, and the checks on the Owner's Mac 2026-11-01. G3: the criteria CI checks 2026-10-31, and the Owner's readings and the release 2026-11-01 |
+| 1.11    | 2026-10-28 | architect, from the Owner's decision (#243, 19:40 PT) | Q6 (observability) isn't in v1.0: §5's Q6 row and §6's v1.0 line say so, and §11 records the decision |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -127,7 +128,7 @@ already hold; add only what goes beyond them.
 | Q3  | performance: resource use (CPU, memory, power, binary size) | Peak memory ≤ 4 GB; models ≤ 2 GB on disk | A one-hour recording, on the Owner's Mac | should |
 | Q4  | reliability (crash-free rate, recovery time) | Never crashes on bad input: a corrupt, empty, silent or unsupported file gives a clear error | Fuzzed and malformed inputs in CI | must |
 | Q5  | usability and accessibility | Installs with one command; works offline after the first model download; subtitles follow SRT and WebVTT | A clean macOS user account (the Owner's), and the CI runners `ubuntu-24.04` and `macos-15` (#83, answer 10a) | should |
-| Q6  | observability (logs, metrics, traces; what a failure report must contain) | `--verbose` shows the time of each stage; an error report names the input format, the model versions and the stage that failed | — | should |
+| Q6  | observability (logs, metrics, traces; what a failure report must contain) | `--verbose` shows the time of each stage; an error report names the input format, the model versions and the stage that failed | Not in v1.0: the Owner accepted v1.0 without it (#243) | should |
 | Q7  | reproducibility beyond the generic (e.g. identical output on every platform) | The same accuracy numbers for the same input, models and machine: pinned model revisions, deterministic decoding | The evaluation harness, run twice | must |
 | Q8  | privacy (what user data is collected, kept and shared; retention; consent) | Audio and transcripts never leave the computer. No telemetry. Nothing is written except the requested outputs and the model cache | Network calls are tested to be none after the models are downloaded | must |
 | Q9  | security (threats to defend against, authentication, encryption) | Models are downloaded only from pinned sources and verified by checksum; untrusted files are parsed safely | — | should |
@@ -144,7 +145,7 @@ PR, nightly) is sized against your CI limit.
 - **Linux x86_64, CPU only:** CI, and reviewers reproducing the results (U3). No GPU is assumed anywhere.
 - **Ships as** a Python package installable with one command, with semantic versions and GitHub releases.
   - The command is `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0`, with `uv`, installed by its own installer, as the one prerequisite. Nothing is published beyond GitHub; PyPI could follow later (#83, answer 9a).
-  - v1.0 is G1 and G3. Live mode (G2) follows as v1.1 (#83, answer 2a).
+  - v1.0 is G1 and G3, without Q6 (#243). Live mode (G2) follows as v1.1 (#83, answer 2a).
 
 ## 7. Constraints
 
@@ -224,4 +225,5 @@ None open. The Owner answered on #79:
 - the licence is MIT, and pyannote may be used (on #81 the Owner accepted the dependency licence classes in §7, and CC BY 4.0 for model weights);
 - the proposed targets and defaults are accepted;
 - the summary (F10) is a non-goal for now;
-- on #82, capturing system audio directly became a non-goal for now.
+- on #82, capturing system audio directly became a non-goal for now;
+- on #243, the Owner accepted v1.0 without Q6 (observability).
