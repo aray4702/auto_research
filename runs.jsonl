@@ -1079,3 +1079,4 @@
 {"at": "2026-10-29T17:03:16+00:00", "cost_usd": 0.136869, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 330, "role": "architect", "run_id": "architect-20261029T170212Z", "seven_day": 0.01, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 12}
 {"at": "2026-10-29T17:04:42+00:00", "event": "start", "item": 330, "pid": 95380, "role": "architect", "run_id": "architect-20261029T170434Z", "task": "PR #330 needs work: its gate is red."}
 {"at": "2026-10-29T17:04:43+00:00", "event": "end", "item": 304, "role": "architect", "run_id": "architect-20261029T170434Z", "status": "failed: launcher: CalledProcessError"}
+{"at": "2026-10-29T17:05:11+00:00", "cost_usd": 0.23889, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 337, "role": "reviewer", "run_id": "reviewer-20261029T170212Z", "seven_day": 0.01, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 20}
