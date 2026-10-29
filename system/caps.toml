@@ -3,7 +3,7 @@
 
 [claude]
 # The system's share of the Max 20x plan's 7-day limit, in utilization points (1 point = 1 %).
-# The Owner, 2026-10-28 22:32 PT, for the G1-1 push: "raise to 30" (#84); 2026-10-29 10:20 PT: "no restore until the project is done" (#334).
+# The Owner, 2026-10-28 22:32 PT, for the G1-1 push: "raise to 30" (#84); 2026-10-29 (morning): "no restore until the project is done" (#334).
 weekly_points = 30
 warn_at_points = 15
 # Points per API-equivalent dollar at the margin, as calibrate.py measures it (#43), rounded up: from the
