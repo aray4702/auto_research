@@ -73,28 +73,57 @@ def denial_signature(denial):
 
 
 OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
+# A second command on a later line (#178): `git fetch` then a line that isn't allowed is denied, and
+# without this mark it read as a `git fetch` gap. Not one of OPERATORS, as no command line contains it.
+NEWLINE = "⏎"
+COMPOUND = OPERATORS + (NEWLINE,)
 
 
 def shell_operators(command):
-    """The shell operators on the command's first line, outside quotes, in order and once each (#138):
-    `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept."""
-    line, out, quote, i = command.split("\n", 1)[0], [], None, 0
-    while i < len(line):
-        c = line[i]
+    """The shell operators in the command's first command, outside quotes, in order and once each (#138):
+    `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept.
+    Then NEWLINE if another command follows it on a later line. A newline inside quotes, after a `\\`
+    or in a heredoc's body doesn't end the first command (#198)."""
+    text = command.strip()
+    out, quote, heredocs, i = [], None, [], 0
+    while i < len(text):
+        c = text[i]
         if quote:
-            quote = None if c == quote else quote
+            if c == "\\" and quote == '"':
+                i += 1
+            elif c == quote:
+                quote = None
         elif c in "'\"":
             quote = c
         elif c == "\\":
             i += 1
+        elif c == "\n":
+            if text[after_heredocs(text, i + 1, heredocs):].strip():
+                out.append(NEWLINE)
+            return out
         else:
-            op = next((o for o in OPERATORS if line.startswith(o, i)), None)
+            op = next((o for o in OPERATORS if text.startswith(o, i)), None)
             if op:
                 out += [op] if op not in out else []
+                heredoc = re.match(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1", text[i:]) if op == "<<" else None
+                heredocs += [heredoc.group(2)] if heredoc else []
                 i += len(op)
                 continue
         i += 1
     return out
+
+
+def after_heredocs(text, i, delimiters):
+    """Where the text resumes after the bodies of these heredocs, which start at i: past each body's
+    closing delimiter line, or at the end if one never closes."""
+    for delimiter in delimiters:
+        while i < len(text):
+            end = text.find("\n", i)
+            end = len(text) if end < 0 else end
+            line, i = text[i:end], end + 1
+            if line.strip() == delimiter:
+                break
+    return min(i, len(text))
 
 
 INTERPRETERS = {"python3", "python"}
