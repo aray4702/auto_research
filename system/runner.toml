@@ -35,6 +35,7 @@ allow = [
   "Bash(python3 -I -m unittest:*)",
   "Bash(date:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)",
   "Bash(sort:*)", "Bash(diff:*)",
+  "Bash(git ls-tree:*)",  # read-only: the files at a commit, as git ls-files can't list another ref's (#179)
 ]
 deny = [
   "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push --force-with-lease:*)",

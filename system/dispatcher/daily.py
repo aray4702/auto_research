@@ -42,7 +42,7 @@ def denials(runs, now, explained=()):
         if usage.OUTSIDE in sig.split():
             out.append((f"outside:{sig}", "builder", f"Recurring denial outside the worktree: {sig} — the rules keep runs inside it",
                         f"{where} Not a permission gap: --restricted denies any path outside a run's worktree. Find why runs still reach outside it, and fix that.", None))
-        elif set(sig.split()) & set(usage.OPERATORS):
+        elif set(sig.split()) & set(usage.COMPOUND):
             out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
                         f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
         else:
