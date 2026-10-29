@@ -1181,3 +1181,4 @@
 {"at": "2026-10-29T19:46:13+00:00", "cost_usd": 0.085976, "denials": 0, "denied": [], "event": "end", "five_hour": 0.27, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T194530Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 11}
 {"at": "2026-10-29T19:47:54+00:00", "event": "start", "item": 345, "pid": 79798, "role": "developer", "run_id": "developer-20261029T194747Z", "task": "Work on your item, as the work order schedules it."}
 {"at": "2026-10-29T19:54:48+00:00", "cost_usd": 0.452287, "denials": 0, "denied": [], "event": "end", "five_hour": 0.27, "item": 357, "role": "reviewer", "run_id": "reviewer-20261029T193729Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 6}
+{"at": "2026-10-29T19:57:11+00:00", "event": "start", "item": 363, "pid": 81922, "role": "reviewer", "run_id": "reviewer-20261029T195701Z", "task": "Review PR #363."}
