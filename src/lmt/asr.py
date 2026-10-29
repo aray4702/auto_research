@@ -13,6 +13,10 @@ BEAM_SIZE = 5
 THREADS = min(8, os.cpu_count() or 1)  # fixed per machine (Q7)
 
 
+def quiet_onnxruntime() -> None:
+    """onnxruntime's default logger down to errors (design/internal/g1-stage2.md, P11)."""
+
+
 def load(model_dir: Path) -> "Engine":
     """The model in `model_dir`. Call after `models.ensure`, which sets HF_HUB_OFFLINE."""
     from faster_whisper import WhisperModel

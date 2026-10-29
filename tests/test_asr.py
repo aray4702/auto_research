@@ -2,6 +2,7 @@
 reading on the reference clip with the real one."""
 
 import os
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -40,10 +41,16 @@ class FakeWhisperModel:
 
 @pytest.fixture
 def fake(monkeypatch):
-    """faster_whisper replaced by a module whose WhisperModel is the fake."""
+    """faster_whisper replaced by a module whose WhisperModel is the fake, and onnxruntime by one whose
+    `severities` records each severity set, with how many WhisperModels existed then. So no test imports the
+    real onnxruntime or sets its process-wide severity."""
     monkeypatch.setattr(FakeWhisperModel, "instances", [])
     monkeypatch.setattr(FakeWhisperModel, "segments", [])
     monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeWhisperModel))
+    severities = []
+    monkeypatch.setitem(sys.modules, "onnxruntime", types.SimpleNamespace(
+        severities=severities,
+        set_default_logger_severity=lambda level: severities.append((level, len(FakeWhisperModel.instances)))))
     return FakeWhisperModel
 
 
@@ -85,6 +92,24 @@ def test_words_are_stripped_and_empty_ones_dropped(fake, tmp_path):
     ]
     words = asr.load(tmp_path).transcribe(numpy.zeros(10, numpy.float32))
     assert words == [Word(0.0, 0.42, "Hello", 0.9), Word(1.234567, 1.9, "world.", 0.75)]
+
+
+def test_onnxruntime_is_quieted_before_the_model_loads(fake, tmp_path):
+    asr.load(tmp_path)
+    assert sys.modules["onnxruntime"].severities == [(3, 0)]  # errors and fatal only, before any WhisperModel
+
+
+def test_the_vad_leaves_stderr_empty():
+    """onnxruntime's warnings (on Linux, GetPciBusId's) never reach stderr, so G1-11's one line holds. A fresh
+    process, so its environment is created here; the VAD model ships in faster-whisper's wheel."""
+    code = ("import numpy\n"
+            "from lmt import asr\n"
+            "asr.quiet_onnxruntime()\n"
+            "from faster_whisper.vad import get_speech_timestamps\n"
+            "get_speech_timestamps(numpy.zeros(16_000, numpy.float32))\n")
+    result = subprocess.run([sys.executable, "-c", code], check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
 
 
 @pytest.mark.models
