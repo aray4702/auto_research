@@ -1184,3 +1184,4 @@
 {"at": "2026-10-29T19:57:11+00:00", "event": "start", "item": 363, "pid": 81922, "role": "reviewer", "run_id": "reviewer-20261029T195701Z", "task": "Review PR #363."}
 {"at": "2026-10-29T20:02:04+00:00", "cost_usd": 0.489486, "denials": 2, "denied": ["Bash: uv run"], "event": "end", "five_hour": 0.28, "item": 363, "role": "reviewer", "run_id": "reviewer-20261029T195701Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 30}
 {"at": "2026-10-29T20:04:03+00:00", "event": "start", "item": 362, "pid": 83522, "role": "reviewer", "run_id": "reviewer-20261029T200354Z", "task": "Review PR #362."}
+{"at": "2026-10-29T20:10:34+00:00", "cost_usd": 0.607258, "denials": 2, "denied": ["Bash: gh pr", "Bash: python3 -I .github/scripts/criteria.py"], "event": "end", "five_hour": 0, "item": 362, "role": "reviewer", "run_id": "reviewer-20261029T200354Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 33}
