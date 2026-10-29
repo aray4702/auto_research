@@ -6,6 +6,7 @@
 | 2026-10-27 | architect, #104 | Reviewer's changes on #119: one order the Coordinator can follow, with the `test` job's two edits; the filter's own tier recorded as open (#121); `dirty` excludes the output directory only inside the work tree; the WER fixture's word counts spelled out |
 | 2026-10-28 | architect, #82 | `public-api.md` now documents `lmt live` (G2): G1-6's table test skips the sections marked "(G2)", and G2's `lmt live` item adds the subcommand to `cli.py` |
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: the table test's skip and the `cli.py` exception also cover G3's `lmt rename` and `lmt demo`, which G3's items add |
+| 2026-10-28 | architect, #206 | §1a's `pyproject.toml` gains the wheel's `packages` and ruff's `include`, as #188 built them (the Owner's answer 1 on #188); `.github/scripts/` joins `include` in #222 |
 
 This is the detail a Developer needs to build each of G1 stage 1's items in one run. It works inside `spec/acceptance.md` G1, `design/architecture.md` and `design/public-api.md`, and the Owner's answers 1a–14a on #81 and #105. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
@@ -66,6 +67,9 @@ dev = ["pytest", "ruff"]               # 1b adds the eval extra's packages here 
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/lmt"]                 # the import package's name isn't the distribution's
+
 [tool.uv]
 environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
@@ -83,9 +87,12 @@ markers = [
 [tool.ruff]
 target-version = "py311"
 line-length = 110
+include = ["src/**/*.py", "tests/**/*.py"]     # the product's code; system/ isn't the product's
 extend-exclude = ["src/lmt/eval/normalizer"]   # vendored, kept as upstream wrote it
 ```
 
+- **Wheel packages:** hatchling looks for a package named after the distribution (`local_meeting_transcriber`), so without `packages` it finds none and `uv sync` fails (the Owner's answer 1 on #188).
+- **Ruff's scope:** `include` keeps `ruff check` to the product's Python; no rule is turned off (the Owner's answer 1 on #188). `.github/scripts/**/*.py` joins it in #222: the product's CI runs those scripts, so they get the same lint. They have ruff findings today, which #222 fixes first. `system/` stays out.
 - **Versions:** `uv lock` picks them, with lower bounds only where a feature is needed. The lock is the pin (G1-15).
 - **Markers:** `addopts` keeps model and data tests out of a plain `uv run --frozen pytest`, which is the agents' command and the `test` job's. A later `-m` wins, so `pytest -m models` runs only the model tests.
 
