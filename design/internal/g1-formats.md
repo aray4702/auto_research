@@ -3,6 +3,7 @@
 | Date (PT) | By | Change |
 | --- | --- | --- |
 | 2026-10-29 | architect, #291 | First version: the five encodings' ffmpeg recipe in the dataset tool, the committed files, and G1-2's test, as one Developer item |
+| 2026-10-29 | architect, #295 | MP4/MOV: the still track's length is fixed at its source (`d=57`) and `-shortest` is dropped, because `-shortest` gave different bytes on every run with ffmpeg 8.0 (#296) |
 
 This is what a Developer needs to build **G1-2** in `spec/acceptance.md` in one run, unchanged: the reference clip as FLAC, MP3, M4A, MP4 and MOV each transcribes with a WER within 1.0 percentage point of the WAV's WER, by the same test run once per format, in CI. The encodings are the spec's Terms: FLAC; MP3 at 128 kbit/s; M4A (AAC-LC) at 128 kbit/s; MP4 and MOV with an AAC track and a still video track. It builds on `g1-slice.md`: S1's dataset tool and `sets.toml`, S2's `audio.decode` (which reads all five unchanged, as the architecture's "Decode" says) and S6's product run in tests. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
@@ -25,14 +26,14 @@ Each command is `ffmpeg` followed by exactly these arguments, with `<wav>` the a
 | `flac` | `-nostdin -v error -y -i <wav> -map 0:a:0 -map_metadata -1 -fflags +bitexact -flags:a +bitexact -threads 1 -c:a flac -compression_level 8 -sample_fmt s16 -ar 16000 -ac 1 -f flac <out>` |
 | `mp3` | `-nostdin -v error -y -i <wav> -map 0:a:0 -map_metadata -1 -fflags +bitexact -flags:a +bitexact -threads 1 -c:a libmp3lame -b:a 128k -ar 44100 -ac 1 -f mp3 <out>` |
 | `m4a` | `-nostdin -v error -y -i <wav> -map 0:a:0 -map_metadata -1 -fflags +bitexact -flags:a +bitexact -threads 1 -c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 1 -f ipod <out>` |
-| `mp4` | `-nostdin -v error -y -i <wav> -f lavfi -i color=c=black:s=320x240:r=1 -map 0:a:0 -map 1:v:0 -shortest -map_metadata -1 -fflags +bitexact -flags:a +bitexact -flags:v +bitexact -threads 1 -c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 1 -c:v mpeg4 -pix_fmt yuv420p -f mp4 <out>` |
+| `mp4` | `-nostdin -v error -y -i <wav> -f lavfi -i color=c=black:s=320x240:r=1:d=57 -map 0:a:0 -map 1:v:0 -map_metadata -1 -fflags +bitexact -flags:a +bitexact -flags:v +bitexact -threads 1 -c:a aac -profile:a aac_low -b:a 128k -ar 48000 -ac 1 -c:v mpeg4 -pix_fmt yuv420p -f mp4 <out>` |
 | `mov` | the `mp4` arguments with `-f mov` in place of `-f mp4` |
 
 Why these choices:
 
 - **The rates.** FLAC is lossless, so it keeps the clip's 16 kHz. ffmpeg's AAC encoder caps a channel at 6,144 bits per 1,024 samples, which is 96 kbit/s at 16 kHz. So 128 kbit/s, as the spec requires, needs a higher rate: 48 kHz for AAC, and 44.1 kHz, MP3's usual rate, for MP3. That also puts decode's resampler on the path, as most users' files do. Mono stays mono.
-- **The encoders.** `libmp3lame` with `-b:a` is constant bit rate. `aac` is ffmpeg's own encoder, named explicitly so that macOS's `aac_at` is never picked, and `-profile:a aac_low` is AAC-LC. The still video track is a black 320×240 frame at 1 frame/s, made by `lavfi`'s `color` source, in ffmpeg's own `mpeg4` encoder, which every ffmpeg build has. `-shortest` ends it with the audio.
-- **Reproducible bytes for one ffmpeg version.** `-map_metadata -1`, the `bitexact` flags and `-threads 1` keep version strings, tags and thread timing out of the files. Bytes still vary between ffmpeg versions, so the files are committed and their hashes recorded with the version that made them. Tests use the committed files and never re-encode them.
+- **The encoders.** `libmp3lame` with `-b:a` is constant bit rate. `aac` is ffmpeg's own encoder, named explicitly so that macOS's `aac_at` is never picked, and `-profile:a aac_low` is AAC-LC. The still video track is a black 320×240 frame at 1 frame/s, made by `lavfi`'s `color` source, in ffmpeg's own `mpeg4` encoder, which every ffmpeg build has. The source's `d=57` makes exactly 57 frames, so the track covers the clip's 56.565 s (905,040 samples at 16 kHz) and stops by itself; the file's length is the video's 57 s, and the audio stream keeps the clip's length.
+- **Reproducible bytes for one ffmpeg version.** `-map_metadata -1`, the `bitexact` flags and `-threads 1` keep version strings, tags and thread timing out of the files. Every input is finite, so no option cuts a stream short. `-shortest` did, and with ffmpeg 8.0 its cut point varied from run to run, as did the files' bytes and sizes (#296); it is not used. Bytes still vary between ffmpeg versions, so the files are committed and their hashes recorded with the version that made them. Tests use the committed files and never re-encode them.
 
 ### `sets.toml`
 
@@ -61,7 +62,7 @@ def encode(fixture: Fixture, fmt: str, out: Path) -> None   # one command, subpr
 
 **`encode-fixture <name> [--write]`** checks that the fixture has `encodings`, then encodes each of the five, in the order above, to a temporary file beside the WAV (`tempfile.mkstemp(dir=..., suffix=f".{fmt}.tmp")`, deleted on any failure), and prints `<path> <sha256>` for each and then `ffmpeg <version>`. A non-zero ffmpeg exit raises `InputError(<the encoding's path>, "ffmpeg failed: <its stderr's last line>")`. With `--write`, it renames each file into place first. Then it compares: if the local version differs from `ffmpeg` in `sets.toml`, it exits 3 with `lmt: error: ffmpeg: version <local> here, sets.toml records <recorded>; the hashes can't be compared`. Otherwise it exits 0 if every hash matches, and 3 naming the first file that doesn't. Without `--write`, nothing in the repository changes.
 
-**Making the files** (once, in E1): add the two keys with 64 zeros for each hash and the local version, run `encode-fixture clip --write`, copy the printed hashes into `sets.toml`, then run `encode-fixture clip` again, which must exit 0. The PR shows both outputs and `ffmpeg -version`'s first line, through the tool's output.
+**Making the files** (once, in E1): add the two keys with 64 zeros for each hash and the local version, run `encode-fixture clip --write`, copy the printed hashes into `sets.toml`, then run `encode-fixture clip` three more times, each of which must exit 0. The PR shows these outputs and `ffmpeg -version`'s first line, through the tool's output.
 
 ## Tests
 
@@ -89,9 +90,10 @@ def encode(fixture: Fixture, fmt: str, out: Path) -> None   # one command, subpr
 
 No new job and no workflow change: `test-models` already runs `pytest -m models`, and the test only decodes, through PyAV, so the runner needs no ffmpeg. It adds five product runs on the 60 s clip, about 1 minute each, so about 5 minutes. That is inside the architecture's estimate for `test-models` ("about 8 runs on the 60-second clips", 22 minutes for tier 2) and its 30-minute timeout. The PR shows the job's time. If the job passes 1.5 times its estimate, the Developer says so on the item, and the Architect re-sizes it, as `architecture.md` "CI" says. The five files add about 4.5 MB to the repository.
 
-**Test of the item:** the tests above in the `test` job; G1-2's five cases passing in the PR's `test-models` job, with each format's WER, the WAV's and the difference in the job's summary; the PR's `criteria-test-models` record giving `G1-2` `passed`, and `criteria.py --ref refs/pull/<n>/merge` giving `pass` for G1-2; and the tool's output, `encode-fixture clip --write` and then `encode-fixture clip` exiting 0.
+**Test of the item:** the tests above in the `test` job; G1-2's five cases passing in the PR's `test-models` job, with each format's WER, the WAV's and the difference in the job's summary; the PR's `criteria-test-models` record giving `G1-2` `passed`, and `criteria.py --ref refs/pull/<n>/merge` giving `pass` for G1-2; and the tool's output, `encode-fixture clip --write` and then `encode-fixture clip` exiting 0 on each of three runs.
 
 ## Risks
 
 - **No ffmpeg, or one without `libmp3lame`,** on the Developer's machine. The tool fails with one `lmt: error:` line. The Developer doesn't install it outside the tools agents are allowed: the item is held for the Owner with `needs-decision:owner`, asking for ffmpeg on that machine.
+- **A file's bytes still vary between runs.** The Developer reports each run's hashes and sizes on the item and holds it for the Architect with `needs-decision:architect`, without trying other arguments.
 - **A format misses the bound.** That is a product finding, most likely in decode's resampling. The Developer reports the five readings on the item, and the Architect designs the fix in decode. The recipe, the clip and the bound don't change.
