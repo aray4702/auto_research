@@ -749,3 +749,4 @@
 {"at": "2026-10-29T02:20:26+00:00", "event": "start", "item": null, "pid": 97896, "role": "coordinator", "run_id": "coordinator-20261029T022022Z", "task": "Triage these issues: #237."}
 {"at": "2026-10-29T02:20:29+00:00", "event": "start", "item": 236, "pid": 97989, "role": "reviewer", "run_id": "reviewer-20261029T022022Z", "task": "Review PR #236."}
 {"at": "2026-10-29T02:21:11+00:00", "cost_usd": 0.211793, "denials": 0, "denied": [], "event": "end", "five_hour": 0.11, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T022022Z", "seven_day": 0.44, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 15}
+{"at": "2026-10-29T02:21:56+00:00", "cost_usd": 0.329573, "denials": 2, "denied": ["Bash: uv run"], "event": "end", "five_hour": 0.11, "item": 236, "role": "reviewer", "run_id": "reviewer-20261029T022022Z", "seven_day": 0.44, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 27}
