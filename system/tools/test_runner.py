@@ -76,7 +76,8 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("Bash(uv run --frozen pytest)", allow, f"{role} (#90)")
             for rule in allow:  # a bare `uv run` (or ffmpeg) would get around the deny list (#92)
                 self.assertFalse(rule.startswith("Bash(uv run") and not rule.startswith(("Bash(uv run --frozen pytest",
-                                 "Bash(uv run --frozen ruff check", "Bash(uv run --frozen ruff format", "Bash(uv run --frozen lmt")), f"{role}: {rule}")
+                                 "Bash(uv run --frozen ruff check", "Bash(uv run --frozen ruff format", "Bash(uv run --frozen lmt",
+                                 "Bash(uv run --frozen python -m lmt.eval.datasets")), f"{role}: {rule}")  # the product's own module (#269)
                 self.assertFalse(rule.startswith(("Bash(ffmpeg", "Bash(ffprobe")), f"{role}: {rule}")
             writes = {"Bash(uv lock:*)", "Bash(uv sync:*)", "Bash(uv add:*)", "Bash(uv remove:*)", "Bash(uv pip compile:*)",
                       "Bash(uv run --frozen pytest:*)", "Bash(uv run --frozen ruff check:*)"}

@@ -1,0 +1,70 @@
+# Every file the evaluation downloads, and the archive members it uses (design/internal/g1-slice.md, S1).
+schema_version = 1
+
+[[source]]
+id = "librispeech-test-clean"
+urls = ["https://www.openslr.org/resources/12/test-clean.tar.gz",
+        "https://us.openslr.org/resources/12/test-clean.tar.gz"]     # tried in order
+# Equals torchaudio's published checksum for test-clean; the archive's MD5 is openslr's, 32fa31d27d2e1cad72775fee3f4849a9.
+sha256 = "39fde525e59672dc6d1551919b1478f724438a95aa55f874b576be21967e6c23"
+size = 346663984
+licence = "CC-BY-4.0"
+keep = false                     # deleted once the members it needs are extracted
+
+# The clip (sets.toml): speaker 61's utterances 61-70968-0000 to 61-70968-0012, and their chapter's transcript.
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0000.flac"
+sha256 = "fd3c84146d8b357efc7f0d21de86de770721fc5ddac7e6577688dbf3cdabff5b"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0001.flac"
+sha256 = "2f7236fa44f194f03b04571f94fd56cc99253f5d41496bff3476c3390dd20524"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0002.flac"
+sha256 = "8676316e531d8c0e496e3677811ed2bf63e5aaf0a12446cde70416fd490b1792"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0003.flac"
+sha256 = "c50e106a06d1603451f1b1a3f145900e83f733f2873deb12fa9838ef5f74655a"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0004.flac"
+sha256 = "2dcfde6a6365ccc73bc196294fe07b874b8c0d0827b6b6b1da1f03375d29f39d"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0005.flac"
+sha256 = "1022f303c108707548ff8738b7d7f512403b8fa443b9664bab94f740ef412183"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0006.flac"
+sha256 = "fb59db90ccbb471e52338b1a298b1b805084576c07abbd904f778eafe798e10d"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0007.flac"
+sha256 = "83b18d71a6ce8c2231fb1cd01acfd54f4493f30caddb1ac092cfa4fb55ebd1f0"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0008.flac"
+sha256 = "77cd105fd6b1fa77eb83f641fe3624f3cd8ea224f4696392ba7c627e319324ef"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0009.flac"
+sha256 = "4bcc8b7198b6162f26470adcb461a4eb23c77a803c30b7896c4b0a2d011ccfbb"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0010.flac"
+sha256 = "d70f1f718ac85ea815adcf8f63f6e90feb8b17c739593fcdffd899c9e215ef1b"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0011.flac"
+sha256 = "670ebf7f5252665a373e35486d5604c916f4d4ca68441009e458a23f91f60a22"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968-0012.flac"
+sha256 = "980dd86b87c173dc5c0e5395de5619c95523fb59e8dfbece50108afb4ce2277f"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/61/70968/61-70968.trans.txt"
+sha256 = "b196e5dd2f4799b120d31f6e75589f2e4141fc78ac6670a7ff727e154ea03dd7"
