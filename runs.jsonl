@@ -995,3 +995,4 @@
 {"at": "2026-10-29T08:02:15+00:00", "event": "start", "item": 298, "pid": 93088, "role": "reviewer", "run_id": "reviewer-20261029T080209Z", "task": "Review PR #298."}
 {"at": "2026-10-29T08:02:16+00:00", "event": "end", "item": 301, "role": "reviewer", "run_id": "reviewer-20261029T080209Z", "status": "failed: launcher: CalledProcessError"}
 {"at": "2026-10-29T08:04:22+00:00", "cost_usd": 0.740023, "denials": 2, "denied": ["Bash: gh run", "Bash: uv run"], "event": "end", "five_hour": 0.34, "item": 298, "role": "reviewer", "run_id": "reviewer-20261029T080209Z", "seven_day": 0.56, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 32}
+{"at": "2026-10-29T08:04:29+00:00", "event": "start", "item": null, "pid": 94363, "role": "coordinator", "run_id": "coordinator-20261029T080425Z", "task": "Triage these issues: #300."}
