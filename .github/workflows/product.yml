@@ -160,7 +160,8 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-  # `lmt eval --set ci` (design/internal/g1-stage1.md §5a). Item #110 adds its steps.
+  # The CI subset, cached by the manifests' hash, fetched and verified on every run (design/internal/g1-stage1.md
+  # §5a). Stage 2 adds `lmt eval --set ci`, its bounds and the double run.
   eval-ci:
     needs: changes
     if: fromJSON(needs.changes.outputs.tier) >= 3
@@ -175,3 +176,20 @@ jobs:
           version: "0.13.6"
           enable-cache: true
       - run: uv sync --locked --all-extras
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/lmt/data
+          key: data-${{ hashFiles('src/lmt/eval/manifests/*.toml') }}
+      - run: uv run --frozen python -m lmt.eval.datasets fetch ci
+      # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
+      - env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: uv run --frozen pytest -m data --criteria-out=criteria-eval-ci.json
+      # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-eval-ci
+          path: criteria-eval-ci.json
+          retention-days: 90
+          if-no-files-found: error

@@ -3,7 +3,7 @@ recipes and `fetch` (design/internal/g1-stage1.md §5a), with no network.
 
 `urllib.request.urlopen` is replaced by one that serves a small .tar.gz built here, of FLAC files written
 with soundfile and their chapter's .trans.txt, and for the AMI recipes a small WAV, a .zip of two speakers'
-words.xml files and an RTTM.
+words.xml files and an RTTM. The tests marked `data`, at the end, read the real CI subset instead.
 """
 
 import gzip
@@ -16,6 +16,7 @@ import tarfile
 import urllib.error
 import wave
 import zipfile
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -716,3 +717,52 @@ class TestDatasetManifests:
         (tmp_path / "sets.toml").write_text("schema_version = 1\n")
         with pytest.raises(ValueError, match="a source without members is a single file, so keep must be true"):
             datasets.load_manifests(tmp_path)
+
+
+# --- The CI subset itself ---------------------------------------------------------------------------------------
+# Marked `data`: they run in the eval-ci job, after `python -m lmt.eval.datasets fetch ci` has filled LMT_DATA_DIR.
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(scope="module")
+def ci_items():
+    return datasets.fetch("ci")
+
+
+@pytest.mark.data
+@pytest.mark.criterion("G1-5")
+class TestFetchCI:
+    """`fetch("ci")` gives the CI subset, every file verified against the manifests."""
+
+    def test_ls_ci_has_20_items_with_references(self, ci_items):
+        ls = [i for i in ci_items if i.dataset == "LS-ci"]
+        assert [i.id for i in ls] == list(datasets.load_manifests().datasets["LS-ci"].utterances)
+        for item in ls:
+            assert item.audio.is_file(), item.id
+            assert item.ref_text and item.ref_text == item.ref_text.strip(), item.id
+            assert 4.0 <= item.duration <= 12.0, item.id
+
+    def test_ami_ci_is_one_300_s_item_with_words_and_turns(self, ci_items):
+        (ami,) = [i for i in ci_items if i.dataset == "AMI-ci"]
+        assert ami.id == "ES2004a"
+        assert ami.duration == 300.0
+        with wave.open(str(ami.audio), "rb") as w:
+            assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
+        assert len(ami.ref_text.split()) > 100
+        assert len({t.speaker for t in ami.ref_turns}) >= 2
+        assert all(0.0 <= t.start < t.end <= 300.0 for t in ami.ref_turns)
+
+    def test_the_sample_meeting_is_ami_ci_offline(self, ci_items):
+        (ami,) = [i for i in ci_items if i.dataset == "AMI-ci"]
+        assert datasets.sample_meeting(offline=True) == ami.audio
+
+
+@pytest.mark.data
+def test_the_clip_rebuilds_from_the_cache(ci_items):
+    """S1's reference clip, rebuilt from the cache, is the committed one byte for byte."""
+    manifests = datasets.load_manifests()
+    fixture = manifests.fixtures["clip"]
+    audio, text = datasets.build_fixture(fixture, manifests)
+    assert audio == (ROOT / fixture.path).read_bytes()
+    assert text.encode("utf-8") == (ROOT / fixture.reference).read_bytes()
