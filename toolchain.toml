@@ -13,12 +13,17 @@ allow = [
   "Bash(uv run --frozen pytest)", "Bash(uv run --frozen pytest -q)",
   "Bash(uv run --frozen ruff check)", "Bash(uv run --frozen ruff check .)",
   "Bash(uv run --frozen lmt:*)",  # writes only where -o/--out points; downloads only pinned models (#89)
+  # G1-15's licence check: reads an install's site-packages and this file (#220).
+  "Bash(python3 -I .github/scripts/check_licences.py:*)",
 ]
 # Commands that change pyproject.toml, uv.lock or files the run names (#92). No ffmpeg or ffprobe here or
 # above: they read and write URLs and any path, so the product's tests run them instead.
 allow_write = [
   "Bash(uv lock:*)", "Bash(uv sync:*)", "Bash(uv add:*)", "Bash(uv remove:*)", "Bash(uv pip compile:*)",
   "Bash(uv run --frozen pytest:*)", "Bash(uv run --frozen ruff check:*)", "Bash(uv run --frozen ruff format:*)",
+  # The licence inventory's installs (#220): the lock as a requirements file, and only its hash-pinned wheels,
+  # unpacked under --target without building anything. Never a bare `uv pip install`.
+  "Bash(uv export --frozen:*)", "Bash(uv pip install --no-deps --require-hashes --no-build --target:*)",
 ]
 
 # The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
