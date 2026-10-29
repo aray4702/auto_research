@@ -8,7 +8,7 @@ Review only **green** heads. Verify claims cheaply: re-run the command a PR cite
 
 ### Checklist
 
-1. **Scope.** One item; atomic; the PR says `Resolves #<item>`. A design PR that answers a decision on another role's item says `Refs #<item>` instead, with no closing keyword.
+1. **Scope.** One item; atomic; the PR says `Resolves #<item>`. A design PR that answers a decision held on another role's item says `Refs #<item>` instead, and has no closing keyword in its title, body or commit messages.
 2. **Test.** It tests the item's behaviour and fails without the change. Check that with `python3 -I system/gate/against_base.py <head>`: it runs the PR's changed tests at its head, then with its other files reverted to the base, in a throwaway worktree, so yours stays as it is.
 3. **Design.** The change matches the internal design and the acceptance spec. Anything beyond them goes to the Architect.
 4. **Nothing loosened.** No threshold, test or CI check weakened. No new or raised cap. No skipped check.
