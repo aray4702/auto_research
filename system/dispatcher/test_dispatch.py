@@ -13,6 +13,10 @@ from system.tools import post
 ROOT = Path(__file__).resolve().parents[2]
 IDENTITY = post.load_identity()
 CAPS = tomllib.loads((ROOT / "system" / "caps.toml").read_text())
+
+# These tests check the caps' logic at the sizing's concurrency (2 runs, 1 per role), not the Owner's
+# temporary setting in caps.toml for the G1-1 push (#84).
+CAPS["concurrency"] = {"max_runs": 2, "max_runs_per_role": 1}
 NOW = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)
 BOT, SECOND = IDENTITY["reviewer_app"]["bot_login"], IDENTITY["second_login"]
 # A protected file SR3 leaves to the Owner (#221), for the tests of what the Owner is asked.
@@ -756,7 +760,12 @@ class DryRunTest(unittest.TestCase):
 
     def test_a_pass_catches_up_the_builders_daily_run(self):
         # NOW is 20:00 PT and no daily run has started today (#186): it takes the second slot, ahead of triage.
-        with mock.patch.object(post, "GitHub", FakeGitHub), \
+        # Run at the sizing's 2 slots, not the Owner's temporary 3 (#84).
+        caps = tomllib.loads((ROOT / "system" / "caps.toml").read_text())
+        caps["concurrency"] = {"max_runs": 2, "max_runs_per_role": 1}
+        real_load = dispatch.runner.load_all
+        with mock.patch.object(dispatch.runner, "load_all", lambda *a, **k: {**real_load(*a, **k), "caps": caps}), \
+             mock.patch.object(post, "GitHub", FakeGitHub), \
              mock.patch("system.dispatcher.state.Store", FakeStore), \
              mock.patch.object(dispatch, "spawn"), \
              mock.patch.object(dispatch.relay, "run", return_value=[]):
