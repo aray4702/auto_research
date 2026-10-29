@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "lmt_version": "0.1.0",
+  "source": {"file": "u2.flac", "duration": 2.5},
+  "models": {"asr": {"name": "distil-large-v3", "repository": "Systran/faster-distil-whisper-large-v3", "revision": "0"}, "diarization": null},
+  "speakers": [{"id": "S1", "label": "Speaker 1"}],
+  "segments": [
+    {"start": 0.1, "end": 2.3, "speaker": "S1", "text": "It was 25 past ten."}
+  ]
+}

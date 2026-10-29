@@ -1,0 +1,26 @@
+# What's built from the sources in sources.toml (design/internal/g1-slice.md, S1).
+schema_version = 1
+
+[[fixture]]
+name = "clip"
+path = "tests/fixtures/clip.wav"          # from the repository root
+reference = "tests/fixtures/clip.txt"
+gap = 0.0
+derived_sha256 = "f227d1d5f63ece887af58c4b56cc05ee247d97c27e248bb10b3d29e7a8d3b5bf"
+reference_sha256 = "45cdd1aa7e7deb4fd7841e14676907c5f211d385d36e293bc28cf3988eee4356"
+# Speaker 61: utterances 61-70968-0000 to 61-70968-0012, 13 utterances, 56.565 s (the rule in design/internal/g1-slice.md, S1).
+concat = [
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0000.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0001.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0002.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0003.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0004.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0005.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0006.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0007.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0008.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0009.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0010.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0011.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0012.flac"},
+]

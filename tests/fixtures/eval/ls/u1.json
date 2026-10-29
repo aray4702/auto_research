@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "lmt_version": "0.1.0",
+  "source": {"file": "u1.flac", "duration": 3.0},
+  "models": {"asr": {"name": "distil-large-v3", "repository": "Systran/faster-distil-whisper-large-v3", "revision": "0"}, "diarization": null},
+  "speakers": [{"id": "S1", "label": "Speaker 1"}],
+  "segments": [
+    {"start": 0.2, "end": 2.8, "speaker": "S1", "text": "The quick brown fox jumped over the lazy dog."}
+  ]
+}
