@@ -54,6 +54,9 @@ explained = [
   "Glob", "Grep", "Read",
   "Bash: ls",  # ls is allowed, so a plain ls denied went outside the worktree; the same rule, step 2 (#182)
   "Bash: ls [outside]",  # the same denial, since #177 marks the path; "Bash: ls" goes once no run this week recorded it
+  # uv running code it is handed runs anything, the denied commands included, as a bare `uv run` would (#92);
+  # rules.md, How a run works, 2 (#324).
+  "Bash: uv run --frozen python -c", "Bash: uv run python -c",
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
