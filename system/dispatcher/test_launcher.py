@@ -240,10 +240,24 @@ class LauncherTest(unittest.TestCase):
             (a0, a1), (b0, b1) = sorted(spans)
             self.assertGreaterEqual(b0, a1 - 0.01, "the two holders overlapped")
 
+    def test_launchers_in_the_same_second_get_different_run_ids(self):
+        # Two reviewers in one pass shared reviewer-20261029T061202Z; the second's worktree add failed (#325).
+        with tempfile.TemporaryDirectory() as d:
+            config = {"runner": {"runner": {"home": d, "logs": d}}}
+            first, p1 = run.reserve(config, "reviewer", NOW)
+            second, p2 = run.reserve(config, "reviewer", NOW)
+            other, _ = run.reserve(config, "architect", NOW)
+        self.assertEqual(first, run.new_run_id("reviewer", NOW))
+        self.assertEqual(second, run.new_run_id("reviewer", NOW + timedelta(seconds=1)))
+        self.assertEqual(other, run.new_run_id("architect", NOW))
+        self.assertNotEqual(p1["worktree"], p2["worktree"])
+
     def test_a_launcher_that_fails_after_claiming_releases_and_records_it(self):
         store = mock.Mock()
         store.read.return_value = []
-        with mock.patch.object(run.killswitch, "paused", return_value=(False, "")), \
+        with tempfile.TemporaryDirectory() as d, \
+             mock.patch.object(run.runner, "home", return_value=Path(d)), \
+             mock.patch.object(run.killswitch, "paused", return_value=(False, "")), \
              mock.patch.object(run.runner, "claude_login", return_value=("claude.ai", "max")), \
              mock.patch.object(run.state, "Store", return_value=store), \
              mock.patch.object(run.post, "GitHub"), \
@@ -253,11 +267,13 @@ class LauncherTest(unittest.TestCase):
              mock.patch("builtins.print"):
             with self.assertRaises(subprocess.CalledProcessError):
                 run.main(["reviewer", "--task", "Review PR #32.", "--item", "32", "--claim"])
+            self.assertEqual(list(Path(d, "runs").glob("*.settings.json")), [], "a failed launcher keeps its run ID")
         claim.assert_called_once()
         release.assert_called_once()
         self.assertEqual(release.call_args.args[2], 32)
         kind, record = store.append.call_args.args
         self.assertEqual((kind, record["event"], record["status"]), ("runs", "end", "failed: launcher: CalledProcessError"))
+        self.assertIn("git fetch", record["detail"], "the failure says which command failed")
 
     def test_a_finished_run_records_one_end_and_raises_nothing(self):
         store = mock.Mock()
