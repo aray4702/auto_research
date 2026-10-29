@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #349 | G1's P6 split into P6a and P6b, and P7 into P7a to P7c (`g1-stage2.md`). The guard and its test are P7a's, and `tests/isolation.py` is P7b's: item 2a, which takes its snapshot, needs P7a and P7b, and item 4b, which keeps its own, needs P7a. `tests/subtitle_checks.py` is P6a's, so items 1 and 4b, which call it, need P6a |
 | 2026-10-29 | architect, #289 | G1's stage 2 (`g1-stage2.md`): the network guard and its test are built by G1's P7, with `LMT_NETGUARD_ALLOW`, so item 0 no longer lists them, items 2a and 4b need P7, and every G3 use sets `LMT_NETGUARD_ALLOW=127.0.0.1` |
 | 2026-10-29 | architect, #286 | The label pattern ends with `(?![\s\S])`, not `$`, so Python's and ECMA-262's validators agree on a trailing newline |
 | 2026-10-28 | architect, #155 | Reviewer's findings on #156: item 3's `lmt rename` writes only the JSON; the network guard allows only `127.0.0.1`; item 4b runs its offline phase as one process inside one namespace, imports `subtitle_checks` lazily, and lists the directories G3-6 compares; the CI cost is corrected to about 960 minutes; `--tag-checkout` takes the README's tag; U+FEFF joins the name tests |
@@ -18,12 +19,12 @@ The coordinator's five items become eight, for two reasons:
 | Item | What | Needs | Files it creates or changes | Tier |
 | --- | --- | --- | --- | --- |
 | **0** | CLI wiring for `rename` and `demo`, stubs, the transcript and markup fixtures, the tier exceptions and the import-graph test | G1.2 (transcript types, schema, exporters, `lmt transcribe`); G1 #107 (`tiers.py`) | `src/lmt/cli.py`, `src/lmt/rename.py` (stub), `src/lmt/demo/__init__.py`, `src/lmt/demo/server.py` (stub), `src/lmt/demo/sample.py` (stub), `tests/fixtures/two_speakers.transcript.json`, `tests/fixtures/markup.py`, `tests/test_fixture_transcript.py`, `tests/test_import_graph.py`, `tests/test_cli.py` (cases), `.github/scripts/tiers.py`, `.github/scripts/test_tiers.py`, `.github/workflows/product.yml` (`test-models` block) | 3 |
-| **1** | `lmt rename` (G3-1 to G3-3) | 0 | `src/lmt/rename.py` (replaces the stub), `tests/test_rename.py`, `tests/test_rename_models.py` | 2 |
-| **2a** | `lmt demo`: server and page (G3-4) | 0; G1's P7 (the network guard) | `src/lmt/demo/server.py` (replaces the stub), `src/lmt/demo/static/` (`index.html`, `app.js`, `app.css`, `favicon.svg`), `tests/test_demo_server.py`, `tests/demo_process.py` | 2 |
+| **1** | `lmt rename` (G3-1 to G3-3) | 0; G1's P6a (the subtitle checks) | `src/lmt/rename.py` (replaces the stub), `tests/test_rename.py`, `tests/test_rename_models.py` | 2 |
+| **2a** | `lmt demo`: server and page (G3-4) | 0; G1's P7a (the network guard) and P7b (the file snapshot) | `src/lmt/demo/server.py` (replaces the stub), `src/lmt/demo/static/` (`index.html`, `app.js`, `app.css`, `favicon.svg`), `tests/test_demo_server.py`, `tests/demo_process.py` | 2 |
 | **2b** | `lmt demo --sample` (G3-6's mechanics) | 0; G1 #108 (models), #110 (datasets) | `src/lmt/demo/sample.py` (replaces the stub), `tests/test_demo_sample.py`; `src/lmt/eval/datasets.py` only if #110 lacks `sample_meeting` (below) | 2, or 3 with `datasets.py` |
 | **3** | The browser test, the `browser` job and the screenshot script (G3-2's Chrome parse, G3-5) | 1, 2a | `pyproject.toml` (Selenium, the `browser` marker), `uv.lock`, `toolchain.toml` (`[licences]` entries, if any), `tests/browser/conftest.py`, `tests/browser/test_page.py`, `tests/browser/screenshot.py`, `tests/browser/test_screenshot.py`, `tests/test_demo_server.py` (the relabel helper), `.github/workflows/product.yml` (`browser` block) | 3 |
 | **4a** | Packaging: pins, `## Install`, the install check (G3-7 on Linux) | 0; G1 #122 (licence check) | `pyproject.toml` (pins), `uv.lock`, `tests/test_packaging.py`, `README.md` (`## Install`), `.github/scripts/check_readme.py`, `.github/scripts/test_check_readme.py`, `.github/scripts/check_install.py`, `.github/scripts/test_check_install.py`, `.github/workflows/product.yml` (`test` block) | 3 |
-| **4b** | The full-install sequence script (G3-6, G3-8) | 2b, 4a; G1's P7 (the network guard) | `.github/scripts/check_full_install.py`, `.github/scripts/test_check_full_install.py` | 1 |
+| **4b** | The full-install sequence script (G3-6, G3-8) | 2b, 4a; G1's P6a (the subtitle checks) and P7a (the network guard) | `.github/scripts/check_full_install.py`, `.github/scripts/test_check_full_install.py` | 1 |
 | **5** | Builder: `install-full` and `release.yml` | 4a, 4b; 1, 2a and 2b for `install-full` to pass | `.github/workflows/install-full.yml`, `.github/workflows/release.yml`, `.github/workflows/product.yml` (`install-full` block), `.github/scripts/release_notes.py` | 3 |
 
 **Order.** An item can start once everything it needs has merged:
@@ -65,9 +66,9 @@ G1.2 isn't designed yet. These are the interfaces G3's items call. G1.2's design
 | **The WebVTT visible prefix** (6a) | 1, 3 | `export/vtt.py` writes `<v José &amp; Ana>José &amp; Ana: text`, as `public-api.md` already gives it. G1.2 builds it. Item 1 tests it with the rename names (G3-2). |
 | **Decode** (`lmt.audio`) | 2a | `decode(path) -> numpy.ndarray`, float32, 16 kHz, mono. Every failure is `InputError(str(path), problem)`. |
 | **The pipeline** (`lmt.pipeline`) | 0, 2b | `transcribe(path, *, offline=False) -> Transcript`, with the default models and options, as `lmt transcribe` runs them. |
-| **The subtitle checks** (G1-4's test) | 1, 4b | `tests/subtitle_checks.py`: `check_srt(path)` and `check_vtt(path)`, which assert `srt` in strict mode, `webvtt-py`, and the `ffmpeg` re-encode. Whichever jobs run G1-4's test have `ffmpeg`. If the `test` job doesn't, item 1 adds G1.2's install step for it to the `test` block, and its PR becomes tier 3 and protected. |
+| **The subtitle checks** (G1-4's test; G1's P6a) | 1, 4b | `tests/subtitle_checks.py`: `check_srt(path)` and `check_vtt(path)`, which assert `srt` in strict mode, `webvtt-py`, and the `ffmpeg` re-encode. Whichever jobs run G1-4's test have `ffmpeg`. If the `test` job doesn't, item 1 adds G1.2's install step for it to the `test` block, and its PR becomes tier 3 and protected. |
 | **The shared product run** (`tests/conftest.py`) | 0, 1 | A session fixture, `two_speakers_run`, that runs `lmt transcribe` on `tests/fixtures/two_speakers.wav` once, with all four formats, and returns the output directory. |
-| **The file snapshot** (G1-13's test) | 2a | `tests/isolation.py`: `snapshot(*dirs) -> dict` of path to (size, SHA-256), and fresh `HOME`, `TMPDIR`, `XDG_CACHE_HOME` and working directory for a subprocess. If G1.2 names it otherwise, 2a uses that. |
+| **The file snapshot** (G1-13's test; G1's P7b) | 2a | `tests/isolation.py`: `snapshot(*dirs) -> dict` of path to (size, SHA-256), and fresh `HOME`, `TMPDIR`, `XDG_CACHE_HOME` and working directory for a subprocess. If G1.2 names it otherwise, 2a uses that. |
 | **The CLI table test** (G1-6, item 1a) | 0 | `tests/test_cli.py` compares each command's options in `public-api.md` with the parser's. `public-api.md` has listed `rename` and `demo` since #129. If 1a's test reads every command there, 1a must wire them as stubs itself, and item 0 skips its wiring. Otherwise 1a's test keeps a set of commands it checks, and item 0 adds the two. |
 
 **Two constraints on G1's stage-1 items,** found while designing this:
@@ -101,9 +102,9 @@ The stubs raise `NotBuilt("rename")`, `NotBuilt("demo")` and `NotBuilt("demo --s
 
 ### The network guard
 
-G1's stage 2 builds this guard first, for G1-13 (`g1-stage2.md`, P7), allowing the addresses in `LMT_NETGUARD_ALLOW` and none by default. G3's tests set `LMT_NETGUARD_ALLOW=127.0.0.1`, and item 0 doesn't build it again. As G3 uses it: `tests/netguard/sitecustomize.py`, active only when `LMT_NETGUARD_LOG` is set. It wraps `socket.socket.connect` and `connect_ex`: a connection to any address but `127.0.0.1` is appended, one line, to the log file, and raises `OSError(errno.ENETUNREACH)`. That is G3-4's "allowing only `127.0.0.1`", and it is stricter than G3-8's "loopback", so one guard serves both. `lmt` itself connects to nothing, and the tests' own clients run outside the guard. A caller that swallows the error is still caught, because the test reads the log. Put on `PYTHONPATH` for a subprocess, so it applies to `lmt` without changing it. Item 2a's G3-4 check and item 4b's G3-8 check use it.
+G1's stage 2 builds this guard first, for G1-13 (`g1-stage2.md`, P7a), allowing the addresses in `LMT_NETGUARD_ALLOW` and none by default. G3's tests set `LMT_NETGUARD_ALLOW=127.0.0.1`, and item 0 doesn't build it again. As G3 uses it: `tests/netguard/sitecustomize.py`, active only when `LMT_NETGUARD_LOG` is set. It wraps `socket.socket.connect` and `connect_ex`: a connection to any address but `127.0.0.1` is appended, one line, to the log file, and raises `OSError(errno.ENETUNREACH)`. That is G3-4's "allowing only `127.0.0.1`", and it is stricter than G3-8's "loopback", so one guard serves both. `lmt` itself connects to nothing, and the tests' own clients run outside the guard. A caller that swallows the error is still caught, because the test reads the log. Put on `PYTHONPATH` for a subprocess, so it applies to `lmt` without changing it. Item 2a's G3-4 check and item 4b's G3-8 check use it.
 
-**Its test** is P7's `tests/test_netguard.py` (`g1-stage2.md`), which covers what G3 relies on: under `LMT_NETGUARD_ALLOW=127.0.0.1`, a closed port on `127.0.0.1` is refused by the system and not logged, and `127.0.0.2`, `::1` and `192.0.2.1:80` are each logged and refused. G3's items add no second test of it.
+**Its test** is P7a's `tests/test_netguard.py` (`g1-stage2.md`), which covers what G3 relies on: under `LMT_NETGUARD_ALLOW=127.0.0.1`, a closed port on `127.0.0.1` is refused by the system and not logged, and `127.0.0.2`, `::1` and `192.0.2.1:80` are each logged and refused. G3's items add no second test of it.
 
 ### The tier exceptions
 
@@ -490,7 +491,7 @@ uv run --frozen python .github/scripts/check_full_install.py --lmt <scratch>/bin
    - **On macOS,** the same argv from `env -i` on, with no namespace.
    - **The outer process** waits for the phase with no limit of its own. Every step inside has one, and the job's `timeout-minutes` is the last resort. The phase writes its results to `<work>/offline.json` and exits 0 only if every step passed. The outer process fails the phase if the file is missing, naming the exit code (such as `sudo` failing), or if the exit code and the file disagree.
 
-   Inside the phase, with the network guard (G1's P7) on `PYTHONPATH`, `LMT_NETGUARD_ALLOW=127.0.0.1` and `LMT_NETGUARD_LOG=<work>/netguard.log` for every `lmt` command:
+   Inside the phase, with the network guard (G1's P7a) on `PYTHONPATH`, `LMT_NETGUARD_ALLOW=127.0.0.1` and `LMT_NETGUARD_LOG=<work>/netguard.log` for every `lmt` command:
    1. **On Linux, the cut is real:** `socket.create_connection(("192.0.2.1", 80), timeout=2)` from the phase itself fails with `ENETUNREACH`. Otherwise the phase fails, "the namespace has a route out".
    2. `lmt transcribe <checkout>/tests/fixtures/two_speakers.wav -f txt,srt,vtt,json -o <work>/out` exits 0 within 15 minutes, and `check_srt` and `check_vtt` pass on its files.
    3. `lmt rename <work>/out/two_speakers.json "S1=José & Ana"` exits 0 within 2 minutes.
