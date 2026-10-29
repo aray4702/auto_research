@@ -286,19 +286,21 @@ Standard library only. The path rules are constants that copy `design/architectu
 TIER1 = ("src/", "tests/", "schema/", "results/", "pyproject.toml", "uv.lock", "toolchain.toml",
          ".python-version", "README.md", ".github/scripts/", ".github/workflows/")
 NOT_TIER2 = ("README.md", "results/", "src/lmt/eval/", ".github/scripts/")
-TIER3_EXCEPT = ("src/lmt/export/txt.py", "src/lmt/export/srt.py", "src/lmt/export/vtt.py")
-TIER3_FILES = ("pyproject.toml", "uv.lock", "toolchain.toml", ".python-version")
+TIER3_EXCEPT = ("src/lmt/export/txt.py", "src/lmt/export/srt.py", "src/lmt/export/vtt.py",
+                "src/lmt/rename.py", "src/lmt/demo/")
+TIER3_FILES = ("pyproject.toml", "uv.lock", "toolchain.toml", ".python-version",
+               ".github/scripts/tiers.py")
 # Tier 3: src/lmt/ except TIER3_EXCEPT, TIER3_FILES, or .github/workflows/.
 ```
 
 An entry ending `/` matches by prefix, any other exactly.
 
-**Open: the filter's own tier (#121).** As the architecture stands, `.github/scripts/tiers.py` is tier 1, like every CI script. But it decides which jobs run, which is the architecture's reason for putting the workflows in tier 3, so a PR changing it would be checked by its own filter. #121 proposes moving it to tier 3 and waits for the Owner. If the Owner approves before item 2 is built, item 2 adds `".github/scripts/tiers.py"` to `TIER3_FILES` and the test case `.github/scripts/tiers.py` → 3. Otherwise #121 adds them afterwards. Item 2 doesn't add them without the approval.
+`rename.py` and `demo/` leave tier 3 like the exporters, by the Owner's answers on #83 and #129. The filter itself, `.github/scripts/tiers.py`, is tier 3 beside the workflows, by the Owner's answer `1` on #121 (#134): it decides which jobs run, so a change to it isn't checked by its own filter. The other scripts in `.github/scripts/` stay at tier 1.
 
 - `tier_for_path(path) -> int` is the highest tier whose rule matches, else 0. `tier_for_paths(paths)` is the highest over all paths (0 for none).
 - `main(argv)`, with `--event`, `--base` and `--head`:
   - `workflow_dispatch` or `schedule`: 3.
-  - Otherwise `git diff --name-only <base>...<head>` (from their merge base). For a push, the base is `github.event.before`. If the base is empty or all zeros, or `git` fails, the result is 3, and the reason is printed.
+  - Otherwise `git diff --name-only --no-renames <base>...<head>` (from their merge base). `--no-renames` lists a renamed file's old path too, so moving a file out of a tier can't hide it. For a push, the base is `github.event.before`. If the base is empty or all zeros, or `git` fails, the result is 3, and the reason is printed.
   - It writes `tier=<n>` to `$GITHUB_OUTPUT`, and the paths that set it to the step summary.
 
 ### `product.yml`
@@ -322,7 +324,7 @@ A job skipped by its `if` counts as passed in the called workflow, so the gate's
 
 `check_readme.py --no-install` skips S1-3 and S1-4, the two checks that run a block. It runs S1-1, S1-2's heading and S1-5, as tier 0 lists.
 
-**Tests (`test_tiers.py`, `unittest`):** one path per tier (`docs.md` → 0, `README.md` → 1, `tests/test_cli.py` → 2, `src/lmt/cli.py` → 3); `src/lmt/eval/score.py` → 3; `results/full.json` → 1; `schema/transcript.schema.json` → 2; each exporter left out of tier 3 → 2, and `export/json.py` → 3; `.github/workflows/gate.yml` → 3; `.github/scripts/x.py` → 1; `uv.lock` → 3; the fallback (an all-zeros base, a base `git` can't resolve) → 3; `workflow_dispatch` and `schedule` → 3. Plus `--no-install` in `test_check_readme.py`.
+**Tests (`test_tiers.py`, `unittest`):** one path per tier (`docs.md` → 0, `README.md` → 1, `tests/test_cli.py` → 2, `src/lmt/cli.py` → 3); `src/lmt/eval/score.py` → 3; `results/full.json` → 1; `schema/transcript.schema.json` → 2; each exporter left out of tier 3 → 2, and `export/json.py` → 3; `src/lmt/rename.py` and `src/lmt/demo/page.html` → 2, and `src/lmt/rename.py.orig` → 3 (an exact entry matches only exactly); `.github/workflows/gate.yml` → 3; `.github/scripts/x.py` → 1, and `.github/scripts/tiers.py` → 3; `uv.lock` → 3; moving `src/lmt/cli.py` to `notes.md` → 3, by its old path; the fallback (an all-zeros base, a base `git` can't resolve) → 3; `workflow_dispatch` and `schedule` → 3. Plus `--no-install` in `test_check_readme.py`.
 
 **Test of the item:** the unit tests, and the PR's gate run, whose summary shows tier 3 (it touches `.github/workflows/`) with every job run.
 
