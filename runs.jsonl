@@ -1201,3 +1201,4 @@
 {"at": "2026-10-29T20:27:13+00:00", "event": "start", "item": 343, "pid": 93993, "role": "developer", "run_id": "developer-20261029T202704Z", "task": "Work on your item, as the work order schedules it."}
 {"at": "2026-10-29T20:27:15+00:00", "event": "start", "item": 364, "pid": 94044, "role": "developer", "run_id": "developer-20261029T202705Z", "task": "PR #364 needs work: its gate is red."}
 {"at": "2026-10-29T20:31:15+00:00", "cost_usd": 0.814086, "denials": 3, "denied": ["Bash: gh api", "Bash: gh api > | ;", "Bash: python3 -m unittest"], "event": "end", "five_hour": 0.02, "item": 345, "role": "builder", "run_id": "builder-20261029T202704Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 37}
+{"at": "2026-10-29T20:31:49+00:00", "event": "start", "item": 366, "pid": 99868, "role": "reviewer", "run_id": "reviewer-20261029T203140Z", "task": "Review PR #366."}
