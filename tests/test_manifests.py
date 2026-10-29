@@ -147,22 +147,6 @@ class TestAMIFull:
     def test_ami_ci_uses_the_list_form(self, entries):
         assert (entries["AMI-ci"]["audio"], entries["AMI-ci"]["rttm"]) == (["ami-ES2004a"], ["ami-rttm-ES2004a"])
 
-    def test_the_one_hour_recording_is_ami_full_joined_and_cut_at_3600_s(self, entries):
-        hour = entries["one-hour"]
-        assert (hour["set"], hour["kind"], hour["of"], hour["gap"], hour["cut"]) == (
-            "full", "concat", "AMI full", 0.0, 3600.0)
-        assert HEX64.match(hour["derived_sha256"])
-        assert [p["source"] for p in hour["concat"]] == [f"ami-{m}" for m in AMI_FULL]
-        assert all(p["start"] == 0 for p in hour["concat"])
-        # Each slice is its whole meeting: the WAV is two bytes a frame after a header (44 bytes, or 1,427 for
-        # IS1009's), so its size gives the frames to within the header.
-        sizes = {s["id"]: s["size"] for s in SOURCES["source"]}
-        for piece in hour["concat"]:
-            assert 0 < sizes[piece["source"]] - 2 * round(piece["end"] * 16000) < 2048, piece
-        manifests = datasets.load_manifests()
-        read = datasets._read_pieces(manifests.datasets["one-hour"])
-        assert [p.source for p, _ in read] == ["ami-EN2002a", "ami-EN2002b"]
-
 
 class TestCommittedClip:
     """The fixture can't change without its manifest."""

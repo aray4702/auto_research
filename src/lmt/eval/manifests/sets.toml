@@ -53,9 +53,9 @@ name = "AMI-ci"
 set = "ci"
 kind = "ami"
 meetings = ["ES2004a"]
-audio = "ami-ES2004a"            # source ids
+audio = ["ami-ES2004a"]          # source ids, parallel to meetings
 words = "ami-annotations-1.6.2"
-rttm = "ami-rttm-ES2004a"
+rttm = ["ami-rttm-ES2004a"]
 crop = 300.0                     # seconds from the start
 derived_sha256 = "1bca9b7c6b9faf216939a69200cfc14059f561a64168424adb5a331ad24b8527"
 
@@ -66,3 +66,19 @@ name = "LS full"
 set = "full"
 kind = "librispeech"
 source = "librispeech-test-clean-full"
+
+# AMI full: the spec's 16 meetings, in its order, each one item (design/internal/g1-stage1.md §5b, decision 4).
+[[dataset]]
+name = "AMI full"
+set = "full"
+kind = "ami"
+meetings = ["EN2002a", "EN2002b", "EN2002c", "EN2002d", "ES2004a", "ES2004b", "ES2004c", "ES2004d",
+            "IS1009a", "IS1009b", "IS1009c", "IS1009d", "TS3003a", "TS3003b", "TS3003c", "TS3003d"]
+audio = ["ami-EN2002a", "ami-EN2002b", "ami-EN2002c", "ami-EN2002d", "ami-ES2004a", "ami-ES2004b", "ami-ES2004c",
+         "ami-ES2004d", "ami-IS1009a", "ami-IS1009b", "ami-IS1009c", "ami-IS1009d", "ami-TS3003a", "ami-TS3003b",
+         "ami-TS3003c", "ami-TS3003d"]
+words = "ami-annotations-1.6.2"
+rttm = ["ami-rttm-EN2002a", "ami-rttm-EN2002b", "ami-rttm-EN2002c", "ami-rttm-EN2002d", "ami-rttm-ES2004a",
+        "ami-rttm-ES2004b", "ami-rttm-ES2004c", "ami-rttm-ES2004d", "ami-rttm-IS1009a", "ami-rttm-IS1009b",
+        "ami-rttm-IS1009c", "ami-rttm-IS1009d", "ami-rttm-TS3003a", "ami-rttm-TS3003b", "ami-rttm-TS3003c",
+        "ami-rttm-TS3003d"]
