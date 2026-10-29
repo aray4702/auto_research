@@ -82,3 +82,33 @@ rttm = ["ami-rttm-EN2002a", "ami-rttm-EN2002b", "ami-rttm-EN2002c", "ami-rttm-EN
         "ami-rttm-ES2004b", "ami-rttm-ES2004c", "ami-rttm-ES2004d", "ami-rttm-IS1009a", "ami-rttm-IS1009b",
         "ami-rttm-IS1009c", "ami-rttm-IS1009d", "ami-rttm-TS3003a", "ami-rttm-TS3003b", "ami-rttm-TS3003c",
         "ami-rttm-TS3003d"]
+
+# one-hour: AMI full joined in its order with no gap and cut at 3,600 s (design/internal/g1-stage1.md §5b,
+# decision 5). Each slice's end is its WAV's frames / 16,000, exactly. Only EN2002a (2,142.709375 s) and the first
+# 1,457.290625 s of EN2002b come before the cut, so only they are read. Built to derived/one-hour/, never committed.
+[[dataset]]
+name = "one-hour"
+set = "full"
+kind = "concat"
+of = "AMI full"
+gap = 0.0
+cut = 3600.0
+derived_sha256 = "d173159e1c3c83d8ec2a8fb50ddaa0ae71a8ba1190080267f841e919ee052d45"
+concat = [
+  {source = "ami-EN2002a", start = 0, end = 2142.709375},
+  {source = "ami-EN2002b", start = 0, end = 1786.848},
+  {source = "ami-EN2002c", start = 0, end = 2972.256},
+  {source = "ami-EN2002d", start = 0, end = 2209.8986875},
+  {source = "ami-ES2004a", start = 0, end = 1049.3546875},
+  {source = "ami-ES2004b", start = 0, end = 2345.493375},
+  {source = "ami-ES2004c", start = 0, end = 2334.368},
+  {source = "ami-ES2004d", start = 0, end = 2222.2906875},
+  {source = "ami-IS1009a", start = 0, end = 838.8333125},
+  {source = "ami-IS1009b", start = 0, end = 2052.3333125},
+  {source = "ami-IS1009c", start = 0, end = 1820.8333125},
+  {source = "ami-IS1009d", start = 0, end = 1944.5},
+  {source = "ami-TS3003a", start = 0, end = 1505.642625},
+  {source = "ami-TS3003b", start = 0, end = 2210.304},
+  {source = "ami-TS3003c", start = 0, end = 2570.0},
+  {source = "ami-TS3003d", start = 0, end = 2618.2},
+]

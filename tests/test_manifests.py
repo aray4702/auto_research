@@ -147,6 +147,27 @@ class TestAMIFull:
     def test_ami_ci_uses_the_list_form(self, entries):
         assert (entries["AMI-ci"]["audio"], entries["AMI-ci"]["rttm"]) == (["ami-ES2004a"], ["ami-rttm-ES2004a"])
 
+    def test_the_one_hour_recording_is_ami_full_joined_and_cut_at_3600_s(self, entries):
+        one_hour = entries["one-hour"]
+        assert (one_hour["set"], one_hour["kind"], one_hour["of"]) == ("full", "concat", "AMI full")
+        assert (one_hour["gap"], one_hour["cut"]) == (0.0, 3600.0)
+        assert HEX64.match(one_hour["derived_sha256"])
+        assert [p["source"] for p in one_hour["concat"]] == [f"ami-{m}" for m in AMI_FULL]
+        sources = {s["id"]: s for s in SOURCES["source"]}
+        for piece in one_hour["concat"]:
+            # Each slice is its whole WAV: end × 16,000 whole 16-bit mono frames, plus a header.
+            frames = piece["end"] * 16000
+            assert piece["start"] == 0 and frames == int(frames), piece
+            assert 44 <= sources[piece["source"]]["size"] - 2 * int(frames) <= 4096, piece
+
+    def test_only_en2002a_and_en2002b_are_read_for_the_one_hour_recording(self):
+        manifests = datasets.load_manifests()
+        one_hour = manifests.datasets["one-hour"]
+        read = datasets._read_pieces(one_hour)
+        assert [(p.source, offset) for p, offset in read] == [("ami-EN2002a", 0.0), ("ami-EN2002b", 2142.709375)]
+        assert datasets._source_ids(one_hour, manifests.datasets) == (
+            "ami-EN2002a", "ami-EN2002b", "ami-annotations-1.6.2", "ami-rttm-EN2002a", "ami-rttm-EN2002b")
+
 
 class TestCommittedClip:
     """The fixture can't change without its manifest."""
