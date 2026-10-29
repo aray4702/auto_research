@@ -703,6 +703,18 @@ class TestDatasetManifests:
         with pytest.raises(ValueError, match=re.escape(problem)):
             self.load(tmp_path, monkeypatch, datasets_toml)
 
+    def test_without_utterances_it_is_every_flac_member_in_sorted_id_order(self, tmp_path, monkeypatch):
+        ls_full = LS_CI.replace(f"utterances = {IDS[:2]!r}\n", "").replace('"LS-ci"', '"LS full"')
+        manifests = self.load(tmp_path, monkeypatch, ls_full)
+        assert manifests.datasets["LS full"].utterances == tuple(IDS)
+
+    def test_without_utterances_a_source_without_flac_members_is_refused(self, tmp_path, monkeypatch):
+        ami = ami_ci("0" * 64)
+        ls_full = LS_CI.replace(f"utterances = {IDS[:2]!r}\n", "").replace(
+            '"librispeech-test-clean"', '"ami-annotations-1.6.2"')
+        with pytest.raises(ValueError, match="without utterances, ami-annotations-1.6.2 must have .flac members"):
+            self.load(tmp_path, monkeypatch, ami + ls_full)
+
     def test_a_dataset_needs_its_chapters_transcript(self, tmp_path, monkeypatch):
         ci = CI(tmp_path, monkeypatch, datasets_toml=LS_CI)
         sources = (ci.dir / "sources.toml").read_text()
@@ -879,6 +891,78 @@ class TestPin:
     def test_the_prefixes_are_the_manifest_tests(self):
         assert datasets.URL_PREFIXES[-1] == ("https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/"
                                              f"{datasets.BUT_COMMIT}/")
+
+
+class TestWriteMembers:
+    """`pin --write-members` (design/internal/g1-stage1.md §5b, decision 2)."""
+
+    WRITE = ("pin", URLS[0], "--member", "*.flac", "--member", "*.trans.txt", "--write-members",
+             "librispeech-test-clean")
+
+    @staticmethod
+    def manifests(tmp_path, monkeypatch, *, listed, keep=False, sets="", archive=None):
+        """sources.toml with the LibriSpeech archive listing `listed` of members(), a comment, then the RTTM."""
+        files = members()
+        archive = tar_gz(files) if archive is None else archive
+        dir = tmp_path / "manifests"
+        dir.mkdir(parents=True, exist_ok=True)
+
+        def text(names):
+            return ("schema_version = 1\n"
+                    + source_toml("librispeech-test-clean", URLS[0], tar_gz(files), keep=keep,
+                                  members={name: sha256(files[name]) for name in names})
+                    + "\n# The RTTM, which stays as it is.\n" + source_toml("ami-rttm-ES2004a", RTTM_URL, b"x"))
+
+        (dir / "sources.toml").write_text(text(listed))
+        (dir / "sets.toml").write_text("schema_version = 1\n" + sets)
+        monkeypatch.setattr(datasets, "MANIFEST_DIR", dir)
+        return dir, text, serve(monkeypatch, {URLS[0]: archive}), archive
+
+    @pytest.mark.parametrize("listed, keep", [([TRANS], False), ([], True)])
+    def test_the_sources_members_are_replaced_in_the_archives_order_and_nothing_else(
+            self, cache, tmp_path, monkeypatch, capsys, listed, keep):
+        dir, text, _, archive = self.manifests(tmp_path, monkeypatch, listed=listed, keep=keep)
+        assert datasets.main(self.WRITE) == 0
+        assert capsys.readouterr().out.splitlines() == [
+            f"{URLS[0]} {len(archive)} {sha256(archive)}",
+            f"librispeech-test-clean: 4 members written to {dir / 'sources.toml'}"]
+        assert (dir / "sources.toml").read_text() == text(list(members()))
+        assert [m.path for m in datasets.load_manifests(dir).sources["librispeech-test-clean"].members] == list(
+            members())
+        assert sorted(p.name for p in dir.iterdir()) == ["sets.toml", "sources.toml"]
+        assert cached_files(cache) == []
+
+    @pytest.mark.parametrize("argv, problem, requested", [
+        (["pin", URLS[1], "--member", "*", "--write-members", "librispeech-test-clean"],
+         f"{URLS[1]}: isn't one of librispeech-test-clean's urls", False),
+        (["pin", URLS[0], "--write-members", "librispeech-test-clean"], "--write-members: needs --member", False),
+        (["pin", URLS[0], "--member", "*", "--write-members", "elsewhere"], "elsewhere: isn't a source in", False),
+        (["pin", URLS[0], "--member", "*.wav", "--write-members", "librispeech-test-clean"],
+         f"{URLS[0]}: has no member matching *.wav", True),
+    ])
+    def test_a_bad_request_exits_3_and_writes_nothing(self, cache, tmp_path, monkeypatch, capsys, argv, problem,
+                                                      requested):
+        dir, text, server, _ = self.manifests(tmp_path, monkeypatch, listed=[TRANS])
+        assert datasets.main(argv) == 3
+        assert problem in capsys.readouterr().err
+        assert (dir / "sources.toml").read_text() == text([TRANS])
+        assert bool(server.requests) == requested
+
+    def test_a_download_that_isnt_the_entrys_exits_3_and_writes_nothing(self, cache, tmp_path, monkeypatch, capsys):
+        other = tar_gz({TRANS: b"changed\n"})
+        dir, text, _, _ = self.manifests(tmp_path, monkeypatch, listed=[TRANS], archive=other)
+        assert datasets.main(self.WRITE) == 3
+        assert "don't match librispeech-test-clean's entry" in capsys.readouterr().err
+        assert (dir / "sources.toml").read_text() == text([TRANS])
+        assert sorted(p.name for p in dir.iterdir()) == ["sets.toml", "sources.toml"]
+
+    def test_a_result_the_loader_refuses_writes_nothing(self, cache, tmp_path, monkeypatch):
+        # LS-ci needs its chapter's transcript, which a FLAC-only write would drop.
+        dir, text, _, _ = self.manifests(tmp_path, monkeypatch, listed=list(members()), sets=LS_CI)
+        with pytest.raises(ValueError, match=re.escape(f"{TRANS} isn't a member of librispeech-test-clean")):
+            datasets.write_members(URLS[0], ("*.flac",), "librispeech-test-clean", dir)
+        assert (dir / "sources.toml").read_text() == text(list(members()))
+        assert sorted(p.name for p in dir.iterdir()) == ["sets.toml", "sources.toml"]
 
 
 # --- The CI subset itself ---------------------------------------------------------------------------------------
