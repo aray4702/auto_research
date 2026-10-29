@@ -294,8 +294,8 @@ FORMATS =("flac", "mp3", "m4a", "mp4", "mov")
 
 def recipe(wav, out):
     """The table in design/internal/g1-formats.md, "The recipe", word for word."""
-    mp4 = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1",
-           "-map", "0:a:0", "-map", "1:v:0", "-shortest", "-map_metadata", "-1", "-fflags", "+bitexact",
+    mp4 = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1:d=57",
+           "-map", "0:a:0", "-map", "1:v:0", "-map_metadata", "-1", "-fflags", "+bitexact",
            "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1", "-c:a", "aac", "-profile:a", "aac_low",
            "-b:a", "128k", "-ar", "48000", "-ac", "1", "-c:v", "mpeg4", "-pix_fmt", "yuv420p"]
     return {
