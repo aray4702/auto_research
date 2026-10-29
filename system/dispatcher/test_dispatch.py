@@ -497,6 +497,11 @@ class SR3Test(unittest.TestCase):
     def plan(self, *prs):
         return merge_rules.merge_plan(snap(prs=list(prs)), IDENTITY)
 
+    @staticmethod
+    def reviewed(p, at):
+        p["reviews"][0]["at"] = at.isoformat().replace("+00:00", "Z")
+        return p
+
     def test_the_builder_is_asked_once_instead_of_the_owner(self):
         ask = [("ask-builder-to-approve", 120, self.H)]
         self.assertEqual(self.plan(self.waiting()), ask)
@@ -523,20 +528,23 @@ class SR3Test(unittest.TestCase):
         unprotected["protected"] = False
         self.assertFalse(merge_rules.sr3_covers(unprotected))
 
-    def test_only_a_recorded_builder_run_that_started_after_the_commit_approves(self):
-        target = self.waiting()
-        made = NOW
-        runs = [{"event": "start", "run_id": "b-new", "role": "builder", "item": 120, "at": (made + timedelta(minutes=5)).isoformat()},
-                {"event": "start", "run_id": "b-wrote", "role": "builder", "item": 120, "at": (made - timedelta(minutes=5)).isoformat()},
-                {"event": "start", "run_id": "c-1", "role": "coordinator", "item": 120, "at": (made + timedelta(minutes=5)).isoformat()},
-                {"event": "start", "run_id": "b-other", "role": "builder", "item": 99, "at": (made + timedelta(minutes=5)).isoformat()}]
+    def test_only_a_recorded_builder_run_that_started_after_the_reviewers_approval_approves(self):
+        reviewed = NOW
+        target = self.reviewed(self.waiting(), reviewed)
+        runs = [{"event": "start", "run_id": "b-new", "role": "builder", "item": 120, "at": (reviewed + timedelta(minutes=5)).isoformat()},
+                {"event": "start", "run_id": "b-wrote", "role": "builder", "item": 120, "at": (reviewed - timedelta(minutes=5)).isoformat()},
+                {"event": "start", "run_id": "c-1", "role": "coordinator", "item": 120, "at": (reviewed + timedelta(minutes=5)).isoformat()},
+                {"event": "start", "run_id": "b-other", "role": "builder", "item": 99, "at": (reviewed + timedelta(minutes=5)).isoformat()}]
         owner = IDENTITY["owner_login"]
 
         def approved(role, run, head=self.H, login=owner, pr_=target):
             body = post.with_marker(post.SR3_APPROVAL.format(head=head) + "\n\nchecked", role, run)
-            return merge_rules.builder_approved(pr_, [comment(1, login, body, 0)], runs, IDENTITY, post.MARKER, lambda sha: made)
+            return merge_rules.builder_approved(pr_, [comment(1, login, body, 0)], runs, IDENTITY, post.MARKER)
         self.assertEqual(approved("builder", "b-new"), self.H)
-        self.assertIsNone(approved("builder", "b-wrote"), "the run that wrote the commit: never its own approver")
+        self.assertIsNone(approved("builder", "b-wrote"), "the run that wrote the PR: never its own approver")
+        self.assertIsNone(approved("builder", "b-new", pr_=self.reviewed(self.waiting(), reviewed + timedelta(minutes=10))),
+                          "the Reviewer approved again after the run started: it may have pushed what was approved")
+        self.assertIsNone(approved("builder", "b-new", pr_=self.waiting()), "no time on the review: nothing counts")
         self.assertIsNone(approved("coordinator", "c-1"), "only the builder")
         self.assertIsNone(approved("builder", "c-1"), "the run was a Coordinator's")
         self.assertIsNone(approved("builder", "b-other"), "a run on another item")
@@ -544,8 +552,31 @@ class SR3Test(unittest.TestCase):
         self.assertIsNone(approved("builder", "b-new", login="someone"), "not posted through post.py")
         self.assertIsNone(approved("builder", "b-new", pr_=self.waiting(files=["blueprint.md"])), "a file the Owner kept")
         quoted = post.with_marker("**Needs a decision: owner.**\n\nI would post:\n" + post.SR3_APPROVAL.format(head=self.H), "builder", "b-new")
-        self.assertIsNone(merge_rules.builder_approved(target, [comment(1, owner, quoted, 0)], runs, IDENTITY, post.MARKER, lambda sha: made),
+        self.assertIsNone(merge_rules.builder_approved(target, [comment(1, owner, quoted, 0)], runs, IDENTITY, post.MARKER),
                           "an approval line quoted further down isn't an approval")
+
+    def test_a_writer_that_backdates_its_commit_still_cant_approve_it(self):
+        # The run that wrote the PR pushes a commit dated before its own start, then approves it. GitHub's time of
+        # the Reviewer's approval decides, not the date the writer set.
+        reviewed, owner = NOW, IDENTITY["owner_login"]
+        target = self.reviewed(self.waiting(), reviewed)
+        runs = [{"event": "start", "run_id": "b-wrote", "role": "builder", "item": 120, "at": (reviewed - timedelta(minutes=5)).isoformat()}]
+        approval = post.with_marker(post.SR3_APPROVAL.format(head=self.H) + "\n\nchecked", "builder", "b-wrote")
+        asked = []
+
+        class GitHub:
+            repo = "o/r"
+
+            def api(self, method, path, body=None, paginate=False):
+                asked.append(path)
+                if "/comments" in path:
+                    return [comment(1, owner, approval, 0)]
+                backdated = (reviewed - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+                return {"commit": {"committer": {"date": backdated}}}
+        merge_rules.annotate(GitHub(), snap(prs=[target]), runs, IDENTITY, post.MARKER)
+        self.assertIsNone(target["builder_approval"])
+        self.assertEqual(asked, ["repos/o/r/issues/120/comments?per_page=100"], "no commit's own date is read")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[target]), IDENTITY), [("ask-builder-to-approve", 120, self.H)])
 
     def test_the_builder_is_started_on_the_pr_and_its_escalation_reaches_the_owner(self):
         p = pr(120, protected=True, labels=["needs-decision:builder"], reviews=[(BOT, "APPROVED", "h2")])

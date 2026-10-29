@@ -66,7 +66,8 @@ Each rule records:
   4. it touches none of the files above.
 - **Conditions on the approval, checked by the script (`merge_rules.builder_approved`):**
   - it is posted through `post.py` by a builder run the Dispatcher recorded on this PR;
-  - that run started after the commit it approves was made, so it isn't the run that wrote it.
+  - that run started after the Reviewer App's latest approval, as GitHub recorded it, so it isn't the run that wrote the PR. A run that wrote a commit started before the Reviewer approved it, and a later push of the PR's own needs the Reviewer again. (A commit's own date is whatever its writer set, so it can't be the check.)
+  - it names one of the PR's commits (`post.py builder-approve` refuses any other).
 - **The judgment, which no script can check:** what `system/roles/builder.md` lists. Does the change stay within the blueprint, requirements, spec and design? Does it loosen no check and grant no wider permission than needed? Does a secret reach only what needs it? Is it free of Owner matters?
 - **How GitHub counts it:** branch protection no longer requires the code owner's review (`identity.toml`, `require_code_owner_reviews = false`). The Dispatcher enforces the Owner's approval, an SR2 sign-off or an SR3 approval before it turns on auto-merge for a protected PR. No agent may merge.
 - **Granted:** by the Owner, 2026-10-28, in the local session:

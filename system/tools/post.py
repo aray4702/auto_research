@@ -355,11 +355,15 @@ def cmd_sign_off(gh, caller, n, approved, head, body):
 
 def cmd_builder_approve(gh, caller, n, head, body):
     """SR3: the builder approves a protected PR at `head` in the Owner's place. The Dispatcher counts it only from a
-    builder run it recorded on the PR that started after `head` was made, so never the run that wrote it."""
+    builder run it recorded on the PR that started after the Reviewer approved it, so never the run that wrote it.
+    `head` must be one of the PR's commits: the Dispatcher compares it with the head, and an unknown commit would stop
+    every pass."""
     if caller[0] != "builder":
         raise SystemExit(f"only the builder approves under SR3, not the {caller[0]}")
     if not SHA.match(head):
         raise SystemExit("--head takes a full 40-character commit SHA")
+    if head not in {c["sha"] for c in gh.api("GET", f"repos/{gh.repo}/pulls/{n}/commits?per_page=100", paginate=True)}:
+        raise SystemExit(f"{head} isn't one of #{n}'s commits")
     url = cmd_comment(gh, caller, n, SR3_APPROVAL.format(head=head) + "\n\n" + body)
     clear_decision_labels(gh, n)
     return url
