@@ -5,20 +5,25 @@ The product's own code is licensed under the MIT License; see LICENSE.
 src/lmt/eval/normalizer/ is Whisper's English text normalizer, Copyright (c) 2022 OpenAI, MIT License; see its LICENSE.
 
 The product doesn't ship model weights. `lmt models download` downloads these models from
-Hugging Face, each at a pinned revision, under its own licence:
+Hugging Face, each at a pinned revision, under its own licence. src/lmt/models.toml records
+each one's revision, files, licence and creators:
 
 - Systran/faster-distil-whisper-large-v3 (speech recognition): MIT License.
+  By SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3.
   Model card: https://huggingface.co/Systran/faster-distil-whisper-large-v3
 
 - pyannote/speaker-diarization-3.1 (the diarization pipeline): MIT License.
+  By pyannote (Hervé Bredin and Alexis Plaquet).
   Model card: https://huggingface.co/pyannote/speaker-diarization-3.1
 
 - pyannote/segmentation-3.0 (speaker segmentation): MIT License.
+  By pyannote (Hervé Bredin and Alexis Plaquet).
   Model card: https://huggingface.co/pyannote/segmentation-3.0
 
 - pyannote/wespeaker-voxceleb-resnet34-LM (speaker embeddings): Creative Commons
   Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
-  Attribution: "wespeaker-voxceleb-resnet34-LM", published by pyannote on Hugging Face,
+  Attribution: "wespeaker-voxceleb-resnet34-LM", by the WeSpeaker project, packaged for
+  pyannote.audio by pyannote, published on Hugging Face,
   https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM. Used unmodified.
 
 The product doesn't ship its dependencies either: they install from PyPI (and, for torch and
