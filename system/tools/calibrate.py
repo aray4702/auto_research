@@ -5,8 +5,9 @@
 
 The runs report the account's 7-day utilization; this tool prices all local Claude Code usage in the
 same window (usage numbers only, from every project's session logs: the Owner's decision 2 on #3)
-and divides. It reports the average points per dollar, the marginal one since the previous recorded
-calibration in this window, and whether caps.toml errs on the safe side. It never edits caps.toml
+and divides. It reports the average points per dollar, the marginal ones since the previous recorded
+calibration and since the window's first run reading, and whether caps.toml errs on the safe side
+against the highest of them. It never edits caps.toml
 (a protected path); with --record it appends the calibration to the dispatcher/state branch.
 Standard library only.
 """
@@ -28,6 +29,8 @@ PROJECTS = Path("~/.claude/projects").expanduser()
 # as each line is parsed, never stored or used (the Owner's decision 2 on #3: usage numbers only).
 KEEP = {"type", "timestamp", "message", "model", "usage", "input_tokens", "output_tokens", "cache_read_input_tokens",
         "cache_creation_input_tokens", "cache_creation", "ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens"}
+# Readings are whole percents, so a marginal needs this many points of change (±1 point = ±20 %).
+MARGIN_MIN_POINTS = 5
 
 
 def usage_entry(line):
@@ -84,31 +87,47 @@ def session_lines(start, projects=PROJECTS):
             yield from path.read_text(errors="replace").splitlines()
 
 
-def calibrate(caps, runs, calibrations, lines, prices, now):
-    reading = usage.latest_reading(runs)
-    if not reading:
-        return {"ok": False, "reason": "no run has reported a 7-day reading yet"}
-    start = usage.window_start(runs, now)
-    at = datetime.fromisoformat(reading["at"])
+def window_cost(runs, lines, prices, start, at):
+    """(USD, the system's runs' USD, unpriced models) of all usage in the window up to `at`."""
     cost, unknown = local_cost(lines, prices, start, at)
     # The system's own runs keep no session logs (--no-session-persistence): add what they reported.
     runs_cost = sum(r.get("cost_usd") or 0 for r in runs
                     if r["event"] == "end" and start <= datetime.fromisoformat(r["at"]) <= at)
-    cost += runs_cost
+    return cost + runs_cost, runs_cost, unknown
+
+
+def calibrate(caps, runs, calibrations, lines, prices, now):
+    reading = usage.latest_reading(runs)
+    if not reading:
+        return {"ok": False, "reason": "no run has reported a 7-day reading yet"}
+    lines = list(lines)
+    start = usage.window_start(runs, now)
+    at = datetime.fromisoformat(reading["at"])
+    cost, runs_cost, unknown = window_cost(runs, lines, prices, start, at)
     points = reading["seven_day"] * 100
     out = {
         "ok": True, "window_start": start.isoformat(), "reading_at": reading["at"], "seven_day_points": round(points, 1),
         "local_cost_usd": round(cost, 2), "system_runs_usd": round(runs_cost, 2), "unpriced_models": unknown, "caps_points_per_usd": caps["claude"]["points_per_usd"],
         "average_points_per_usd": round(points / cost, 4) if cost else None, "marginal_points_per_usd": None,
+        "window_marginal_from": None, "window_marginal_points_per_usd": None,
     }
     earlier = [c for c in calibrations if c["window_start"] == out["window_start"] and c["reading_at"] < out["reading_at"]]
     if earlier:
         prev = earlier[-1]
         d_points, d_cost = points - prev["seven_day_points"], cost - prev["local_cost_usd"]
-        if d_cost > 0 and d_points > 0:
+        if d_cost > 0 and d_points >= MARGIN_MIN_POINTS:
             out["marginal_points_per_usd"] = round(d_points / d_cost, 4)
-    measured = max(x for x in (out["average_points_per_usd"], out["marginal_points_per_usd"]) if x is not None) \
-        if out["average_points_per_usd"] else None
+    # The marginal since the window's first run reading, so a fresh window needs no earlier calibration (#203).
+    first = next((r for r in runs if r["event"] == "end" and r.get("seven_day") is not None
+                  and start <= datetime.fromisoformat(r["at"]) < at), None)
+    if first:
+        d_points = points - first["seven_day"] * 100
+        d_cost = cost - window_cost(runs, lines, prices, start, datetime.fromisoformat(first["at"]))[0]
+        out["window_marginal_from"] = first["at"]
+        if d_cost > 0 and d_points >= MARGIN_MIN_POINTS:
+            out["window_marginal_points_per_usd"] = round(d_points / d_cost, 4)
+    rates = [out[k] for k in ("average_points_per_usd", "marginal_points_per_usd", "window_marginal_points_per_usd")]
+    measured = max(x for x in rates if x is not None) if out["average_points_per_usd"] else None
     out["measured_points_per_usd"] = measured
     out["caps_safe"] = measured is None or caps["claude"]["points_per_usd"] >= measured
     return out
@@ -121,7 +140,8 @@ def report(c):
     lines = [
         f"7-day window from {c['window_start']}: {c['seven_day_points']} points at {c['reading_at']}, "
         f"${c['local_cost_usd']} of local usage (API-equivalent), of which the system's runs ${c['system_runs_usd']}",
-        f"average: {per(c['average_points_per_usd'])}; marginal since the last calibration: {per(c['marginal_points_per_usd'])}",
+        f"average: {per(c['average_points_per_usd'])}; marginal since the last calibration: {per(c['marginal_points_per_usd'])}; "
+        f"since the window's first run reading ({c['window_marginal_from'] or 'none'}): {per(c['window_marginal_points_per_usd'])}",
         f"caps.toml assumes {per(c['caps_points_per_usd'])}: "
         + ("errs on the safe side" if c["caps_safe"] else
            f"UNDERCOUNTS the system's share; propose points_per_usd = {c['measured_points_per_usd']} by PR"),
