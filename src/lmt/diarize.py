@@ -88,11 +88,15 @@ def load(dirs: Mapping[str, Path]) -> "Diarizer":
 class Diarizer:
     def __init__(self, pipeline):
         self._pipeline = pipeline
+        self.raw: list[Turn] = []  # the last call's turns as the pipeline gave them, sorted, before clipping
+        self.clipped = 0.0  # the most the last call clipped from a turn, below 0 or past the audio's end
 
     def diarize(self, audio: numpy.ndarray, *, num_speakers=None, min_speakers=None,
                 max_speakers=None) -> list[Turn]:
         """The speaker turns of `audio` (float32, mono, 16 kHz), in seconds from its start, unrounded, sorted
-        by (start, end, speaker). Turns may overlap. No speaker count unless one is given."""
+        by (start, end, speaker). Turns may overlap. No speaker count unless one is given. pyannote's frame
+        grid can run past the audio, so each turn is clipped to [0, duration], and a turn left empty is
+        dropped."""
         import torch
 
         configure_torch()
@@ -102,4 +106,8 @@ class Diarizer:
                 num_speakers=num_speakers, min_speakers=min_speakers, max_speakers=max_speakers)
         turns = [Turn(float(segment.start), float(segment.end), str(speaker))
                  for segment, _track, speaker in annotation.itertracks(yield_label=True)]
-        return sorted(turns, key=lambda t: (t.start, t.end, t.speaker))
+        self.raw = sorted(turns, key=lambda t: (t.start, t.end, t.speaker))
+        duration = len(audio) / 16000
+        self.clipped = max([0.0] + [max(-t.start, t.end - duration) for t in self.raw])
+        clipped = [Turn(max(t.start, 0.0), min(t.end, duration), t.speaker) for t in self.raw]
+        return sorted((t for t in clipped if t.end > t.start), key=lambda t: (t.start, t.end, t.speaker))
