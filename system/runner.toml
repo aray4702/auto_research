@@ -28,12 +28,14 @@ allow = [
   "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git show:*)", "Bash(git fetch:*)",
   "Bash(git switch:*)", "Bash(git checkout:*)", "Bash(git branch:*)", "Bash(git add:*)", "Bash(git commit:*)",
   "Bash(git push:*)", "Bash(git merge:*)", "Bash(git rev-parse:*)", "Bash(git ls-files:*)", "Bash(git grep:*)",
+  "Bash(git merge-tree:*)",  # does a PR merge cleanly; writes objects only, no ref or file (#180)
   "Bash(python3 -I system/tools/post.py:*)", "Bash(python3 -I system/gate/generic.py:*)",
   "Bash(git range-diff:*)",  # read-only, like git diff: did a PR's own commits change, or only main (#181)
   "Bash(python3 -I system/gate/against_base.py:*)",  # a PR's tests at its head and its base (#139)
   "Bash(python3 -I -m unittest:*)",
   "Bash(date:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)",
   "Bash(sort:*)", "Bash(diff:*)",
+  "Bash(git ls-tree:*)",  # read-only: the files at a commit, as git ls-files can't list another ref's (#179)
 ]
 deny = [
   "Bash(git push --force:*)", "Bash(git push -f:*)", "Bash(git push --force-with-lease:*)",
@@ -46,9 +48,12 @@ deny = [
 [denials]
 explained = [
   "Bash: cat << |",  # cat <<'EOF' | post.py: denied though both are allowed; rules.md, Posting, gives the heredoc form
+  "Bash: sed",  # sed can write files (-i, w), so a role without Edit could; rules.md, How a run works, 2, pages with Read (#184)
   # The file tools are allowed without limit, so their only denial is --restricted: a path outside the run's
   # worktree. Not granted, since that keeps runs out of the Owner's checkout and the logs; rules.md, How a run works, 2 (#185).
   "Glob", "Grep", "Read",
+  "Bash: ls",  # ls is allowed, so a plain ls denied went outside the worktree; the same rule, step 2 (#182)
+  "Bash: ls [outside]",  # the same denial, since #177 marks the path; "Bash: ls" goes once no run this week recorded it
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
