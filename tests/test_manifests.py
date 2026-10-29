@@ -1,13 +1,15 @@
-"""The committed manifests and the reference clip they describe (design/internal/g1-slice.md, S1).
+"""The committed manifests and the fixture clips they describe (design/internal/g1-slice.md, S1, and
+design/internal/g1-stage2.md, "The two-speaker clip's rule").
 
 The manifests are read as TOML here, apart from `load_manifests`, so these checks don't rest on the loader's.
 """
 
 import hashlib
+import itertools
 import re
 import tomllib
 import wave
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import pytest
 
@@ -32,6 +34,7 @@ class TestManifests:
         manifests = datasets.load_manifests()
         assert "librispeech-test-clean" in manifests.sources
         assert "clip" in manifests.fixtures
+        assert manifests.fixtures["two_speakers"].rttm == "tests/fixtures/two_speakers.rttm"
 
     def test_every_source_has_a_sha256_a_size_and_a_url(self):
         assert SOURCES["source"]
@@ -100,6 +103,84 @@ class TestCommittedClip:
         with wave.open(str(ROOT / clip["path"]), "rb") as w:
             assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
             assert 55.0 <= w.getnframes() / 16000 <= 70.0
+
+
+class TestCommittedTwoSpeakers:
+    """The two-speaker clip and its references (design/internal/g1-stage2.md, "The two-speaker clip's rule"), as
+    committed. The `data` test in tests/test_datasets.py rebuilds them and checks the rule's choices."""
+
+    RTTM_LINE = re.compile(r"SPEAKER two_speakers 1 (\d+\.\d{3}) (\d+\.\d{3}) <NA> <NA> (\d+) <NA> <NA>")
+
+    @pytest.fixture
+    def fixture(self):
+        return next(f for f in SETS["fixture"] if f["name"] == "two_speakers")
+
+    @pytest.fixture
+    def turns(self, fixture):
+        """(start, end, speaker) of each RTTM line, which must all match the format."""
+        text = (ROOT / fixture["rttm"]).read_text(encoding="utf-8")
+        assert text.endswith("\n")
+        matches = [self.RTTM_LINE.fullmatch(line) for line in text.splitlines()]
+        assert all(matches), text
+        return [(float(m[1]), float(m[1]) + float(m[2]), m[3]) for m in matches]
+
+    @staticmethod
+    def duration(fixture):
+        with wave.open(str(ROOT / fixture["path"]), "rb") as w:
+            assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
+            return w.getnframes() / 16000
+
+    def test_its_files_match_the_manifest(self, fixture):
+        assert sha256(ROOT / fixture["path"]) == fixture["derived_sha256"]
+        assert sha256(ROOT / fixture["reference"]) == fixture["reference_sha256"]
+        assert sha256(ROOT / fixture["rttm"]) == fixture["rttm_sha256"]
+        assert (fixture["path"], fixture["reference"], fixture["rttm"]) == (
+            "tests/fixtures/two_speakers.wav", "tests/fixtures/two_speakers.txt", "tests/fixtures/two_speakers.rttm")
+
+    def test_it_is_16_khz_mono_16_bit_and_at_least_55_5_s(self, fixture):
+        assert self.duration(fixture) >= 55.5
+
+    def test_the_rttm_has_a_line_per_piece_by_its_speaker_at_its_offset(self, fixture, turns):
+        assert [speaker for _, _, speaker in turns] == [PurePosixPath(p["member"]).stem.split("-")[0]
+                                                        for p in fixture["concat"]]
+        assert turns[0][0] == 0.0
+        for (_, end, _), (start, _, _) in itertools.pairwise(turns):
+            assert start - end == pytest.approx(fixture["gap"], abs=0.0015)
+        assert turns[-1][1] == pytest.approx(self.duration(fixture), abs=0.001)
+
+    def test_four_alternating_turns_of_two_speakers_each_at_least_13_5_s(self, fixture, turns):
+        runs = [list(group) for _, group in itertools.groupby(turns, key=lambda t: t[2])]
+        assert len(runs) == 4
+        assert runs[0][0][2] == runs[2][0][2] != runs[1][0][2] == runs[3][0][2]
+        for run in runs:
+            assert run[-1][1] - run[0][0] >= 13.5 - 0.001, run
+
+    def test_the_reference_is_one_line_of_words_separated_by_single_spaces(self, fixture):
+        text = (ROOT / fixture["reference"]).read_text(encoding="utf-8")
+        assert re.fullmatch(r"[A-Z']+( [A-Z']+)*\n", text), text
+
+    def test_its_new_sources_are_listed(self):
+        (source,) = (s for s in SOURCES["source"] if s["id"] == "librispeech-test-clean")
+        paths = {m["path"] for m in source["member"]}
+        assert "LibriSpeech/SPEAKERS.TXT" in paths
+        assert "LibriSpeech/test-clean/121/121726/121-121726.trans.txt" in paths
+        assert "LibriSpeech/test-clean/61/70968/61-70968.trans.txt" in paths
+
+    SETS_TEXT = (datasets.MANIFEST_DIR / "sets.toml").read_text(encoding="utf-8")
+
+    @pytest.mark.parametrize("old, new, problem", [
+        (re.compile(r'^rttm = .*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
+        (re.compile(r'^rttm_sha256 = .*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
+        (re.compile(r'^(rttm_sha256 = ")([0-9a-f]{64})', re.MULTILINE), lambda m: m[1] + m[2].upper(),
+         "isn't a SHA-256 in lower-case hex"),
+    ])
+    def test_a_bad_entry_raises(self, tmp_path, old, new, problem):
+        text = old.sub(new, self.SETS_TEXT)
+        assert text != self.SETS_TEXT
+        (tmp_path / "sets.toml").write_text(text, encoding="utf-8")
+        (tmp_path / "sources.toml").write_bytes((datasets.MANIFEST_DIR / "sources.toml").read_bytes())
+        with pytest.raises(ValueError, match=re.escape(problem)):
+            datasets.load_manifests(tmp_path)
 
 
 class TestEncodings:
