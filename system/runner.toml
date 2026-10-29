@@ -58,6 +58,9 @@ explained = [
   # `uv pip install --no-deps --require-hashes --no-build --target` (#92, #220). Any other form takes any
   # package, runs a package's build or changes the shared venv; the macOS inventory reads the `uv sync` venv (#323).
   "Bash: uv pip",
+  # uv running code it is handed runs anything, the denied commands included, as a bare `uv run` would (#92);
+  # rules.md, How a run works, 2 (#324).
+  "Bash: uv run --frozen python -c", "Bash: uv run python -c",
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
