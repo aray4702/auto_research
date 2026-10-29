@@ -72,7 +72,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}.mu
 .banner{grid-column:1/-1;padding:12px 16px;border-radius:10px;font-weight:600}.banner.bad{background:color-mix(in srgb,var(--bad) 12%,transparent)}
 .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 10px}.bar>div{height:100%;background:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:14px}td{padding:4px 0;border-top:1px solid var(--line)}td:last-child{text-align:right}
-nav{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line)}
+nav{display:flex;flex-wrap:wrap;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line)}
 nav a{padding:10px 14px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600}
 nav a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent)}nav a:hover{text-decoration:none;color:var(--ink)}
 .grid{overflow-x:auto}.grid table td,.grid table th{padding:6px 10px 6px 0;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
@@ -81,19 +81,27 @@ nav a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent)}nav 
 @media (max-width:600px){header{padding:12px 16px}main{padding:12px 16px}nav{padding:0 12px}}
 """
 
-# Progress is the default tab, then Roles (#246). Overview is the page / showed before.
-TABS = (("/", "Progress"), ("/roles", "Roles"), ("/overview", "Overview"))
+# Progress is the default tab, then Roles (#246), then the old Overview page's sections, one tab each (#253).
+OVERVIEW = (("/waiting", "Waiting on you"), ("/prs", "Pull requests"), ("/work-order", "Work order"), ("/usage", "Usage"),
+            ("/health", "Health"), ("/merges", "Merges"), ("/items", "Open items"))
+TABS = (("/", "Progress"), ("/roles", "Roles")) + OVERVIEW
 
 
 def link(d, n, kind="issues"):
     return f'<a href="https://github.com/{d["repo"]}/{kind}/{n}">#{n}</a>'
 
 
-def html_page(d):
+def html_page(d, here="/waiting"):
+    """One of the Overview tabs (#253), with the kill-switch banner on each."""
+    e = html.escape
+    banner = f'<div class="banner bad">Kill switch thrown: no runs start. {e(d["pause_reason"])}</div>' if d["paused"] else ""
+    return frame(d, here, banner + sections(d)[here])
+
+
+def sections(d):
+    """{tab path: its section}, for the Overview tabs."""
     e, tz, u = html.escape, d["time_zone"], d["usage"]
     parts = []
-    if d["paused"]:
-        parts.append(f'<div class="banner bad">Kill switch thrown: no runs start. {e(d["pause_reason"])}</div>')
     yours = [f'<li>{link(d, x["number"])} {e(x["title"])}<span class="pill {"good" if x["answered"] else "you"}">'
              f'{"answered" if x["answered"] else "asked by the " + e(x["asker"] or "?")}</span>'
              f'<div class="muted">{e(x["question"][:400])}</div></li>' for x in d["decisions"]]
@@ -103,15 +111,15 @@ def html_page(d):
     prs = [f'<li>{link(d, p["number"], "pull")} {e(p["title"])}<span class="pill {"bad" if p["gate"] == "FAILURE" else "good" if p["gate"] == "SUCCESS" else ""}">'
            f'gate {e(p["gate"].lower())}</span><span class="pill">{e(p["author"])}</span>'
            f'<div class="muted">waiting on {e(p["waiting_on"])}</div></li>' for p in d["prs"]]
-    parts.append(f'<section><h2>Pull requests</h2><ul>{"".join(prs) or "<li class=muted>None open.</li>"}</ul></section>')
+    parts.append(f'<section class="wide"><h2>Pull requests</h2><ul>{"".join(prs) or "<li class=muted>None open.</li>"}</ul></section>')
     wo = [f'<li>{w["order"]}. {link(d, w["number"])} {e(w["title"])}'
           f'{"<span class=pill>parallel-safe</span>" if w["parallel_safe"] else ""}</li>' for w in d["work_order"]]
-    parts.append(f'<section><h2>Work order</h2><ul>{"".join(wo) or "<li class=muted>Empty.</li>"}</ul></section>')
+    parts.append(f'<section class="wide"><h2>Work order</h2><ul>{"".join(wo) or "<li class=muted>Empty.</li>"}</ul></section>')
     share = min(100, 100 * u["points_used"] / u["weekly_points"]) if u["weekly_points"] else 0
     rows = "".join(f'<tr><td>{e(r)}</td><td>{v["today"]} / {v["cap"]} runs today · ${v["cost"]}</td></tr>' for r, v in u["per_role"].items())
     active = "".join(f'<li>{e(a["role"])} on {link(d, a["item"]) if a["item"] else "—"} since {local(a["since"], tz)}</li>' for a in u["active"])
     parts.append(
-        f'<section><h2>Usage against the caps</h2>'
+        f'<section class="wide"><h2>Usage against the caps</h2>'
         f'<div>System: <b>{u["points_used"]}</b> of {u["weekly_points"]} weekly points (warn at {u["warn_at"]}) · ${u["cost_window"]} this window</div>'
         f'<div class="bar"><div style="width:{share:.1f}%"></div></div>'
         f'<div class="muted">Account: 5-hour {pct(u["five_hour"])} (hold at {pct(u["hold_at"])}) · 7-day {pct(u["seven_day"])} (pause at {pct(u["pause_at"])})</div>'
@@ -125,12 +133,12 @@ def html_page(d):
     health.append(f'<li>Dispatcher heartbeat <span class="pill">{local(d["last_heartbeat"], tz)}</span></li>')
     lr = d["last_run"]
     health.append(f'<li>Last run <span class="pill">{e(lr["run_id"]) + " · " + e(lr["event"]) if lr else "none"}</span></li>')
-    parts.append(f'<section><h2>Health</h2><ul>{"".join(health)}</ul></section>')
+    parts.append(f'<section class="wide"><h2>Health</h2><ul>{"".join(health)}</ul></section>')
     merges = [f'<li>{link(d, m["number"], "pull")} {e(m["title"])} <span class="muted">· {local(m["mergedAt"], tz)}</span></li>' for m in d["merges"]]
-    parts.append(f'<section><h2>Merges from your account</h2><ul>{"".join(merges) or "<li class=muted>None.</li>"}</ul></section>')
+    parts.append(f'<section class="wide"><h2>Merges from your account</h2><ul>{"".join(merges) or "<li class=muted>None.</li>"}</ul></section>')
     items = [f'<li>{link(d, i["number"])} {e(i["title"])}' + "".join(f'<span class="pill">{e(x)}</span>' for x in i["labels"]) + "</li>" for i in d["items"]]
     parts.append(f'<section class="wide"><h2>Open items</h2><ul>{"".join(items) or "<li class=muted>None.</li>"}</ul></section>')
-    return frame(d, "/overview", "".join(parts))
+    return dict(zip((path for path, _ in OVERVIEW), parts))
 
 
 def frame(d, here, body):
