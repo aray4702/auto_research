@@ -55,11 +55,36 @@ class DenialsTest(unittest.TestCase):
                 self.assertIn(tool, role["tools"], "else a denial could be a real gap")
         self.assertIn("--restricted", config["runner"]["flags"])
 
+    def test_a_plain_ls_is_explained_only_while_every_role_may_run_it_and_a_compound_ls_is_not(self):
+        config = runner.load_all()["runner"]
+        explained = config["denials"]["explained"]
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls ~/Library/Logs/auto_research"}})
+        self.assertIn(sig, explained, "outside the worktree, --restricted denies it (#182)")
+        self.assertIn("Bash(ls:*)", config["common"]["allow"], "else a denial could be a real gap")
+        self.assertFalse([d for d in config["common"]["deny"] if d.startswith("Bash(ls")], "else a denial could be a real gap")
+        for role in config["roles"].values():
+            self.assertIn("Bash", role["tools"], "else a denial could be a real gap")
+        self.assertIn("--restricted", config["runner"]["flags"])
+        compound = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls system | head"}})
+        self.assertEqual(len(daily.denials([end(x, denied=[compound]) for x in "abc"], NOW, explained)), 1, "still the one-command rule")
+
     def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
         for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
                               ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
                               ("echo $(cat key) && ls; date", "Bash: echo $( && ;"), ("cat a\\|b", "Bash: cat")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
+
+    def test_a_second_line_is_marked_so_a_multiline_denial_is_raised_as_compound(self):
+        for command, want in [("git fetch origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
+                              ("git fetch origin main\n", "Bash: git fetch"), ("git fetch \\\n  origin main", "Bash: git fetch"),
+                              ("cat > a.md <<'EOF'\nx\nEOF", "Bash: cat > <<"), ("git log | head\ndate", "Bash: git log | ⏎"),
+                              ('git commit -m "Fix x\n\nCo-Authored-By: y"', "Bash: git commit"),
+                              ('gh pr create --body "a\nb \\" c\nd" | cat', "Bash: gh pr |"),
+                              ("git fetch \\\n  origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
+                              ("cat <<EOF > a.md\ngh x\nEOF\ngh pr diff 187", "Bash: cat << > ⏎")]:
+            self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
+        runs = [end(x, denied=["Bash: git fetch ⏎"]) for x in "abc"]
+        self.assertEqual([k for k, *_ in daily.denials(runs, NOW)], ["compound:Bash: git fetch ⏎"], "#178: not a git fetch gap")
 
     def test_signatures_keep_only_the_tool_and_first_two_words(self):
         self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "gh pr checks 34 --watch"}}), "Bash: gh pr")

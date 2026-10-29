@@ -10,7 +10,7 @@ Every run reads this file, then its role file in `system/roles/`, then its item.
 ## How a run works
 
 1. **Claim.** Work only on the item you were started for. The Dispatcher claimed it before starting you. A run the Dispatcher didn't start claims its own first, with `post.py claim`.
-2. **Read** through the tool, every page: `post.py read <n>`, find items with `post.py list`, and read a commit's gate with `post.py gate [ref]`. Run one command at a time: a pipe, chain, redirect, substitution or loop is denied whenever any part isn't allowed, so none is granted. Page a file with Read's offset and limit, and filter with Grep; the file tools reach only your worktree. `sed` is denied, since it can write files.
+2. **Read** through the tool, every page: `post.py read <n>`, find items with `post.py list`, and read a commit's gate with `post.py gate [ref]`. Run one command at a time, on one line: a pipe, chain, redirect, substitution, loop or second line is denied whenever any part isn't allowed, so none is granted. Page a file with Read's offset and limit, and filter with Grep; the file tools and `ls` reach only your worktree, so logs, run state and the Owner's checkout reach you through the tools and the audits. `sed` is denied, since it can write files.
 3. **Work in your own worktree,** on a branch named `<role>/<item>-<topic>`. Never work in the Owner's checkout.
 4. **Open the PR as soon as the local gate passes** (`python3 -I system/gate/generic.py --base origin/main`), because a run can be cut off. One item per PR, with its test, and `Resolves #<item>` in the body.
 5. **If the item is bigger than one run,** land the ready part as an item of its own and leave the rest open, saying so on the item.
