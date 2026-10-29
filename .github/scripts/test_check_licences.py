@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import check_licences  # noqa: E402
+import check_licences
 
 ALLOW = """
 [licences]
@@ -226,6 +226,47 @@ class TestLibraries(unittest.TestCase):
         code, out = self.fake.run()
         self.assertEqual(code, 0, out)
         self.assertIn("warning: [[licences.library]] av", out)
+
+    def test_the_first_matching_entry_applies(self):
+        self.fake.add("zeta", headers=["License-Expression: MIT"], files=["zeta/lib/libgomp.so.1"])
+        self.fake.config(
+            LIBRARY.replace('"av"', '"zeta"').replace("av.libs/libavcodec-*.so*", "zeta/lib/libgomp*")
+            .format(licence="GPL-3.0-or-later WITH GCC-exception-3.1")
+            + LIBRARY.replace('"av"', '"zeta"').replace("av.libs/libavcodec-*.so*", "zeta/lib/*")
+            .format(licence="MIT"))
+        code, out = self.fake.run()
+        self.assertEqual(code, 0, out)
+        self.assertIn("PASS library zeta/lib/libgomp.so.1 1.0 GPL-3.0-or-later WITH GCC-exception-3.1", out)
+
+
+TOOLCHAIN = Path(__file__).resolve().parents[2] / "toolchain.toml"
+
+
+class TestRepositoryToolchain(unittest.TestCase):
+    """The repository's own toolchain.toml: well-formed, and GPL only through the files it names (#122, 3a)."""
+
+    def setUp(self):
+        self.config = check_licences.load_config(TOOLCHAIN)
+
+    def test_entries_are_complete_and_parse(self):
+        for o in self.config["override"]:
+            self.assertEqual(set(o), {"distribution", "version", "licence", "source"}, o)
+            check_licences.parse_spdx(o["licence"])
+        for e in self.config["library"]:
+            self.assertEqual(set(e), {"distribution", "files", "library", "licence", "platforms", "source"}, e)
+            self.assertTrue(set(e["platforms"]) <= set(check_licences.PLATFORMS), e)
+            check_licences.parse_spdx(e["licence"])
+
+    def test_gpl_passes_only_through_its_entries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = FakeSite(tmp)
+            fake.toolchain.write_text(TOOLCHAIN.read_text())
+            fake.add("av", "18.1.0", headers=["License-Expression: BSD-3-Clause"],
+                     files=["av.libs/libx264-d6533a8d.so.165", "av.libs/libfdk-aac-0123abcd.so.2"])
+            code, out = fake.run()
+        self.assertEqual(code, 1)
+        self.assertIn("PASS library av.libs/libx264-d6533a8d.so.165 18.1.0 GPL-2.0-or-later", out)
+        self.assertIn("FAIL library av.libs/libfdk-aac-0123abcd.so.2", out)
 
 
 if __name__ == "__main__":

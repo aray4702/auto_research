@@ -19,3 +19,22 @@ Hugging Face, each at a pinned revision, under its own licence:
   Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
   Attribution: "wespeaker-voxceleb-resnet34-LM", published by pyannote on Hugging Face,
   https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM. Used unmodified.
+
+The product doesn't ship its dependencies either: they install from PyPI (and, for torch and
+torchaudio on Linux, the PyTorch CPU index), each under its own licence. toolchain.toml's
+[licences] section lists every licence and bundled library that CI checks. Some of them ask
+for these notices:
+
+- Portions of this software are copyright (C) The FreeType Project (https://freetype.org).
+  All rights reserved. (FreeType, inside pillow's wheel, under the FreeType License.)
+
+- This software is based in part on the work of the Independent JPEG Group. (libjpeg-turbo,
+  inside pillow's wheel.)
+
+- pillow is under the MIT-CMU License, regex under Apache-2.0 and the CNRI Python licence,
+  and numpy partly under the zlib licence. Each wheel carries its notice in its .dist-info.
+
+- PyAV's (av) wheels bundle FFmpeg (LGPL-3.0-or-later), the x264 and x265 video encoders
+  (GPL-2.0-or-later) and LAME (LGPL-2.0-or-later). soundfile's wheels bundle libsndfile with
+  LAME and mpg123 (LGPL). Each is a shared library under its own licence, unmodified. The
+  product only decodes audio and never calls the x264 or x265 encoders.

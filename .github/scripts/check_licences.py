@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """G1-15's licence check: every installed distribution and bundled shared library against toolchain.toml.
 
 Usage: python3 -I .github/scripts/check_licences.py --site DIR --platform {linux-x86_64,macos-arm64}
