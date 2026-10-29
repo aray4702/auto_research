@@ -66,7 +66,9 @@ def members():
     return files
 
 
-def write_manifests(dir, archive, files, *, member_sha=None, gap=0.0, derived=None, reference=None):
+def write_manifests(dir, archive, files, *, member_sha=None, gap=0.0, derived=None, reference=None, rttm=None,
+                    cut=None):
+    """`rttm`, when given, is the fixture's rttm_sha256, with tests/fixtures/clip.rttm as its path."""
     dir.mkdir(parents=True, exist_ok=True)
     listed = "".join(f'\n[[source.member]]\npath = "{name}"\nsha256 = "{(member_sha or {}).get(name, sha256(data))}"\n'
                      for name, data in files.items())
@@ -74,10 +76,12 @@ def write_manifests(dir, archive, files, *, member_sha=None, gap=0.0, derived=No
         f'schema_version = 1\n\n[[source]]\nid = "librispeech-test-clean"\nurls = {URLS!r}\n'
         f'sha256 = "{sha256(archive)}"\nsize = {len(archive)}\nlicence = "CC-BY-4.0"\nkeep = false\n{listed}')
     concat = ",\n".join(f'  {{source = "librispeech-test-clean", member = "{CHAPTER}/{uid}.flac"}}' for uid in IDS)
+    optional = "" if rttm is None else f'rttm = "tests/fixtures/clip.rttm"\nrttm_sha256 = "{rttm}"\n'
+    optional += "" if cut is None else f"cut = {cut}\n"
     (dir / "sets.toml").write_text(
         f'schema_version = 1\n\n[[fixture]]\nname = "clip"\npath = "tests/fixtures/clip.wav"\n'
         f'reference = "tests/fixtures/clip.txt"\ngap = {gap}\nderived_sha256 = "{derived or "0" * 64}"\n'
-        f'reference_sha256 = "{reference or "0" * 64}"\nconcat = [\n{concat},\n]\n')
+        f'reference_sha256 = "{reference or "0" * 64}"\n{optional}concat = [\n{concat},\n]\n')
 
 
 class Server:
@@ -236,8 +240,9 @@ class TestManifests:
 
 
 class TestRecipe:
-    def build(self, tmp_path, monkeypatch, gap=0.0):
-        manifests, _, _ = setup(tmp_path, monkeypatch, gap=gap)
+    def build(self, tmp_path, monkeypatch, gap=0.0, **manifest):
+        """The fixture's WAV and reference; and its RTTM with `rttm` in `manifest`, else None."""
+        manifests, _, _ = setup(tmp_path, monkeypatch, gap=gap, **manifest)
         datasets.fetch_source(manifests.sources["librispeech-test-clean"])
         return datasets.build_fixture(manifests.fixtures["clip"], manifests)
 
@@ -248,18 +253,72 @@ class TestRecipe:
             return np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
 
     def test_samples_come_out_in_order(self, cache, tmp_path, monkeypatch):
-        audio, _ = self.build(tmp_path, monkeypatch)
+        audio, _, rttm = self.build(tmp_path, monkeypatch)
         assert np.array_equal(self.frames(audio), np.concatenate(pieces()))
+        assert rttm is None
 
     def test_a_gap_of_a_quarter_second_inserts_4000_zero_samples(self, cache, tmp_path, monkeypatch):
-        audio, _ = self.build(tmp_path, monkeypatch, gap=0.25)
+        audio, _, _ = self.build(tmp_path, monkeypatch, gap=0.25)
         silence = np.zeros(4000, dtype=np.int16)
         a, b, c = pieces()
         assert np.array_equal(self.frames(audio), np.concatenate([a, silence, b, silence, c]))
 
     def test_the_reference_is_the_lines_joined_by_single_spaces(self, cache, tmp_path, monkeypatch):
-        _, text = self.build(tmp_path, monkeypatch)
+        _, text, _ = self.build(tmp_path, monkeypatch)
         assert text == " ".join(TEXTS) + "\n"
+
+    def test_the_rttm_has_a_line_per_piece_at_its_offset_by_its_speaker(self, cache, tmp_path, monkeypatch):
+        # Three pieces of 800 samples, 0.05 s, with 0.25 s gaps: offsets 0, 0.3 and 0.6. The file id is the WAV's stem.
+        _, _, rttm = self.build(tmp_path, monkeypatch, gap=0.25, rttm="0" * 64)
+        assert rttm == ("SPEAKER clip 1 0.000 0.050 <NA> <NA> 61 <NA> <NA>\n"
+                        "SPEAKER clip 1 0.300 0.050 <NA> <NA> 61 <NA> <NA>\n"
+                        "SPEAKER clip 1 0.600 0.050 <NA> <NA> 61 <NA> <NA>\n")
+
+    def test_the_rttm_is_cropped_at_the_cut(self, cache, tmp_path, monkeypatch):
+        audio, _, rttm = self.build(tmp_path, monkeypatch, gap=0.25, rttm="0" * 64, cut=0.33)
+        assert len(self.frames(audio)) == 5280
+        assert rttm == ("SPEAKER clip 1 0.000 0.050 <NA> <NA> 61 <NA> <NA>\n"
+                        "SPEAKER clip 1 0.300 0.030 <NA> <NA> 61 <NA> <NA>\n")
+
+    def test_rttm_text_writes_times_to_the_millisecond(self):
+        turns = [datasets.Turn(0.0, 8.46, "121"), datasets.Turn(8.96, 14.8850625, "121"),
+                 datasets.Turn(15.3850625, 20.29, "61")]
+        assert datasets.rttm_text("two_speakers", turns) == (
+            "SPEAKER two_speakers 1 0.000 8.460 <NA> <NA> 121 <NA> <NA>\n"
+            "SPEAKER two_speakers 1 8.960 5.925 <NA> <NA> 121 <NA> <NA>\n"
+            "SPEAKER two_speakers 1 15.385 4.905 <NA> <NA> 61 <NA> <NA>\n")
+        assert datasets.rttm_text("x", []) == ""
+
+    def test_build_fixture_writes_and_checks_the_rttm(self, cache, tmp_path, monkeypatch, capsys):
+        audio, text, rttm = self.build(tmp_path, monkeypatch, rttm="0" * 64)
+        digests = {"derived": sha256(audio), "reference": sha256(text.encode()), "rttm": sha256(rttm.encode())}
+        setup(tmp_path, monkeypatch, **digests)
+        assert datasets.main(["build-fixture", "clip", "--write"]) == 0
+        assert (tmp_path / "tests/fixtures/clip.rttm").read_text() == rttm
+        assert capsys.readouterr().out.splitlines() == [
+            f"tests/fixtures/clip.wav {digests['derived']}",
+            f"tests/fixtures/clip.txt {digests['reference']}",
+            f"tests/fixtures/clip.rttm {digests['rttm']}",
+            "clip: tests/fixtures/clip.wav, tests/fixtures/clip.txt, tests/fixtures/clip.rttm match sets.toml"]
+        setup(tmp_path, monkeypatch, **(digests | {"rttm": "e" * 64}))
+        assert datasets.main(["build-fixture", "clip"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: tests/fixtures/clip.rttm: the rebuilt file's SHA-256 doesn't match sets.toml"]
+
+    @pytest.mark.parametrize("old, new, problem", [
+        ('rttm_sha256 = "' + "0" * 64 + '"\n', "", "rttm and rttm_sha256 must be given together"),
+        ('rttm = "tests/fixtures/clip.rttm"\n', "", "rttm and rttm_sha256 must be given together"),
+        (f"{CHAPTER}/{IDS[1]}.flac", TRANS,
+         "an rttm needs every piece to be a LibriSpeech utterance's .flac member"),
+    ])
+    def test_a_bad_rttm_entry_is_refused(self, tmp_path, old, new, problem):
+        files = members()
+        write_manifests(tmp_path, tar_gz(files), files, rttm="0" * 64)
+        sets = (tmp_path / "sets.toml").read_text()
+        assert old in sets
+        (tmp_path / "sets.toml").write_text(sets.replace(old, new))
+        with pytest.raises(ValueError, match=re.escape(problem)):
+            datasets.load_manifests(tmp_path)
 
     @pytest.mark.parametrize("samples, rate, problem", [
         (np.zeros(800, dtype=np.int16), 44100, "44100 Hz, 1 channels"),
@@ -274,7 +333,7 @@ class TestRecipe:
             datasets.build_fixture(manifests.fixtures["clip"], manifests)
 
     def test_build_fixture_write_then_check(self, cache, tmp_path, monkeypatch, capsys):
-        audio, text = self.build(tmp_path, monkeypatch)
+        audio, text, _ = self.build(tmp_path, monkeypatch)
         setup(tmp_path, monkeypatch, derived=sha256(audio), reference=sha256(text.encode()))
         assert datasets.main(["build-fixture", "clip", "--write"]) == 0
         assert (tmp_path / "tests/fixtures/clip.wav").read_bytes() == audio
@@ -283,7 +342,7 @@ class TestRecipe:
         assert capsys.readouterr().err == ""
 
     def test_build_fixture_exits_3_naming_the_file_that_differs(self, cache, tmp_path, monkeypatch, capsys):
-        audio, _ = self.build(tmp_path, monkeypatch)
+        audio, _, _ = self.build(tmp_path, monkeypatch)
         setup(tmp_path, monkeypatch, derived=sha256(audio), reference="e" * 64)
         assert datasets.main(["build-fixture", "clip"]) == 3
         assert capsys.readouterr().err.splitlines() == [
@@ -760,7 +819,8 @@ class TestConcat:
         assert fixture.concat[0] == datasets.Piece("ami-ES2004a", start=0.25, end=0.5)
         assert fixture.cut == 0.3
         datasets.fetch_source(manifests.sources["ami-ES2004a"])
-        audio, text = datasets.build_fixture(fixture, manifests)
+        audio, text, rttm = datasets.build_fixture(fixture, manifests)
+        assert rttm is None
         meeting = meeting_samples()
         expected = np.concatenate([meeting[4000:8000], np.zeros(1000, dtype=np.int16), meeting[:2000]])[:4800]
         assert np.array_equal(TestRecipe.frames(audio), expected)
@@ -921,10 +981,55 @@ class TestFetchCI:
 
 
 @pytest.mark.data
-def test_the_clip_rebuilds_from_the_cache(ci_items):
-    """S1's reference clip, rebuilt from the cache, is the committed one byte for byte."""
+@pytest.mark.parametrize("name", ["clip", "two_speakers"])
+def test_the_fixture_rebuilds_from_the_cache(ci_items, name):
+    """S1's reference clip and the two-speaker clip, rebuilt from the cache, are the committed ones byte for byte,
+    with their references."""
     manifests = datasets.load_manifests()
-    fixture = manifests.fixtures["clip"]
-    audio, text = datasets.build_fixture(fixture, manifests)
+    fixture = manifests.fixtures[name]
+    audio, text, rttm = datasets.build_fixture(fixture, manifests)
     assert audio == (ROOT / fixture.path).read_bytes()
     assert text.encode("utf-8") == (ROOT / fixture.reference).read_bytes()
+    if fixture.rttm is None:
+        assert rttm is None
+    else:
+        assert rttm.encode("utf-8") == (ROOT / fixture.rttm).read_bytes()
+
+
+@pytest.mark.data
+def test_the_two_speaker_clip_follows_its_rule(ci_items):
+    """design/internal/g1-stage2.md, "The two-speaker clip's rule (for #123)", from the cache: test-clean's
+    lowest-id F and M speakers in SPEAKERS.TXT; four turns, F, M, F, M, each the shortest run of the speaker's
+    next utterances in ascending id order whose decoded samples plus 8,000 per gap between them reach 216,000.
+
+    Each speaker's utterances are their chapter's .trans.txt ids. The chapter is the one the clip starts the
+    speaker in, each speaker's lowest in test-clean (by `pin`'s listing of the archive, as sets.toml records), since
+    the cache holds only the listed members."""
+    manifests = datasets.load_manifests()
+    fixture = manifests.fixtures["two_speakers"]
+    root = datasets.data_dir() / "sources" / "librispeech-test-clean"
+    sexes = {}
+    for line in (root / "LibriSpeech" / "SPEAKERS.TXT").read_text(encoding="utf-8").splitlines():
+        fields = [f.strip() for f in line.split("|")]
+        if not line.startswith(";") and len(fields) >= 3 and fields[2] == "test-clean":
+            sexes[int(fields[0])] = fields[1]
+    female = min(s for s, sex in sexes.items() if sex == "F")
+    male = min(s for s, sex in sexes.items() if sex == "M")
+
+    def utterances(speaker):
+        first = next(root / p.member for p in fixture.concat if p.member.split("/")[2] == str(speaker))
+        chapter = first.parent
+        trans = chapter / f"{speaker}-{chapter.name}.trans.txt"
+        ids = sorted((line.split()[0] for line in trans.read_text(encoding="utf-8").splitlines()),
+                     key=lambda uid: tuple(int(n) for n in uid.split("-")))
+        return iter(chapter / f"{uid}.flac" for uid in ids)
+
+    queues = {female: utterances(female), male: utterances(male)}
+    expected = []
+    for speaker in (female, male, female, male):
+        total = -8000
+        while total < 216000:
+            flac = next(queues[speaker])
+            total += 8000 + len(soundfile.read(flac, dtype="int16")[0])
+            expected.append(str(flac.relative_to(root)))
+    assert [p.member for p in fixture.concat] == expected

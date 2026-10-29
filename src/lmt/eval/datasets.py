@@ -128,6 +128,8 @@ class Fixture:
     cut: float | None = None  # seconds kept from the start of the joined audio
     ffmpeg: str | None = None  # the version that made the encodings
     encodings: tuple[Encoding, ...] = ()
+    rttm: str | None = None  # one SPEAKER line per piece, from the repository root
+    rttm_sha256: str | None = None
 
 
 @dataclass(frozen=True)
@@ -201,6 +203,7 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
             concat=tuple(_piece(p, sources, where) for p in _get(entry, "concat", list, where)),
             cut=None if cut is None else float(_get(entry, "cut", (int, float), where)),
             **_encodings(entry, where),
+            **_rttm(entry, where),
         )
         if fixture.name in fixtures:
             raise ValueError(f"{where}: name {fixture.name!r} is repeated")
@@ -208,6 +211,8 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
             raise ValueError(f"{where}: gap must be at least 0, and concat must have a piece")
         if fixture.cut is not None and fixture.cut <= 0:
             raise ValueError(f"{where}: cut must be positive")
+        if fixture.rttm is not None and not all(_speaker(p) for p in fixture.concat):
+            raise ValueError(f"{where}: an rttm needs every piece to be a LibriSpeech utterance's .flac member")
         fixtures[fixture.name] = fixture
 
     datasets = {}
@@ -259,6 +264,24 @@ def _encodings(entry, where):
             raise ValueError(f"{at}: format {encoding.format!r} is repeated")
         encodings.append(encoding)
     return {"ffmpeg": _get(entry, "ffmpeg", str, where), "encodings": tuple(encodings)}
+
+
+def _rttm(entry, where):
+    """The fixture's `rttm` and `rttm_sha256`, which come together or not at all."""
+    if ("rttm" in entry) != ("rttm_sha256" in entry):
+        raise ValueError(f"{where}: rttm and rttm_sha256 must be given together")
+    if "rttm" not in entry:
+        return {}
+    return {"rttm": _get(entry, "rttm", str, where),
+            "rttm_sha256": _hex64(_get(entry, "rttm_sha256", str, where), where)}
+
+
+def _speaker(piece):
+    """The LibriSpeech speaker id of a piece that is an utterance's .flac member, else None."""
+    if piece.member is None:
+        return None
+    path = PurePosixPath(piece.member)
+    return path.stem.split("-")[0] if path.suffix == ".flac" and _UTTERANCE.match(path.stem) else None
 
 
 def _member(entry, where):
@@ -524,15 +547,16 @@ def _write_member(stream, dest, sha256):
 # --- The recipe ------------------------------------------------------------------------------------------------
 
 
-def build_fixture(fixture: Fixture, manifests: Manifests) -> tuple[bytes, str]:
-    """The fixture's WAV bytes and reference text, from the sources in the cache.
+def build_fixture(fixture: Fixture, manifests: Manifests) -> tuple[bytes, str, str | None]:
+    """The fixture's WAV bytes, reference text and RTTM text (None without `rttm`), from the sources in the cache.
 
     A member piece is read as 16-bit samples, which decodes FLAC exactly, and must be 16 kHz mono. A slice is
     read from its single-file WAV source (`slice_wav`). The pieces are joined by `concat`, with the fixture's
     gap and cut, and written as one-channel, 16-bit, 16 kHz WAV by the `wave` module, so the bytes are the same
     on every platform. The reference is each member utterance's line in its chapter's .trans.txt, without the
     id, joined by single spaces, with one final newline. A slice's references are its dataset's, placed with
-    `place_references`.
+    `place_references`. The RTTM has one turn per piece, at its offset, by its utterance's speaker (`rttm_text`),
+    cropped at the cut as AMI-ci's turns are.
     """
     samples, texts = [], []
     for piece in fixture.concat:
@@ -547,8 +571,22 @@ def build_fixture(fixture: Fixture, manifests: Manifests) -> tuple[bytes, str]:
             raise ValueError(f"{path}: {rate} Hz, {channels} channels; the recipe takes 16 kHz mono")
         samples.append(data)
         texts.append(_transcript(path))
-    joined, _ = concat(samples, fixture.gap, fixture.cut)
-    return _wav_bytes(joined.astype("<i2").tobytes()), " ".join(texts) + "\n"
+    joined, offsets = concat(samples, fixture.gap, fixture.cut)
+    rttm = None
+    if fixture.rttm is not None:
+        turns = [Turn(at, at + len(s) / SAMPLE_RATE, _speaker(p))
+                 for at, s, p in zip(offsets, samples, fixture.concat, strict=True)]
+        if fixture.cut is not None:
+            _, turns = crop_references([], turns, fixture.cut)
+        rttm = rttm_text(Path(fixture.path).stem, turns)
+    return _wav_bytes(joined.astype("<i2").tobytes()), " ".join(texts) + "\n", rttm
+
+
+def rttm_text(file_id: str, turns: list[Turn]) -> str:
+    """One `SPEAKER <file_id> 1 <start> <duration> <NA> <NA> <speaker> <NA> <NA>` line per turn, in order, with
+    times in seconds to the millisecond (design/internal/g1-stage2.md, "The two-speaker clip's rule")."""
+    return "".join(f"SPEAKER {file_id} 1 {t.start:.3f} {t.end - t.start:.3f} <NA> <NA> {t.speaker} <NA> <NA>\n"
+                   for t in turns)
 
 
 def concat(pieces: list[np.ndarray], gap: float, cut: float | None = None) -> tuple[np.ndarray, list[float]]:
@@ -840,7 +878,7 @@ def main(argv=None) -> int:
     f.add_argument("set", help='The set\'s name in sets.toml ("ci").')
     b = commands.add_parser("build-fixture", help="Fetch a fixture's sources, build it and check its hashes.")
     b.add_argument("name", help="The fixture's name in sets.toml.")
-    b.add_argument("--write", action="store_true", help="Write the fixture and its reference to their paths first.")
+    b.add_argument("--write", action="store_true", help="Write the fixture and its references to their paths first.")
     e = commands.add_parser("encode-fixture", help="Encode a fixture with ffmpeg and check the files' hashes.")
     e.add_argument("name", help="The fixture's name in sets.toml.")
     e.add_argument("--write", action="store_true", help="Write the encodings beside the fixture first.")
@@ -916,17 +954,21 @@ def _build_fixture_command(name, write):
     manifests, fixture = _fixture(name)
     for source_id in dict.fromkeys(p.source for p in fixture.concat):
         fetch_source(manifests.sources[source_id])
-    audio, text = build_fixture(fixture, manifests)
-    reference = text.encode("utf-8")
+    audio, text, rttm = build_fixture(fixture, manifests)
+    files = [(fixture.path, audio, fixture.derived_sha256),
+             (fixture.reference, text.encode("utf-8"), fixture.reference_sha256)]
+    if rttm is not None:
+        files.append((fixture.rttm, rttm.encode("utf-8"), fixture.rttm_sha256))
     if write:
-        for path, content in ((fixture.path, audio), (fixture.reference, reference)):
+        for path, content, _ in files:
             Path(path).parent.mkdir(parents=True, exist_ok=True)
             Path(path).write_bytes(content)
-    for path, content, expected in ((fixture.path, audio, fixture.derived_sha256),
-                                    (fixture.reference, reference, fixture.reference_sha256)):
+    for path, content, _ in files:
+        print(f"{path} {hashlib.sha256(content).hexdigest()}")
+    for path, content, expected in files:
         if hashlib.sha256(content).hexdigest() != expected:
             raise InputError(path, "the rebuilt file's SHA-256 doesn't match sets.toml")
-    print(f"{fixture.name}: {fixture.path} and {fixture.reference} match sets.toml")
+    print(f"{fixture.name}: {', '.join(path for path, _, _ in files)} match sets.toml")
     return 0
 
 

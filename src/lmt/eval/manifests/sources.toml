@@ -224,6 +224,30 @@ sha256 = "3fa96f8e0276d79ec027bb1595215a8bbeb488cefcc1702ff798e91ec8504403"
 path = "LibriSpeech/test-clean/3729/6852/3729-6852.trans.txt"
 sha256 = "0480ac34fb6fa46de455a8d25c75c90b41e74da21e5bb8317d93c32a8412fc6b"
 
+# The two-speaker clip (sets.toml): LibriSpeech's speaker list, which gives each speaker's sex, and speaker 121's
+# utterances 121-121726-0001 to 0004. Its 121-121726-0000 and transcript are listed with LS-ci's, and speaker 61's
+# utterances with the clip's.
+
+[[source.member]]
+path = "LibriSpeech/SPEAKERS.TXT"
+sha256 = "3350f093382f8baa1d589c9f5a5cee8ec3705e656f521d6eafbaa31a5fcd8f76"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/121/121726/121-121726-0001.flac"
+sha256 = "4d4459266056fcd052ced71563e093ecf74a420abfa3a402283fb6b8eb848441"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/121/121726/121-121726-0002.flac"
+sha256 = "5d461a2020d7c302d607d3b5a6a8f81a01d29e2b29041faccc7925ee098d6dc7"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/121/121726/121-121726-0003.flac"
+sha256 = "4ebfb6ebfc9dcc963e8d9c51b2ddce0d6c11f3113cea5ec0be40651c9b9872b2"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/121/121726/121-121726-0004.flac"
+sha256 = "44b0420506873ae701c23442188985b373540acd9d505718deffedb81cc2b22c"
+
 # AMI-ci (sets.toml): meeting ES2004a. AMI publishes no checksums, so these are first-use hashes, taken from a local
 # download (#110), never from CI's.
 
