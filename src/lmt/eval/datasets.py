@@ -4,22 +4,28 @@ S1), and the datasets' recipes (design/internal/g1-stage1.md §5a).
 Every file that's downloaded is listed in `manifests/sources.toml`, with its SHA-256, and only the archive members
 listed there are extracted. A source without members is a single file, kept as it is. `manifests/sets.toml` says
 what's built from them. The cache is `<LMT_DATA_DIR>/sources/<source id>/<file or member path>`, and what a
-recipe makes is under `<LMT_DATA_DIR>/derived/<dataset name>/`. Nothing here imports the eval extra.
+recipe makes is under `<LMT_DATA_DIR>/derived/<dataset name>/`. Nothing here imports the eval extra. The
+fixture's encodings are made by ffmpeg, with the arguments in ENCODINGS (design/internal/g1-formats.md).
 
     python -m lmt.eval.datasets fetch ci
     python -m lmt.eval.datasets build-fixture clip [--write]
+    python -m lmt.eval.datasets encode-fixture clip [--write]
+    python -m lmt.eval.datasets pin <url> [--member GLOB ...]
 """
 
 import argparse
+import fnmatch
 import hashlib
 import http.client
 import io
 import os
 import re
+import subprocess
 import sys
 import tarfile
 import tempfile
 import tomllib
+import urllib.parse
 import urllib.request
 import wave
 import xml.etree.ElementTree as ET
@@ -41,8 +47,40 @@ TIMEOUT = 60  # seconds without data before a download fails
 SAMPLE_MEETING = "AMI-ci"  # lmt demo --sample's meeting (design/internal/g3-stage1.md)
 KINDS = ("librispeech", "ami")
 
+# The manifests name only LibriSpeech and AMI sources (design/internal/g1-stage1.md §5a). AMI's RTTMs come from
+# BUT's diarization setup, at the one commit the manifests pin. `pin` refuses any other URL, and
+# tests/test_manifests.py checks every manifest URL against the same list.
+BUT_COMMIT = "2509d8933721023fab4def2618aabd5c28eb82e9"
+URL_PREFIXES = (
+    "https://www.openslr.org/resources/12/",
+    "https://us.openslr.org/resources/12/",
+    "https://groups.inf.ed.ac.uk/ami/",
+    f"https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/{BUT_COMMIT}/",
+)
+ARCHIVE_SUFFIXES = (".zip", ".tar.gz", ".tgz", ".tar")
+AUDIO_SUFFIXES = (".flac", ".wav")
+
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _UTTERANCE = re.compile(r"^\d+-\d+-\d+$")
+
+# The arguments after `ffmpeg` for each encoding, in the order they're made (design/internal/g1-formats.md,
+# "The recipe"). <wav> is the fixture's absolute path and <out> a temporary file beside it. They're never read
+# from the manifest, so the tool can run only these.
+_AUDIO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-map", "0:a:0", "-map_metadata", "-1",
+             "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1")
+_VIDEO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1:d=57",
+             "-map", "0:a:0", "-map", "1:v:0", "-map_metadata", "-1", "-fflags", "+bitexact",
+             "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1")
+_AAC = ("-c:a", "aac", "-profile:a", "aac_low", "-b:a", "128k", "-ar", "48000", "-ac", "1")
+_STILL = ("-c:v", "mpeg4", "-pix_fmt", "yuv420p")
+ENCODINGS: dict[str, tuple[str, ...]] = {
+    "flac": (*_AUDIO_IN, "-c:a", "flac", "-compression_level", "8", "-sample_fmt", "s16", "-ar", "16000", "-ac", "1",
+             "-f", "flac", "<out>"),
+    "mp3": (*_AUDIO_IN, "-c:a", "libmp3lame", "-b:a", "128k", "-ar", "44100", "-ac", "1", "-f", "mp3", "<out>"),
+    "m4a": (*_AUDIO_IN, *_AAC, "-f", "ipod", "<out>"),
+    "mp4": (*_VIDEO_IN, *_AAC, *_STILL, "-max_interleave_delta", "0", "-f", "mp4", "<out>"),
+    "mov": (*_VIDEO_IN, *_AAC, *_STILL, "-max_interleave_delta", "0", "-f", "mov", "<out>"),
+}
 
 
 @dataclass(frozen=True)
@@ -64,8 +102,18 @@ class Source:
 
 @dataclass(frozen=True)
 class Piece:
+    """An archive member, or the slice [start, end) seconds of a single-file WAV source."""
+
     source: str
-    member: str
+    member: str | None = None
+    start: float | None = None
+    end: float | None = None
+
+
+@dataclass(frozen=True)
+class Encoding:
+    format: str  # a key of ENCODINGS; the file is the fixture's path with this as its suffix
+    sha256: str
 
 
 @dataclass(frozen=True)
@@ -77,6 +125,9 @@ class Fixture:
     derived_sha256: str
     reference_sha256: str
     concat: tuple[Piece, ...]
+    cut: float | None = None  # seconds kept from the start of the joined audio
+    ffmpeg: str | None = None  # the version that made the encodings
+    encodings: tuple[Encoding, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -139,6 +190,7 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
     fixtures = {}
     for i, entry in enumerate(sets.get("fixture", [])):
         where = f"{sets_file}: fixture {i + 1}"
+        cut = entry.get("cut")
         fixture = Fixture(
             name=_get(entry, "name", str, where),
             path=_get(entry, "path", str, where),
@@ -146,19 +198,16 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
             gap=float(_get(entry, "gap", (int, float), where)),
             derived_sha256=_hex64(_get(entry, "derived_sha256", str, where), where),
             reference_sha256=_hex64(_get(entry, "reference_sha256", str, where), where),
-            concat=tuple(Piece(source=_get(p, "source", str, where), member=_get(p, "member", str, where))
-                         for p in _get(entry, "concat", list, where)),
+            concat=tuple(_piece(p, sources, where) for p in _get(entry, "concat", list, where)),
+            cut=None if cut is None else float(_get(entry, "cut", (int, float), where)),
+            **_encodings(entry, where),
         )
         if fixture.name in fixtures:
             raise ValueError(f"{where}: name {fixture.name!r} is repeated")
         if fixture.gap < 0 or not fixture.concat:
             raise ValueError(f"{where}: gap must be at least 0, and concat must have a piece")
-        for piece in fixture.concat:
-            source = sources.get(piece.source)
-            if source is None:
-                raise ValueError(f"{where}: source {piece.source!r} isn't in {sources_file.name}")
-            if piece.member not in {m.path for m in source.members}:
-                raise ValueError(f"{where}: {piece.member} isn't a member of {piece.source}")
+        if fixture.cut is not None and fixture.cut <= 0:
+            raise ValueError(f"{where}: cut must be positive")
         fixtures[fixture.name] = fixture
 
     datasets = {}
@@ -194,6 +243,24 @@ def _hex64(value, where):
     return value
 
 
+def _encodings(entry, where):
+    """The fixture's `ffmpeg` and `encodings`, which come together or not at all."""
+    if ("ffmpeg" in entry) != ("encodings" in entry):
+        raise ValueError(f"{where}: ffmpeg and encodings must be given together")
+    if "ffmpeg" not in entry:
+        return {}
+    encodings = []
+    for j, e in enumerate(_get(entry, "encodings", list, where)):
+        at = f"{where}, encoding {j + 1}"
+        encoding = Encoding(format=_get(e, "format", str, at), sha256=_hex64(_get(e, "sha256", str, at), at))
+        if encoding.format not in ENCODINGS:
+            raise ValueError(f"{at}: format {encoding.format!r} isn't one of {', '.join(ENCODINGS)}")
+        if encoding.format in {x.format for x in encodings}:
+            raise ValueError(f"{at}: format {encoding.format!r} is repeated")
+        encodings.append(encoding)
+    return {"ffmpeg": _get(entry, "ffmpeg", str, where), "encodings": tuple(encodings)}
+
+
 def _member(entry, where):
     path = _get(entry, "path", str, where)
     parts = PurePosixPath(path).parts
@@ -201,6 +268,28 @@ def _member(entry, where):
     if not parts or path.startswith("/") or "\\" in path or any(p in ("", ".", "..") for p in parts):
         raise ValueError(f"{where}: {path!r} isn't a relative path inside the archive")
     return Member(path=path, sha256=_hex64(_get(entry, "sha256", str, where), where))
+
+
+def _piece(entry, sources, where):
+    """{source, member} for an archive member, or {source, start, end} for a slice of a single-file source."""
+    source_id = _get(entry, "source", str, where)
+    source = sources.get(source_id)
+    if source is None:
+        raise ValueError(f"{where}: source {source_id!r} isn't in sources.toml")
+    if "member" in entry:
+        member = _get(entry, "member", str, where)
+        if "start" in entry or "end" in entry:
+            raise ValueError(f"{where}: a piece is a member or a slice, not both")
+        if member not in {m.path for m in source.members}:
+            raise ValueError(f"{where}: {member} isn't a member of {source_id}")
+        return Piece(source=source_id, member=member)
+    start = float(_get(entry, "start", (int, float), where))
+    end = float(_get(entry, "end", (int, float), where))
+    if source.members:
+        raise ValueError(f"{where}: a slice's source {source_id} must be a single file, without members")
+    if not 0 <= start < end:
+        raise ValueError(f"{where}: a slice needs 0 <= start < end")
+    return Piece(source=source_id, start=start, end=end)
 
 
 def _dataset(entry, where):
@@ -339,30 +428,41 @@ def _download(source, archive):
     failure = None
     for url in source.urls:
         fd, part = tempfile.mkstemp(dir=archive.parent, prefix=f".{archive.name}.", suffix=".part")
+        os.close(fd)
         part = Path(part)
         try:
-            digest, size = hashlib.sha256(), 0
-            with os.fdopen(fd, "wb") as out, urllib.request.urlopen(url, timeout=TIMEOUT) as response:
-                while block := response.read(CHUNK):
-                    out.write(block)
-                    digest.update(block)
-                    size += len(block)
-        except (OSError, http.client.HTTPException) as e:  # URLError, HTTPError and timeouts are OSErrors
-            part.unlink(missing_ok=True)
-            failure = InputError(url, f"download failed: {getattr(e, 'reason', e)}")
+            size, sha256 = _save(url, part)
+        except InputError as e:
+            failure = e
             continue
-        except BaseException:
-            part.unlink(missing_ok=True)
-            raise
         if size != source.size:
             part.unlink()
             raise InputError(url, f"size {size} doesn't match the manifest's {source.size}")
-        if digest.hexdigest() != source.sha256:
+        if sha256 != source.sha256:
             part.unlink()
             raise InputError(url, "SHA-256 doesn't match the manifest")
         part.replace(archive)
         return
     raise failure
+
+
+def _save(url, path):
+    """Download `url` to `path`, and return its size and SHA-256. A failed download deletes `path` and raises
+    InputError."""
+    try:
+        digest, size = hashlib.sha256(), 0
+        with open(path, "wb") as out, urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+            while block := response.read(CHUNK):
+                out.write(block)
+                digest.update(block)
+                size += len(block)
+    except (OSError, http.client.HTTPException) as e:  # URLError, HTTPError and timeouts are OSErrors
+        path.unlink(missing_ok=True)
+        raise InputError(url, f"download failed: {getattr(e, 'reason', e)}") from e
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return size, digest.hexdigest()
 
 
 def _extract(archive, root, members):
@@ -425,33 +525,75 @@ def _write_member(stream, dest, sha256):
 
 
 def build_fixture(fixture: Fixture, manifests: Manifests) -> tuple[bytes, str]:
-    """The fixture's WAV bytes and reference text, from the members in the cache.
+    """The fixture's WAV bytes and reference text, from the sources in the cache.
 
-    Each piece is read as 16-bit samples, which decodes FLAC exactly, and must be 16 kHz mono. The pieces are
-    joined in order with round(gap × 16000) zero samples between them, and written as one-channel, 16-bit,
-    16 kHz WAV by the `wave` module, so the bytes are the same on every platform. The reference is each
-    utterance's line in its chapter's .trans.txt, without the id, joined by single spaces, with one final newline.
+    A member piece is read as 16-bit samples, which decodes FLAC exactly, and must be 16 kHz mono. A slice is
+    read from its single-file WAV source (`slice_wav`). The pieces are joined by `concat`, with the fixture's
+    gap and cut, and written as one-channel, 16-bit, 16 kHz WAV by the `wave` module, so the bytes are the same
+    on every platform. The reference is each member utterance's line in its chapter's .trans.txt, without the
+    id, joined by single spaces, with one final newline. A slice's references are its dataset's, placed with
+    `place_references`.
     """
-    gap = np.zeros(round(fixture.gap * SAMPLE_RATE), dtype=np.int16)
     samples, texts = [], []
-    for i, piece in enumerate(fixture.concat):
-        path = data_dir() / "sources" / manifests.sources[piece.source].id / piece.member
+    for piece in fixture.concat:
+        source = manifests.sources[piece.source]
+        if piece.member is None:
+            samples.append(slice_wav(source_file(source), piece.start, piece.end))
+            continue
+        path = data_dir() / "sources" / source.id / piece.member
         data, rate = soundfile.read(path, dtype="int16")
         if rate != SAMPLE_RATE or data.ndim != 1:
             channels = 1 if data.ndim == 1 else data.shape[1]
             raise ValueError(f"{path}: {rate} Hz, {channels} channels; the recipe takes 16 kHz mono")
-        if i:
-            samples.append(gap)
         samples.append(data)
         texts.append(_transcript(path))
+    joined, _ = concat(samples, fixture.gap, fixture.cut)
+    return _wav_bytes(joined.astype("<i2").tobytes()), " ".join(texts) + "\n"
 
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SAMPLE_RATE)
-        w.writeframes(np.concatenate(samples).astype("<i2").tobytes())
-    return buffer.getvalue(), " ".join(texts) + "\n"
+
+def concat(pieces: list[np.ndarray], gap: float, cut: float | None = None) -> tuple[np.ndarray, list[float]]:
+    """The pieces' samples joined in order, with round(gap × 16000) zero samples between them, and cut to the
+    first round(cut × 16000) samples when `cut` is set; and each piece's offset in the result, in seconds.
+    A piece's offset is where it would start even when the cut drops it."""
+    silence = np.zeros(round(gap * SAMPLE_RATE), dtype=np.int16)
+    joined, offsets, at = [], [], 0
+    for i, piece in enumerate(pieces):
+        if i:
+            joined.append(silence)
+            at += len(silence)
+        offsets.append(at / SAMPLE_RATE)
+        joined.append(piece)
+        at += len(piece)
+    samples = np.concatenate(joined)
+    if cut is not None:
+        samples = samples[:round(cut * SAMPLE_RATE)]
+    return samples, offsets
+
+
+def slice_wav(path: Path, start: float, end: float) -> np.ndarray:
+    """Frames round(start × 16000) to round(end × 16000) of a 16 kHz, mono, 16-bit WAV, as int16 samples."""
+    first, last = round(start * SAMPLE_RATE), round(end * SAMPLE_RATE)
+    with wave.open(str(path), "rb") as r:
+        if (r.getframerate(), r.getnchannels(), r.getsampwidth()) != (SAMPLE_RATE, 1, 2):
+            raise ValueError(f"{path}: {r.getframerate()} Hz, {r.getnchannels()} channels, "
+                             f"{8 * r.getsampwidth()}-bit; the recipe takes 16 kHz mono 16-bit")
+        if r.getnframes() < last:
+            raise ValueError(f"{path}: {r.getnframes() / SAMPLE_RATE} s, shorter than the slice's end, {end} s")
+        r.setpos(first)
+        return np.frombuffer(r.readframes(last - first), dtype="<i2").astype(np.int16)
+
+
+def place_references(words, turns, start: float, end: float, offset: float):
+    """A slice's references, for the slice [start, end) of its source placed at `offset` in a concatenation.
+
+    Words are kept when their midpoint is inside the slice, and turns when they overlap it, clipped to it. Both
+    are shifted by offset − start. A cut then crops the joined references with `crop_references`.
+    """
+    shift = offset - start
+    kept_words = [(s + shift, e + shift, text) for s, e, text in words if start <= (s + e) / 2 < end]
+    kept_turns = [Turn(max(t.start, start) + shift, min(t.end, end) + shift, t.speaker)
+                  for t in turns if t.start < end and t.end > start]
+    return kept_words, kept_turns
 
 
 def _transcript(flac):
@@ -464,6 +606,39 @@ def _transcript(flac):
             if uid == utterance:
                 return text
     raise ValueError(f"{flac.parent}: no transcript line for {utterance}")
+
+
+# --- The encodings ---------------------------------------------------------------------------------------------
+
+
+def ffmpeg_version() -> str:
+    """The token after "ffmpeg version " on the first line of `ffmpeg -version`."""
+    try:
+        r = subprocess.run(["ffmpeg", "-version"], check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise InputError("ffmpeg", "not found on PATH") from None
+    first = r.stdout.splitlines()[0] if r.stdout else ""
+    if r.returncode != 0 or not first.startswith("ffmpeg version "):
+        raise InputError("ffmpeg", "`ffmpeg -version` didn't give its version")
+    return first.removeprefix("ffmpeg version ").split()[0]
+
+
+def encoding_path(fixture: Fixture, fmt: str) -> Path:
+    """tests/fixtures/clip.<fmt>: the fixture's path with the format as its suffix, never from the manifest."""
+    return Path(fixture.path).with_suffix(f".{fmt}")
+
+
+def encode(fixture: Fixture, fmt: str, out: Path) -> None:
+    """One encoding of the fixture's WAV to `out`, by ENCODINGS[fmt]. A failed ffmpeg raises InputError."""
+    wav = str(Path(fixture.path).resolve())
+    argv = ["ffmpeg", *(wav if a == "<wav>" else str(out) if a == "<out>" else a for a in ENCODINGS[fmt])]
+    try:
+        r = subprocess.run(argv, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise InputError("ffmpeg", "not found on PATH") from None
+    if r.returncode != 0:
+        last = (r.stderr.strip().splitlines() or [f"exit status {r.returncode}"])[-1]
+        raise InputError(str(encoding_path(fixture, fmt)), f"ffmpeg failed: {last}")
 
 
 # --- The datasets ----------------------------------------------------------------------------------------------
@@ -590,17 +765,68 @@ def _crop(audio, dataset):
         if r.getnframes() < frames:
             raise ValueError(f"{audio}: {r.getnframes() / SAMPLE_RATE} s, shorter than the crop's {dataset.crop} s")
         data = r.readframes(frames)
+    content = _wav_bytes(data)
+    if hashlib.sha256(content).hexdigest() != dataset.derived_sha256:
+        raise InputError(str(path), "the cropped WAV's SHA-256 doesn't match sets.toml")
+    _write_member(io.BytesIO(content), path, dataset.derived_sha256)
+    return path
+
+
+def _wav_bytes(frames):
+    """One-channel, 16-bit, 16 kHz WAV of little-endian frames, as the wave module writes it."""
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SAMPLE_RATE)
-        w.writeframes(data)
-    content = buffer.getvalue()
-    if hashlib.sha256(content).hexdigest() != dataset.derived_sha256:
-        raise InputError(str(path), "the cropped WAV's SHA-256 doesn't match sets.toml")
-    _write_member(io.BytesIO(content), path, dataset.derived_sha256)
-    return path
+        w.writeframes(frames)
+    return buffer.getvalue()
+
+
+# --- Pinning a source ------------------------------------------------------------------------------------------
+
+
+def pin(url: str, members: tuple[str, ...] = ()) -> list[str]:
+    """The facts a manifest entry needs about a file, from one download to a temporary directory.
+
+    The first line is `<url> <size> <sha256>`. For an archive (.zip, .tar.gz, .tgz or .tar), one more line
+    follows for each regular member matching a `members` glob (fnmatch, where `*` also matches `/`), in the
+    archive's order: `<member> <sha256>`. A .flac or .wav, the file or a member, adds `<frames> <rate>
+    <channels>` to its line. Only URLs under URL_PREFIXES are fetched. Nothing is cached.
+    """
+    if not url.startswith(URL_PREFIXES):
+        raise UsageError(url, "isn't under a pinned LibriSpeech or AMI prefix")
+    name = PurePosixPath(urllib.parse.urlsplit(url).path).name
+    archive = name.endswith(ARCHIVE_SUFFIXES)
+    if members and not archive:
+        raise UsageError(url, f"--member needs an archive ({', '.join(ARCHIVE_SUFFIXES)})")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / (name or "download")
+        size, sha256 = _save(url, path)
+        lines = [f"{url} {size} {sha256}{_audio_facts(name, path)}"]
+        if not members:
+            return lines
+        try:
+            for member, stream in _entries(path):
+                member = member.removeprefix("./")
+                if stream is None or not any(fnmatch.fnmatchcase(member, glob) for glob in members):
+                    continue
+                data = stream.read()
+                lines.append(f"{member} {hashlib.sha256(data).hexdigest()}{_audio_facts(member, io.BytesIO(data))}")
+        except (tarfile.TarError, zipfile.BadZipFile) as e:
+            raise InputError(url, f"can't read the archive: {e}") from e
+    return lines
+
+
+def _audio_facts(name, file):
+    """' <frames> <rate> <channels>' for a .flac or .wav, from its header; '' for anything else."""
+    if not name.lower().endswith(AUDIO_SUFFIXES):
+        return ""
+    try:
+        info = soundfile.info(file)
+    except RuntimeError as e:  # soundfile's errors are RuntimeErrors
+        raise InputError(name, f"can't read the audio's header: {e}") from e
+    return f" {info.frames} {info.samplerate} {info.channels}"
 
 
 # --- The entry point -------------------------------------------------------------------------------------------
@@ -615,11 +841,23 @@ def main(argv=None) -> int:
     b = commands.add_parser("build-fixture", help="Fetch a fixture's sources, build it and check its hashes.")
     b.add_argument("name", help="The fixture's name in sets.toml.")
     b.add_argument("--write", action="store_true", help="Write the fixture and its reference to their paths first.")
+    e = commands.add_parser("encode-fixture", help="Encode a fixture with ffmpeg and check the files' hashes.")
+    e.add_argument("name", help="The fixture's name in sets.toml.")
+    e.add_argument("--write", action="store_true", help="Write the encodings beside the fixture first.")
+    p = commands.add_parser("pin", help="Download a file once and print its size and SHA-256, and its listed "
+                                        "members' hashes, for writing the manifests. Nothing is cached.")
+    p.add_argument("url", help="Under one of the pinned LibriSpeech or AMI prefixes.")
+    p.add_argument("--member", action="append", default=[], metavar="GLOB",
+                   help="Archive members to hash, by glob; may be repeated.")
     args = parser.parse_args(argv)
     try:
         if args.command == "fetch":
             return _fetch_command(args.set)
-        return _build_fixture_command(args.name, args.write)
+        if args.command == "pin":
+            print("\n".join(pin(args.url, tuple(args.member))))
+            return 0
+        command = _build_fixture_command if args.command == "build-fixture" else _encode_fixture_command
+        return command(args.name, args.write)
     except LmtError as e:
         print(f"lmt: error: {e}", file=sys.stderr)
         return e.exit_code
@@ -634,11 +872,48 @@ def _fetch_command(set_name):
     return 0
 
 
-def _build_fixture_command(name, write):
+def _fixture(name):
     manifests = load_manifests(MANIFEST_DIR)
     fixture = manifests.fixtures.get(name)
     if fixture is None:
         raise UsageError(name, f"not a fixture in sets.toml ({', '.join(sorted(manifests.fixtures))})")
+    return manifests, fixture
+
+
+def _encode_fixture_command(name, write):
+    _, fixture = _fixture(name)
+    if not fixture.encodings:
+        raise UsageError(name, "has no encodings in sets.toml")
+    version = ffmpeg_version()
+    temps, hashes = {}, {}
+    try:
+        for fmt in ENCODINGS:
+            fd, temp = tempfile.mkstemp(dir=Path(fixture.path).parent, suffix=f".{fmt}.tmp")
+            os.close(fd)
+            temps[fmt] = Path(temp)
+            encode(fixture, fmt, temps[fmt])
+            hashes[fmt] = _sha256_file(temps[fmt])
+        if write:
+            for fmt, temp in temps.items():
+                temp.replace(encoding_path(fixture, fmt))
+    finally:
+        for temp in temps.values():
+            temp.unlink(missing_ok=True)
+    for fmt, digest in hashes.items():
+        print(f"{encoding_path(fixture, fmt)} {digest}")
+    print(f"ffmpeg {version}")
+    if version != fixture.ffmpeg:
+        raise InputError("ffmpeg", f"version {version} here, sets.toml records {fixture.ffmpeg}; "
+                                   "the hashes can't be compared")
+    expected = {e.format: e.sha256 for e in fixture.encodings}
+    for fmt, digest in hashes.items():
+        if digest != expected.get(fmt):
+            raise InputError(str(encoding_path(fixture, fmt)), "the encoded file's SHA-256 doesn't match sets.toml")
+    return 0
+
+
+def _build_fixture_command(name, write):
+    manifests, fixture = _fixture(name)
     for source_id in dict.fromkeys(p.source for p in fixture.concat):
         fetch_source(manifests.sources[source_id])
     audio, text = build_fixture(fixture, manifests)
