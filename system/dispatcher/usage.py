@@ -6,6 +6,7 @@ utilization. The system's own share is its runs' cost times caps.toml's points_p
 """
 
 import json
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -13,8 +14,8 @@ from zoneinfo import ZoneInfo
 STATUS = {"success": "finished", "error_max_turns": "cap: turns", "error_max_budget_usd": "cap: budget"}
 
 
-def summarize(lines):
-    """A run's outcome and usage from its stream-json lines."""
+def summarize(lines, worktree=None):
+    """A run's outcome and usage from its stream-json lines. The worktree tells which paths were outside it."""
     result, reading = None, None
     for line in lines:
         try:
@@ -37,7 +38,7 @@ def summarize(lines):
             "denials": len(result.get("permission_denials") or []),
             # What was denied, as the tool and the command's first two words (#44): enough to spot a
             # recurring permission gap, nothing more of the command.
-            "denied": sorted({denial_signature(d) for d in result.get("permission_denials") or []}),
+            "denied": sorted({denial_signature(d, worktree) for d in result.get("permission_denials") or []}),
         }
     if reading:
         out["five_hour"] = reading.get("five_hour", {}).get("utilization")
@@ -46,11 +47,13 @@ def summarize(lines):
     return out
 
 
-def denial_signature(denial):
+def denial_signature(denial, worktree=None):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
     assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. An
     interpreter is followed by what it runs instead (see interpreted). A first word that isn't
-    command-shaped is recorded by its shape (see first_word), not as a bare "?" (#176)."""
+    command-shaped is recorded by its shape (see first_word), not as a bare "?" (#176). Shell operators
+    and OUTSIDE follow as symbols: `git diff` is allowed, yet denied with `$(…)` or a path outside the
+    worktree (#177)."""
     tool = denial.get("tool_name", "?")
     command = (denial.get("tool_input") or {}).get("command")
     if tool != "Bash" or not command:
@@ -74,7 +77,8 @@ def denial_signature(denial):
         words.append(word)
         if len(words) == 2:
             break
-    return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command)])
+    outside = [OUTSIDE] if reaches_outside(command, worktree) else []
+    return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command), *outside])
 
 
 COMMAND = r"[a-z][a-z0-9._-]{0,19}"
@@ -97,17 +101,24 @@ OPERATORS = ("$(", "<<", "||", "&&", ">>", "|", ";", ">", "<", "`")
 # without this mark it read as a `git fetch` gap. Not one of OPERATORS, as no command line contains it.
 NEWLINE = "⏎"
 COMPOUND = OPERATORS + (NEWLINE,)
+EXPANDED = ("$(", "`")  # the shell expands these inside double quotes too
+OUTSIDE = "[outside]"
 
 
 def shell_operators(command):
     """The shell operators in the command's first command, outside quotes, in order and once each (#138):
     `cat … |` is denied where `cat` alone is allowed. Symbols only, so no word of the command is kept.
+    `$(` and `` ` `` count inside double quotes too, as the shell expands them there (#177).
     Then NEWLINE if another command follows it on a later line. A newline inside quotes, after a `\\`
     or in a heredoc's body doesn't end the first command (#198)."""
     text = command.strip()
     out, quote, heredocs, i = [], None, [], 0
     while i < len(text):
         c = text[i]
+        if quote == '"' and (op := next((o for o in EXPANDED if text.startswith(o, i)), None)):
+            out += [op] if op not in out else []
+            i += len(op)
+            continue
         if quote:
             if c == "\\" and quote == '"':
                 i += 1
@@ -131,6 +142,28 @@ def shell_operators(command):
                 continue
         i += 1
     return out
+
+
+def reaches_outside(command, worktree=None):
+    """Whether a path on the command's first line leads outside the worktree, which --restricted denies.
+    A word counts as a path once its quotes and any `--flag=` are stripped; with no worktree known, any
+    absolute, `~` or `..` path does. The command's own path isn't counted: first_word records it, and a
+    command run by path misses the allow rules wherever it is (#176)."""
+    words = command.split("\n", 1)[0].split()
+    while words and "=" in words[0]:
+        words.pop(0)  # a leading VAR=value assignment, as in denial_signature
+    for word in words[1:]:
+        word = re.sub(r"^--?[\w-]+=", "", word.strip("'\""))
+        if word.startswith("~"):
+            return True
+        if not (word.startswith("/") or word == ".." or word.startswith("../") or "/../" in word):
+            continue
+        if not worktree:
+            return True
+        path = os.path.normpath(os.path.join(worktree, word))
+        if os.path.commonpath([path, os.path.normpath(worktree)]) != os.path.normpath(worktree):
+            return True
+    return False
 
 
 def after_heredocs(text, i, delimiters):
