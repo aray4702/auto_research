@@ -2,11 +2,12 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-28 | architect, #260 | The Reviewer's findings on #261: `clip_run` passes no option, writing to its working directory; `lmt.transcript.load` and the move of `jsonschema` stay with stage 2's later items, as G3 assumes; S2's options test pins every ASR setting fixed before measurement |
 | 2026-10-28 | architect, #260 | First version: the shortest path to G1-1 as the spec gives it, in six Developer items, with what moves out of #110 and #123 |
 
 This is the detail a Developer needs to build each of the slice's items in one run. The slice is the shortest path to **G1-1** in `spec/acceptance.md`, unchanged: the reference clip, as WAV, transcribes with WER ≤ 5.0 %, and every segment has 0 ≤ `start` < `end` ≤ the clip's duration, in order of `start`, checked in CI. It works inside `spec/acceptance.md`, `design/architecture.md`, `design/public-api.md` and `design/internal/g1-stage1.md`, and assumes #108 (models) and #109 (scoring) as §3 and §4 there design them. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
-It is G1's stage 2 cut down to what G1-1 needs, built so that the rest of stage 2 extends it rather than redoes it. It honours the interfaces G2's and G3's designs assume from stage 2 (`g2-stage1.md` and `g3-stage1.md`, "What stage 1 assumes from G1's stage 2"), with the names they give.
+It is G1's stage 2 cut down to what G1-1 needs, built so that the rest of stage 2 extends it rather than redoes it. It honours the interfaces G2's and G3's designs assume from stage 2 (`g2-stage1.md` and `g3-stage1.md`, "What stage 1 assumes from G1's stage 2"), with the names they give. Those it builds, it builds as they are given there. Those G1-1 doesn't need, such as G3's `lmt.transcript.load(path)`, stay with stage 2's later items (below), so neither G2's design nor G3's changes.
 
 ## What G1-1 needs, and why it is more than WAV and ASR
 
@@ -43,7 +44,7 @@ G1-1's check is "a test runs **the product run** on the clip, then scores the JS
 
 - **Out of #123 (5b), into S1:** the concatenation recipe (pieces, `gap`, `derived_sha256`, the text reference) and the reference clip, `tests/fixtures/clip.wav` with its reference. **#123 keeps:** LS full and AMI full, the recipe's `cut` and its shifting and cropping of word and turn references, the one-hour recording, and `tests/fixtures/two_speakers.wav` with its RTTM and word references. It extends S1's recipe rather than writing its own.
 - **Out of #110 (5a), into S1:** `data_dir()`, the format of `sources.toml`, and the fetch of one source (download, verify, extract the listed archive members, delete the archive), with its tests that need no network. **#110 keeps:** the CI subset's sources and `[[dataset]]` entries, the LS-ci and AMI recipes, `fetch(set)`, `python -m lmt.eval.datasets fetch ci`, the `data` tests and the `eval-ci` job's steps. It adds its sources and members to S1's files, and its fetch of the LibriSpeech archive extracts the clip's members too, since they are listed in the same source.
-- **Out of stage 2's other items, into the slice:** decode, the ASR and diarization stages, alignment, the transcript types, the four exporters, the schema, and `lmt transcribe` with its documented options' plumbing. **They keep** their criteria's tests and what those need: the clip's other encodings and the fuzz corpus (G1-2, G1-11), the two-speaker test (G1-3), the subtitle checks with `ffmpeg` (G1-4), one test per option's effect (G1-6), the network and file test (G1-13), and `lmt eval --set ci` with the `eval-ci` steps (G1-5, G1-8c, G1-12).
+- **Out of stage 2's other items, into the slice:** decode, the ASR and diarization stages, alignment, the transcript types, the four exporters, the schema, and `lmt transcribe` with its documented options' plumbing. **They keep** their criteria's tests and what those need: the clip's other encodings and the fuzz corpus (G1-2, G1-11), the two-speaker test (G1-3), the subtitle checks with `ffmpeg` (G1-4), one test per option's effect (G1-6), the network and file test (G1-13), and `lmt eval --set ci` with the `eval-ci` steps (G1-5, G1-8c, G1-12). They also keep `lmt.transcript.load(path)`, which `g3-stage1.md` assumes from G1's stage 2, together with moving `jsonschema` from `dev` to a run-time dependency (`pyproject.toml` and `uv.lock`), which `load` needs.
 
 The Coordinator edits #110's and #123's bodies to match, and opens S1 to S6 as Developer items.
 
@@ -158,7 +159,7 @@ class Engine:
 ### Tests
 
 - `tests/test_audio.py`, with no model: a 1 s 440 Hz tone written as 16-bit 16 kHz mono WAV decodes to 16,000 samples equal to sample ÷ 32,768 to within 1 × 10⁻⁷; a 44.1 kHz stereo WAV decodes to 16 kHz mono, of length 16,000 ± 16; `tests/fixtures/clip.wav` decodes to as many samples as its WAV header has frames. Each error above gives `InputError` with its exit code 3: a missing file, a directory, an empty file, a WAV header with no data, 1,000 random bytes from a fixed seed named `.wav`, and a text file named `.wav`. No other exception type escapes.
-- `tests/test_asr.py`, with no model (tagged `G1-7`, `G1-12`): with `faster_whisper.WhisperModel` replaced by a fake that records its arguments, `load` passes the directory, `cpu`, `int8` and `local_files_only=True`, and `transcribe` passes `language="en"`, `temperature=0.0`, `beam_size=5`, `word_timestamps=True` and `vad_filter=True`. Words are stripped and empty ones dropped.
+- `tests/test_asr.py`, with no model (tagged `G1-7`, `G1-12`): with `faster_whisper.WhisperModel` replaced by a fake that records its arguments, `load` passes the directory, `device="cpu"`, `compute_type="int8"`, `cpu_threads=THREADS`, `num_workers=1` and `local_files_only=True`, and `transcribe` passes `language="en"`, `task="transcribe"`, `beam_size=5`, `temperature=0.0`, `condition_on_previous_text=False`, `word_timestamps=True` and `vad_filter=True`. Each is asserted exactly: `temperature` is the float `0.0`, not a tuple or list, since a single temperature is what keeps fallback off, and `cpu_threads` is `asr.THREADS`, which the test also checks equals `min(8, os.cpu_count() or 1)`. These are the settings fixed before any WER is measured, so a change to any of them fails this test. Words are stripped and empty ones dropped.
 - One test marked `models`: `asr.transcribe` on the clip, with the default ASR model from `models.ensure`, returns words whose times lie within the clip. It writes the words' WER against `clip.txt`, scored with #109's `wer`, to the test's output and to `$GITHUB_STEP_SUMMARY` when that is set. It doesn't assert the bound: that is G1-1's, on the product run. This is the slice's first reading of the WER, so that a problem shows before S6.
 
 **Test of the item:** the tests above, in the `test` job and in `test-models`; the PR shows the model test's WER.
@@ -219,7 +220,7 @@ def from_dict(doc: dict) -> Transcript
 - **Version 1.1,** as `public-api.md` gives it and `g2-stage1.md` recommends, so G2 needn't change the schema. `transcribe`'s `source` is `{"file": <the input's base name>, "duration": <seconds>}`.
 - **Key order** in `to_dict`: `schema_version`, `lmt_version`, `source`, `models`, `speakers`, `segments`; a segment's `start`, `end`, `speaker`, `text`, `words`; a word's `start`, `end`, `text`, `probability`.
 - **`lmt_version`** is the transcript's own field. The JSON exporter writes it, never the running version, so G3's `rename` keeps it. The pipeline sets it from `lmt.__version__`.
-- **G3's `load(path)`,** which validates at run time, comes with G3's item 1. It needs `jsonschema` as a run-time dependency, which #122 puts only in `dev`, so that item moves it.
+- **G3's `load(path)`,** which validates at run time, isn't in the slice: G1-1 doesn't need it. It stays with stage 2's later items, as G3 assumes ("What moves out of #110 and #123", above). It needs `jsonschema` as a run-time dependency, which #122 puts only in `dev`, so the item that adds `load` moves it.
 
 ### `src/lmt/align.py`
 
@@ -325,7 +326,7 @@ def run_lmt(argv, *, cwd=None, env=None) -> subprocess.CompletedProcess   # [sys
 def clip_run(tmp_path_factory) -> ProductRun        # returncode, stdout, stderr, out_dir
 ```
 
-`clip_run` runs `lmt transcribe tests/fixtures/clip.wav -o <a fresh directory>`, with **no other option**: the product run. It inherits `LMT_CACHE_DIR`, where the job has already downloaded and verified the models. It runs once per session, and every test that needs it shares it. G3's `two_speakers_run` (`g3-stage1.md`) is the same kind of fixture, added with the two-speaker clip.
+`clip_run` runs `lmt transcribe <the absolute path of tests/fixtures/clip.wav>`, with **no option at all**: the product run. It passes `cwd=<a fresh directory>`, and that is its `out_dir`, since `-o` defaults to the current directory, so the outputs land there without `-o` being given. It inherits `LMT_CACHE_DIR`, where the job has already downloaded and verified the models. It runs once per session, and every test that needs it shares it. G3's `two_speakers_run` (`g3-stage1.md`) is the same kind of fixture, added with the two-speaker clip.
 
 ### G1-1's test (`tests/test_g1_1.py`)
 
@@ -335,7 +336,7 @@ Marked `models` and `criterion("G1-1")`. It checks exactly G1-1's criterion, fro
 - **WER.** The hypothesis is `lmt.eval.score.hypothesis_from_transcript(doc).text`, the segments' texts joined (#109). The reference is `tests/fixtures/clip.txt`. `wer([(reference, hypothesis)])` is at most `WER_BOUND = 0.050`, a constant whose comment cites `spec/acceptance.md` G1-1. The WER goes into the assertion's message, the test's output and `$GITHUB_STEP_SUMMARY`, pass or fail.
 - **Times.** The clip's duration is read from the WAV with the `wave` module, frames over rate, unrounded, never from the JSON. Every segment has 0 ≤ `start` < `end` ≤ that duration, and each segment's `start` is at least the one before it.
 
-A second test, untagged, uses the same run: stdout lists the four default outputs, and each exists; `clip.json` validates against the schema; and stderr holds no line starting `lmt: error:`.
+A second test, untagged, uses the same run: stdout lists the four default outputs, and each exists, resolved against `out_dir`, since the run's paths are relative to its working directory; `clip.json` validates against the schema; and stderr holds no line starting `lmt: error:`.
 
 ### Other tests (`tests/test_pipeline.py`, no model)
 
