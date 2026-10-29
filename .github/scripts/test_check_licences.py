@@ -127,6 +127,22 @@ class TestDistributions(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("FAIL distribution epsilon 2.0 ? no clear SPDX licence", out)
 
+    def test_an_unmapped_top_level_classifier_fails(self):
+        self.fake.add("eta", headers=["Classifier: License :: Other/Proprietary License",
+                                      "Classifier: License :: OSI Approved :: MIT License"])
+        self.fake.add("theta", headers=["Classifier: License :: Other/Proprietary License", "License: MIT"])
+        code, out = self.fake.run()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL distribution eta 1.0 ? no clear SPDX licence (classifier 'Other/Proprietary License, MIT License')", out)
+        self.assertIn("FAIL distribution theta 1.0 ? no clear SPDX licence (classifier 'Other/Proprietary License')", out)
+
+    def test_an_unmapped_classifier_overrides_the_license_field(self):
+        self.fake.add("epsilon", "2.0", headers=["Classifier: License :: OSI Approved :: BSD License",
+                                                 "License: BSD-3-Clause"])
+        code, out = self.fake.run()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL distribution epsilon 2.0 ? no clear SPDX licence", out)
+
     def test_override_at_its_version_passes(self):
         self.fake.add("epsilon", "2.0", headers=["Classifier: License :: OSI Approved :: BSD License"])
         self.fake.config(OVERRIDE.format(version="2.0"))
@@ -267,6 +283,23 @@ class TestRepositoryToolchain(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("PASS library av.libs/libx264-d6533a8d.so.165 18.1.0 GPL-2.0-or-later", out)
         self.assertIn("FAIL library av.libs/libfdk-aac-0123abcd.so.2", out)
+
+    def test_an_unknown_library_in_torch_or_torchaudio_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = FakeSite(tmp)
+            fake.toolchain.write_text(TOOLCHAIN.read_text())
+            fake.add("torch", "2.8.0", headers=["License: BSD-3-Clause"],
+                     files=["torch/lib/libtorch_cpu.so", "torch/lib/libcudnn.so.9"])
+            fake.add("torchaudio", "2.8.0", headers=["License-Expression: BSD-2-Clause"],
+                     files=["torchaudio/lib/libtorchaudio.so", "torchaudio/lib/libsox.so.3",
+                            "torio/lib/libtorio_ffmpeg6.so", "torio/lib/libavcodec.so.60"])
+            code, out = fake.run()
+        self.assertEqual(code, 1)
+        self.assertIn("PASS library torch/lib/libtorch_cpu.so 2.8.0 BSD-3-Clause", out)
+        self.assertIn("PASS library torchaudio/lib/libtorchaudio.so 2.8.0 BSD-2-Clause", out)
+        self.assertIn("PASS library torio/lib/libtorio_ffmpeg6.so 2.8.0 BSD-2-Clause", out)
+        for path in ["torch/lib/libcudnn.so.9", "torchaudio/lib/libsox.so.3", "torio/lib/libavcodec.so.60"]:
+            self.assertIn(f"FAIL library {path}", out)
 
 
 if __name__ == "__main__":

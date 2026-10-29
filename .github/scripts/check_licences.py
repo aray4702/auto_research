@@ -120,11 +120,12 @@ def distribution_licence(dist, config):
     if expression:
         return expression.strip(), "License-Expression"
     named = [c.split("::")[-1].strip() for c in dist.metadata.get_all("Classifier") or []
-             if c.startswith("License ::") and c.count("::") >= 2 and c.strip() != "License :: OSI Approved"]
+             if c.startswith("License ::") and c.strip() != "License :: OSI Approved"]
     if named and all(c in CLASSIFIERS for c in named):
         return " AND ".join(dict.fromkeys(CLASSIFIERS[c] for c in named)), "classifier"
     licence = (dist.metadata.get("License") or "").strip()
-    if licence and "\n" not in licence:
+    # An unmapped classifier (BSD License, Other/Proprietary License) makes the licence unclear, whatever License says.
+    if licence and "\n" not in licence and not named:
         try:
             parse_spdx(licence)
             return licence, "License"
