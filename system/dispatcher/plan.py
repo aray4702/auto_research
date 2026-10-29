@@ -2,7 +2,7 @@
 
 Dispatch order (blueprint §4.3): severe problems first, then open PRs that need work, then the
 rest, then the work order in sequence; while a work-order item is busy, only parallel-safe items
-start. The merge queue and the standing rules' checks are in merge_rules.py, which SR1 never covers.
+start. Within that order, work for a goal goes ahead of the system's own upkeep (#229). The merge queue and the standing rules' checks are in merge_rules.py, which SR1 never covers.
 """
 
 from datetime import datetime, timedelta
@@ -21,6 +21,26 @@ DECISION_ROLE = {
     "needs-decision:coordinator": "coordinator", "needs-decision:architect": "architect",
     "needs-decision:builder": "builder",
 }
+
+
+SEVERE = ("sev:1", "sev:2")
+
+
+def upkeep(candidate, snap):
+    """Whether a candidate is the system's own upkeep rather than work for a goal: a builder PR or a `type:system`
+    item, unless the work is sev:1 or sev:2. A builder's SR3 approval of a product PR is goal work: the PR is what
+    counts, not the role. Runs without an item keep their place: the builder's daily run stays ahead of triage, or a
+    busy goal day would starve it again (#186)."""
+    role, item, _, why = candidate
+    if item is None:
+        return False
+    issues = {i["number"]: i["labels"] for i in snap["issues"]}
+    pr = next((p for p in snap["prs"] if p["number"] == item), None)
+    if pr:
+        labels = set().union(*[issues.get(n, set()) for n in pr.get("resolves", [])])
+        return pr["author_role"] == "builder" and not labels & set(SEVERE)
+    labels = issues.get(item, set())
+    return "type:system" in labels and not labels & set(SEVERE)
 
 
 def held(labels):
@@ -125,7 +145,9 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None, dail
         if role:
             out.append((role, n, "Work on your item, as the work order schedules it.", "work-order"))
             busy = True
-    return out
+    # Goal work first: the system's own upkeep waits behind it, whatever the kind of either, so an older system PR
+    # doesn't hold a goal's PR or decision (#229). sev:1 stays first; the order within each group stays.
+    return [c for c in out if not upkeep(c, snap)] + [c for c in out if upkeep(c, snap)]
 
 
 def choose(snap, runs, caps, identity, now, skip_review=(), answered=None, daily_schedule=None):

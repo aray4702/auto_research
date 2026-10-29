@@ -59,6 +59,12 @@ jobs:
       - name: README checks (S1-1 to S1-5)
         if: fromJSON(needs.changes.outputs.tier) >= 1
         run: python3 -I .github/scripts/check_readme.py --root .
+      # G1-14: the results table equals what results/full.json renders (design/internal/g1-stage1.md §6).
+      - if: fromJSON(needs.changes.outputs.tier) >= 1
+        run: uv sync --locked
+      - name: The results table's drift check (G1-14)
+        if: fromJSON(needs.changes.outputs.tier) >= 1
+        run: uv run --frozen lmt eval --check-readme
 
   # The product's tests that need no model or data, and ruff (design/internal/g1-stage1.md §1a).
   test:
