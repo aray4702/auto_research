@@ -719,6 +719,168 @@ class TestDatasetManifests:
             datasets.load_manifests(tmp_path)
 
 
+# --- The concatenation's slices, cut and references (design/internal/g1-stage1.md §5b) -------------------------
+
+
+def slices_fixture(tmp_path, monkeypatch, concat, *, gap=0.0625, cut=None, sources=None):
+    """Manifests with the meeting WAV as a single-file source, and a fixture of `concat`'s slices of it."""
+    dir = tmp_path / "manifests"
+    dir.mkdir(parents=True, exist_ok=True)
+    audio = wav(meeting_samples())
+    (dir / "sources.toml").write_text(
+        "schema_version = 1\n" + (sources if sources is not None else source_toml("ami-ES2004a", AMI_WAV_URL, audio)))
+    pieces = ",\n".join(f"  {{source = \"ami-ES2004a\", {piece}}}" for piece in concat)
+    (dir / "sets.toml").write_text(
+        f'schema_version = 1\n\n[[fixture]]\nname = "hour"\npath = "hour.wav"\nreference = "hour.txt"\ngap = {gap}\n'
+        f'{"" if cut is None else f"cut = {cut}{chr(10)}"}derived_sha256 = "{"0" * 64}"\n'
+        f'reference_sha256 = "{"0" * 64}"\nconcat = [\n{pieces},\n]\n')
+    monkeypatch.setattr(datasets, "MANIFEST_DIR", dir)
+    serve(monkeypatch, {AMI_WAV_URL: audio})
+    return dir
+
+
+class TestConcat:
+    def test_offsets_count_the_pieces_and_the_gaps(self):
+        a, b, c = pieces()  # 800 samples, 0.05 s, each
+        samples, offsets = datasets.concat([a, b, c], gap=0.25)
+        assert offsets == [0.0, 0.3, 0.6]
+        silence = np.zeros(4000, dtype=np.int16)
+        assert np.array_equal(samples, np.concatenate([a, silence, b, silence, c]))
+
+    def test_the_cut_keeps_the_first_cut_seconds_and_the_offsets_stay(self):
+        a, b, c = pieces()
+        samples, offsets = datasets.concat([a, b, c], gap=0.25, cut=0.33)
+        assert np.array_equal(samples, np.concatenate([a, np.zeros(4000, dtype=np.int16), b[:480]]))
+        assert offsets == [0.0, 0.3, 0.6]
+
+    def test_a_fixture_of_slices_with_a_gap_and_a_cut(self, cache, tmp_path, monkeypatch):
+        dir = slices_fixture(tmp_path, monkeypatch, ["start = 0.25, end = 0.5", "start = 0, end = 0.125"], cut=0.3)
+        manifests = datasets.load_manifests(dir)
+        fixture = manifests.fixtures["hour"]
+        assert fixture.concat[0] == datasets.Piece("ami-ES2004a", start=0.25, end=0.5)
+        assert fixture.cut == 0.3
+        datasets.fetch_source(manifests.sources["ami-ES2004a"])
+        audio, text = datasets.build_fixture(fixture, manifests)
+        meeting = meeting_samples()
+        expected = np.concatenate([meeting[4000:8000], np.zeros(1000, dtype=np.int16), meeting[:2000]])[:4800]
+        assert np.array_equal(TestRecipe.frames(audio), expected)
+        assert text == "\n"  # a slice's references are its dataset's, not a .trans.txt line
+
+    def test_a_slice_past_the_end_of_its_source_raises(self, cache, tmp_path, monkeypatch):
+        dir = slices_fixture(tmp_path, monkeypatch, ["start = 0.5, end = 1.5"])
+        manifests = datasets.load_manifests(dir)
+        datasets.fetch_source(manifests.sources["ami-ES2004a"])
+        with pytest.raises(ValueError, match=r"1.0 s, shorter than the slice's end, 1.5 s"):
+            datasets.build_fixture(manifests.fixtures["hour"], manifests)
+
+    def test_a_slice_of_a_wav_that_isnt_16_khz_mono_16_bit_raises(self, tmp_path):
+        path = tmp_path / "stereo.wav"
+        soundfile.write(path, np.zeros((1600, 2), dtype=np.int16), 16000, subtype="PCM_16")
+        with pytest.raises(ValueError, match="16000 Hz, 2 channels, 16-bit; the recipe takes 16 kHz mono 16-bit"):
+            datasets.slice_wav(path, 0.0, 0.05)
+
+    @pytest.mark.parametrize("concat, cut, problem", [
+        (["start = 0.5, end = 0.5"], None, "a slice needs 0 <= start < end"),
+        (["start = -0.1, end = 0.5"], None, "a slice needs 0 <= start < end"),
+        (["start = 0, end = 0.5"], 0, "cut must be positive"),
+        (['member = "words/x.xml", start = 0, end = 0.5'], None, "a piece is a member or a slice, not both"),
+        (["start = 0"], None, "end is missing or has the wrong type"),
+    ])
+    def test_a_bad_slice_or_cut_is_refused(self, tmp_path, monkeypatch, concat, cut, problem):
+        dir = slices_fixture(tmp_path, monkeypatch, concat, cut=cut)
+        with pytest.raises(ValueError, match=problem):
+            datasets.load_manifests(dir)
+
+    def test_a_slice_of_an_archive_is_refused(self, tmp_path, monkeypatch):
+        archive = zip_of(WORDS)
+        sources = source_toml("ami-ES2004a", AMI_ZIP_URL, archive, keep=False,
+                              members={name: sha256(data.encode()) for name, data in WORDS.items()})
+        dir = slices_fixture(tmp_path, monkeypatch, ["start = 0, end = 0.5"], sources=sources)
+        with pytest.raises(ValueError, match="a slice's source ami-ES2004a must be a single file, without members"):
+            datasets.load_manifests(dir)
+
+
+class TestPlaceReferences:
+    WORDS = ((0.9, 1.3, "before"), (1.1, 1.3, "first"), (2.0, 2.4, "inside"), (2.8, 3.4, "last"),
+             (2.9, 3.5, "after"))
+    TURNS = (datasets.Turn(0.0, 0.5, "A"), datasets.Turn(0.8, 1.6, "A"), datasets.Turn(1.8, 2.6, "B"),
+             datasets.Turn(2.9, 4.0, "B"), datasets.Turn(3.2, 3.6, "A"))
+
+    def test_words_by_midpoint_inside_the_slice_are_shifted_to_the_offset(self):
+        words, _ = datasets.place_references(self.WORDS, [], start=1.0, end=3.2, offset=10.0)
+        # Midpoints 1.1, 1.2, 2.2, 3.1 and 3.2: "before"'s is inside [1.0, 3.2), "after"'s isn't.
+        assert [(round(s, 6), round(e, 6), t) for s, e, t in words] == [
+            (9.9, 10.3, "before"), (10.1, 10.3, "first"), (11.0, 11.4, "inside"), (11.8, 12.4, "last")]
+
+    def test_turns_overlapping_the_slice_are_clipped_to_it_and_shifted(self):
+        _, turns = datasets.place_references([], self.TURNS, start=1.0, end=3.2, offset=10.0)
+        assert [(round(t.start, 6), round(t.end, 6), t.speaker) for t in turns] == [
+            (10.0, 10.6, "A"), (10.8, 11.6, "B"), (11.9, 12.2, "B")]
+
+    def test_then_the_cut_crops_them_as_ami_cis_crop_does(self):
+        words, turns = datasets.place_references(self.WORDS, self.TURNS, start=1.0, end=3.2, offset=10.0)
+        words, turns = datasets.crop_references(words, turns, 11.5)
+        assert [t for _, _, t in words] == ["before", "first", "inside"]
+        assert [(round(t.start, 6), round(t.end, 6), t.speaker) for t in turns] == [
+            (10.0, 10.6, "A"), (10.8, 11.5, "B")]
+
+
+class TestPin:
+    def test_an_archive_prints_its_hash_then_the_matching_members_with_their_audio_facts(
+            self, cache, monkeypatch, capsys):
+        files = members()
+        archive = tar_gz(files)
+        serve(monkeypatch, {URLS[0]: archive})
+        assert datasets.main(["pin", URLS[0], "--member", "*.flac", "--member", "*/61-70968.trans.txt"]) == 0
+        assert capsys.readouterr().out.splitlines() == [
+            f"{URLS[0]} {len(archive)} {sha256(archive)}",
+            *(f"{CHAPTER}/{uid}.flac {sha256(files[f'{CHAPTER}/{uid}.flac'])} 800 16000 1" for uid in IDS),
+            f"{TRANS} {sha256(files[TRANS])}",
+        ]
+        assert cached_files(cache) == []
+
+    def test_a_zip_prints_only_the_regular_members_that_match(self, cache, monkeypatch):
+        archive = zip_of(WORDS)
+        serve(monkeypatch, {AMI_ZIP_URL: archive})
+        assert datasets.pin(AMI_ZIP_URL, ("words/ES2004a.*",)) == [
+            f"{AMI_ZIP_URL} {len(archive)} {sha256(archive)}",
+            *(f"{name} {sha256(data.encode())}" for name, data in WORDS.items()),
+        ]
+
+    def test_a_wav_prints_its_frames_rate_and_channels(self, cache, monkeypatch):
+        audio = wav(meeting_samples())
+        serve(monkeypatch, {AMI_WAV_URL: audio})
+        assert datasets.pin(AMI_WAV_URL) == [f"{AMI_WAV_URL} {len(audio)} {sha256(audio)} 16000 16000 1"]
+        assert cached_files(cache) == []
+
+    @pytest.mark.parametrize("url", [
+        "https://example.com/resources/12/test-clean.tar.gz",
+        "http://www.openslr.org/resources/12/test-clean.tar.gz",
+        "https://www.openslr.org/resources/13/test-clean.tar.gz",
+        "https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/main/only_words/rttms/test/x.rttm",
+    ])
+    def test_a_url_outside_the_pinned_prefixes_exits_2_without_a_request(self, cache, monkeypatch, capsys, url):
+        server = serve(monkeypatch, {})
+        assert datasets.main(["pin", url]) == 2
+        assert server.requests == []
+        assert capsys.readouterr().err.splitlines() == [
+            f"lmt: error: {url}: isn't under a pinned LibriSpeech or AMI prefix"]
+
+    def test_member_on_a_single_file_exits_2(self, cache, monkeypatch):
+        server = serve(monkeypatch, {})
+        assert datasets.main(["pin", AMI_WAV_URL, "--member", "*"]) == 2
+        assert server.requests == []
+
+    def test_a_failed_download_exits_3(self, cache, monkeypatch, capsys):
+        serve(monkeypatch, {})
+        assert datasets.main(["pin", AMI_WAV_URL]) == 3
+        assert "download failed" in capsys.readouterr().err
+
+    def test_the_prefixes_are_the_manifest_tests(self):
+        assert datasets.URL_PREFIXES[-1] == ("https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/"
+                                             f"{datasets.BUT_COMMIT}/")
+
+
 # --- The CI subset itself ---------------------------------------------------------------------------------------
 # Marked `data`: they run in the eval-ci job, after `python -m lmt.eval.datasets fetch ci` has filled LMT_DATA_DIR.
 
