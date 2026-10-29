@@ -1,0 +1,104 @@
+"""The `criterion` marker's plugin: checks each tag against the spec, and writes the job's record
+with --criteria-out PATH (design/internal/criteria.md §1, §3)."""
+
+import importlib.util
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = ROOT / "spec" / "acceptance.md"
+# Exit statuses after which the session ran to its end: 0, 1 (tests failed) and 5 (no tests collected).
+FINISHED = (pytest.ExitCode.OK, pytest.ExitCode.TESTS_FAILED, pytest.ExitCode.NO_TESTS_COLLECTED)
+RANK = {"passed": 0, "skipped": 1, "failed": 2}  # a test's outcome is its worst phase's
+
+
+def _load_criteria():
+    """.github/scripts/criteria.py, loaded by path: its parser and record writer are the only ones."""
+    spec = importlib.util.spec_from_file_location("lmt_ci_criteria", ROOT / ".github" / "scripts" / "criteria.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+criteria = _load_criteria()
+
+
+def item_criteria(item):
+    return list(dict.fromkeys(cid for mark in item.iter_markers("criterion") for cid in mark.args))
+
+
+def phase_outcome(report):
+    """(outcome, reason) for one phase's report."""
+    if hasattr(report, "wasxfail"):  # xfail and xpass: a criterion is met only by tests that pass outright
+        return "failed", None
+    if report.skipped:
+        reason = report.longrepr[2] if isinstance(report.longrepr, tuple) else str(report.longrepr)
+        return "skipped", reason.removeprefix("Skipped: ")
+    return ("failed", None) if report.failed else ("passed", None)
+
+
+class CriteriaRecord:
+    def __init__(self, config):
+        self.config = config
+        self.tagged = {}  # nodeid: [criterion id], for the selected tests
+        self.outcomes = {}  # nodeid: (outcome, reason)
+        self.interrupted = False
+
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_collection_modifyitems(self, items):
+        """An unknown ID stops the session at collection, a deselected test's included."""
+        tagged = [(item, item_criteria(item)) for item in items]
+        if not any(ids for _, ids in tagged):
+            return
+        known = criteria.spec_ids(SPEC)
+        for item, ids in tagged:
+            for cid in ids:
+                if cid not in known:
+                    raise pytest.UsageError(
+                        f"{item.nodeid}: criterion {cid!r} is not an ID in {SPEC.name}'s done-checks")
+
+    def pytest_collection_finish(self, session):
+        self.tagged = {item.nodeid: ids for item in session.items if (ids := item_criteria(item))}
+
+    def pytest_runtest_logreport(self, report):
+        if report.nodeid not in self.tagged:
+            return
+        outcome = phase_outcome(report)
+        previous = self.outcomes.get(report.nodeid)
+        if previous is None or RANK[outcome[0]] > RANK[previous[0]]:
+            self.outcomes[report.nodeid] = outcome
+
+    def pytest_keyboard_interrupt(self):
+        self.interrupted = True  # Ctrl-C and pytest.exit both
+
+    def pytest_internalerror(self):
+        self.interrupted = True
+
+    def pytest_sessionfinish(self, exitstatus):
+        path = self.config.getoption("criteria_out")
+        if not path:
+            return
+        checks = []
+        for nodeid, ids in self.tagged.items():
+            if nodeid in self.outcomes:
+                outcome, reason = self.outcomes[nodeid]
+                checks.append({"check": nodeid, "criteria": ids, "outcome": outcome}
+                              | ({"reason": reason} if outcome == "skipped" else {}))
+        # Complete only when the session ran to its end and every selected tagged test reported.
+        complete = exitstatus in FINISHED and not self.interrupted and len(checks) == len(self.tagged)
+        criteria.write_record(path, checks, complete)
+
+
+def pytest_addoption(parser):
+    parser.addoption("--criteria-out", metavar="PATH",
+                     help="write the tagged tests' outcomes to PATH, named criteria-<job>.json "
+                          "(design/internal/criteria.md §3)")
+
+
+def pytest_configure(config):
+    path = config.getoption("criteria_out")
+    if path and criteria.job_of(path) is None:
+        raise pytest.UsageError(f"--criteria-out {path}: the name must be criteria-<job>.json or "
+                                "criteria-<job>-<n>.json")
+    config.pluginmanager.register(CriteriaRecord(config), "criteria-record")

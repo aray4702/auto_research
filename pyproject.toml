@@ -52,6 +52,7 @@ addopts = "-m 'not models and not data'"
 markers = [
   "models: needs the default models in LMT_CACHE_DIR (the test-models job)",
   "data: needs the CI subset in LMT_DATA_DIR (the eval-ci job)",
+  "criterion(*ids): the acceptance criteria this test checks (design/internal/criteria.md)",
 ]
 
 [tool.ruff]

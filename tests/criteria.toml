@@ -1,0 +1,38 @@
+# Per criterion: whether its CI checks are complete, and whether it needs the Owner's reading
+# (design/internal/criteria.md §2). A criterion not listed is checked in CI and not yet complete.
+
+# The product jobs that upload a record (§3).
+jobs = ["readme", "test"]
+
+# S1-1 to S1-5: check_readme.py makes their checks in full, and the Reviewer read S1-2's wording
+# when S1 closed. S1-4 waits for the evaluation command in the README (g1-stage1.md §1a).
+[S1-1]
+complete = true
+
+[S1-2]
+complete = true
+
+[S1-3]
+complete = true
+
+[S1-5]
+complete = true
+
+[G1-4m]
+ci = false
+owner = "The two-speaker clip's SRT and WebVTT show their cues at the right times, with the speaker's label, in QuickTime Player and in VLC"
+
+[G1-13]
+owner = "The two-speaker clip transcribes with Wi-Fi off"
+
+[G2-5m]
+ci = false
+owner = "lmt live with the built-in microphone, two voices for about two minutes, stopped with Ctrl-C: labelled text appears within a few seconds, the two voices get different labels, and the four outputs are written and open"
+
+[G3-5m]
+ci = false
+owner = "lmt demo --sample opens the page in the default browser, and clicking segments near the start, the middle and the end plays the meeting from each, heard through the speakers"
+
+[G3-8m]
+ci = false
+owner = "In a new standard macOS account, following only the README: the install, the model download and the sample, then with Wi-Fi off, a recorded clip transcribed, renamed and shown with the name in VLC, and lmt demo on it and on the sample"
