@@ -14,12 +14,17 @@ import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
-TITLE = "# voice-app example"
+TITLE = "# Local Meeting Transcriber"
 CLONE_URL = "https://github.com/aray4702/auto_research.git"
 CLONE_LINES = [f"git clone {CLONE_URL}", "cd auto_research"]
+BUILD_LAST_LINE = "uv run lmt --help"
 GATE_COMMAND = "python3 -I system/gate/generic.py --base origin/main"
+# S1-4: the product's commands the README names as inline code, each also run by product.yml's jobs.
+PRODUCT_COMMANDS = ["uv run --frozen pytest"]
+PRODUCT_YML = ".github/workflows/product.yml"
 
 FENCE = re.compile(r"^```(\S*)[^\n]*\n(.*?)^```[ \t]*$", re.M | re.S)
 INLINE_LINK = re.compile(r"!?\[[^\]]*\]\(\s*<?([^)\s>]*)>?(?:\s+[\"'(][^)]*)?\)")
@@ -50,6 +55,19 @@ def link_targets(text):
     """Markdown link targets outside fenced code."""
     prose = FENCE.sub("", text)
     return INLINE_LINK.findall(prose) + REFERENCE_LINK.findall(prose)
+
+
+def uv_version(root):
+    """toolchain.toml's [uv] version, or None."""
+    try:
+        return tomllib.loads((Path(root) / "toolchain.toml").read_text())["uv"]["version"]
+    except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError):
+        return None
+
+
+def names_version(text, version):
+    """Whether the text names the version on its own, not as part of a longer one (0.9.1 in 0.9.10)."""
+    return re.search(rf"(?<![\w.]){re.escape(version)}(?!\.?\w)", text) is not None
 
 
 def run_sh(script, cwd, env=None):
@@ -92,7 +110,16 @@ def check_build(root, text):
         return problems
     lines = [line.strip() for line in block.splitlines() if line.strip()]
     if lines[:2] != CLONE_LINES:
-        return [f"the Build block doesn't start with the lines {CLONE_LINES}"]
+        problems.append(f"the Build block doesn't start with the lines {CLONE_LINES}")
+    if lines[-1:] != [BUILD_LAST_LINE]:
+        problems.append(f"the Build block's last line isn't {BUILD_LAST_LINE!r}")
+    version = uv_version(root)
+    if version is None:
+        problems.append("toolchain.toml has no [uv] version")
+    elif not names_version(text, version):
+        problems.append(f"README.md doesn't name toolchain.toml's uv version, {version}")
+    if problems:
+        return problems
     # Redirect the clone URL to the checkout, for this run only.
     env = dict(os.environ)
     n = int(env.get("GIT_CONFIG_COUNT") or 0)
@@ -116,6 +143,16 @@ def check_checks(root, text):
     problems, block = heading_and_block(text, "Checks")
     if GATE_COMMAND not in text:
         problems.append(f"README.md doesn't contain {GATE_COMMAND!r}")
+    prose = FENCE.sub("", text)
+    try:
+        workflow = (Path(root) / PRODUCT_YML).read_text()
+    except OSError:
+        workflow = ""
+    for command in PRODUCT_COMMANDS:
+        if f"`{command}`" not in prose:
+            problems.append(f"README.md doesn't name `{command}` as inline code outside fenced code")
+        if command not in workflow:
+            problems.append(f"{PRODUCT_YML} doesn't run {command!r}")
     if block is not None:
         code, out = run_sh(block, root)
         if code != 0:
