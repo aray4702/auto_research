@@ -11,6 +11,9 @@ allow = [
   # forms here: their arguments can write (`ruff check --fix`) or delete (`pytest --basetemp=<dir>`).
   "Bash(uv --version)", "Bash(uv tree --frozen:*)", "Bash(uv lock --check:*)",
   "Bash(uv run --frozen pytest)", "Bash(uv run --frozen pytest -q)",
+  # The model tests, run locally: the pinned models are verified in this Mac's model cache, so no token or
+  # network is needed (the same tests CI's test-models runs).
+  "Bash(uv run --frozen pytest -m models)", "Bash(uv run --frozen pytest -m models -q)",
   "Bash(uv run --frozen ruff check)", "Bash(uv run --frozen ruff check .)",
   "Bash(uv run --frozen lmt:*)",  # writes only where -o/--out points; downloads only pinned models (#89)
   # G1-15's licence check: reads an install's site-packages and this file (#220).
