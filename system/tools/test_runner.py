@@ -49,6 +49,11 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("Bash(mkdir -p:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
         self.assertNotIn("Bash(mkdir -p:*)", settings["permissions"]["allow"])
 
+    def test_every_role_may_check_a_merge_without_making_one(self):
+        # A :* rule matches whole words, so git merge doesn't cover git merge-tree (#180).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git merge-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
     def test_every_role_may_compare_a_prs_revisions(self):
         # Reviewers and the Coordinator (SR2) ask whether a PR's own commits changed or only main (#181).
         for role in CONFIG["runner"]["roles"]:
