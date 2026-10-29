@@ -28,3 +28,4 @@
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: grep", "level": "builder", "title": "Recurring permission denial: Bash: grep"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: python3 -I -c", "level": "builder", "title": "Recurring permission denial: Bash: python3 -I -c"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: python3 -I .github/scripts/criteria.py", "level": "builder", "title": "Recurring permission denial: Bash: python3 -I .github/scripts/criteria.py"}
+{"at": "2026-10-29T14:30:04+00:00", "key": "compound:Bash: python3 -I system/tools/post.py <<", "level": "builder", "title": "Recurring compound-command denial: Bash: python3 -I system/tools/post.py << \u2014 the rules say one command at a time"}
