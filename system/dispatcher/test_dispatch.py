@@ -141,6 +141,25 @@ class CandidatesTest(unittest.TestCase):
         self.assertEqual(github_state.snapshot(gh, IDENTITY)["new_goals"], ["G1"])
         self.assertEqual(github_state.snapshot(FakeGitHub(), IDENTITY)["new_goals"], [])
 
+    def test_a_red_gate_shared_with_main_does_not_restart_the_author(self):
+        # #336: while main's gate was red, the Dispatcher restarted #304's author about every two minutes, for nothing.
+        gh = FakeGitHub()
+        gh.graphql = lambda q, **v: {"repository": {"pullRequests": {"nodes": []}, "defaultBranchRef": {"target": {
+            "checkSuites": {"nodes": [{"app": {"databaseId": IDENTITY["gate_app_id"]},
+                                       "checkRuns": {"nodes": [{"status": "COMPLETED", "conclusion": "FAILURE"}]}}]}}}}}
+        self.assertEqual(github_state.snapshot(gh, IDENTITY)["main_gate"], "FAILURE")
+        self.assertIsNone(github_state.snapshot(FakeGitHub(), IDENTITY)["main_gate"])
+        prs = [pr(20, gate="FAILURE"), pr(22, gate="FAILURE", merge_state="DIRTY")]
+        red = dict(snap(prs=prs), main_gate="FAILURE")
+        self.assertEqual([(r, i, t) for r, i, t, _ in plan.candidates(red, set(), IDENTITY)],
+                         [("developer", 22, "PR #22 needs work: it conflicts with main.")])
+        green = dict(snap(prs=prs), main_gate="SUCCESS")
+        self.assertEqual([(i, w) for _, i, _, w in plan.candidates(green, set(), IDENTITY)], [(20, "pr-work"), (22, "pr-work")])
+        # The PR that fixes main is red for its own reason: it is still offered, or main stays red with no run on it.
+        fix = dict(snap(issues=[issue(5, "type:fix", "sev:1")], prs=[pr(24, gate="FAILURE", resolves=[5])]), main_gate="FAILURE")
+        self.assertEqual([(r, i, t) for r, i, t, _ in plan.candidates(fix, set(), IDENTITY)],
+                         [("developer", 24, "PR #24 needs work: its gate is red.")])
+
     def test_claimed_running_and_records_are_never_offered(self):
         s = snap(issues=[issue(1, "type:fix", "sev:1", "state:claimed"), issue(2, "type:fix", "sev:1"), issue(13, "record:decision-log")])
         self.assertEqual(plan.candidates(s, {2}, IDENTITY), [])

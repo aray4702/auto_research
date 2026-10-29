@@ -46,7 +46,7 @@ SAMPLE_RATE = 16000
 CHUNK = 1 << 20
 TIMEOUT = 60  # seconds without data before a download fails
 SAMPLE_MEETING = "AMI-ci"  # lmt demo --sample's meeting (design/internal/g3-stage1.md)
-KINDS = ("librispeech", "ami")
+KINDS = ("librispeech", "ami", "concat")
 
 # The manifests name only LibriSpeech and AMI sources (design/internal/g1-stage1.md §5a). AMI's RTTMs come from
 # BUT's diarization setup, at the one commit the manifests pin. `pin` refuses any other URL, and
@@ -136,16 +136,20 @@ class Fixture:
 @dataclass(frozen=True)
 class Dataset:
     name: str
-    set: str  # "ci"; 5b adds "full"
+    set: str  # "ci" or "full"
     kind: str  # one of KINDS
     source: str | None = None  # librispeech: the archive's source id
     utterances: tuple[str, ...] = ()
-    meetings: tuple[str, ...] = ()  # ami: one meeting, and its three sources' ids
-    audio: str | None = None
-    words: str | None = None
-    rttm: str | None = None
-    crop: float | None = None  # ami: seconds kept from the start
-    derived_sha256: str | None = None  # of the cropped WAV
+    meetings: tuple[str, ...] = ()  # ami: the meetings, each one item
+    audio: tuple[str, ...] = ()  # ami: each meeting's audio and RTTM source ids, parallel to meetings
+    words: str | None = None  # ami: the annotations archive
+    rttm: tuple[str, ...] = ()
+    crop: float | None = None  # ami, with one meeting: seconds kept from the start
+    derived_sha256: str | None = None  # of the cropped (ami) or joined (concat) WAV
+    of: str | None = None  # concat: the ami dataset whose meetings the slices are
+    concat: tuple[Piece, ...] = ()  # concat: one slice per meeting of `of`, in its order
+    gap: float = 0.0  # concat: seconds of zero samples between pieces
+    cut: float | None = None  # concat: seconds kept from the start of the joined audio
 
 
 @dataclass(frozen=True)
@@ -225,7 +229,7 @@ def _load(sources_file, sets_file):
         dataset = _dataset(entry, sources, where)
         if dataset.name in datasets:
             raise ValueError(f"{where}: name {dataset.name!r} is repeated")
-        _check_dataset(dataset, sources, where)
+        _check_dataset(dataset, sources, datasets, where)
         datasets[dataset.name] = dataset
     return Manifests(sources=sources, fixtures=fixtures, datasets=datasets)
 
@@ -336,11 +340,18 @@ def _dataset(entry, sources, where):
     if common["kind"] == "ami":
         crop = entry.get("crop")
         sha = entry.get("derived_sha256")
-        return Dataset(**common, meetings=_strings(entry, "meetings", where), audio=_get(entry, "audio", str, where),
-                       words=_get(entry, "words", str, where), rttm=_get(entry, "rttm", str, where),
+        return Dataset(**common, meetings=_strings(entry, "meetings", where), audio=_strings(entry, "audio", where),
+                       words=_get(entry, "words", str, where), rttm=_strings(entry, "rttm", where),
                        crop=None if crop is None else float(_get(entry, "crop", (int, float), where)),
                        derived_sha256=None if sha is None else _hex64(_get(entry, "derived_sha256", str, where),
                                                                      where))
+    if common["kind"] == "concat":
+        cut = entry.get("cut")
+        return Dataset(**common, of=_get(entry, "of", str, where),
+                       concat=tuple(_piece(p, sources, where) for p in _get(entry, "concat", list, where)),
+                       gap=float(_get(entry, "gap", (int, float), where)),
+                       cut=None if cut is None else float(_get(entry, "cut", (int, float), where)),
+                       derived_sha256=_hex64(_get(entry, "derived_sha256", str, where), where))
     raise ValueError(f"{where}: kind must be one of {', '.join(KINDS)}")
 
 
@@ -351,8 +362,11 @@ def _strings(entry, key, where):
     return tuple(values)
 
 
-def _check_dataset(dataset, sources, where):
-    for source_id in _source_ids(dataset):
+def _check_dataset(dataset, sources, datasets, where):
+    if dataset.kind == "concat":
+        _check_concat(dataset, datasets, where)
+        return
+    for source_id in _source_ids(dataset, datasets):
         if source_id not in sources:
             raise ValueError(f"{where}: source {source_id!r} isn't in sources.toml")
     if dataset.kind == "librispeech":
@@ -368,22 +382,62 @@ def _check_dataset(dataset, sources, where):
             if str(_trans_member(flac)) not in listed:
                 raise ValueError(f"{where}: {_trans_member(flac)} isn't a member of {source.id}")
         return
-    (meeting, *more) = dataset.meetings
-    if more:
-        raise ValueError(f"{where}: an ami dataset has one meeting")
-    for source_id in (dataset.audio, dataset.rttm):
+    if not len(dataset.audio) == len(dataset.rttm) == len(dataset.meetings):
+        raise ValueError(f"{where}: audio and rttm must be lists parallel to meetings")
+    for source_id in (*dataset.audio, *dataset.rttm):
         if sources[source_id].members:
             raise ValueError(f"{where}: {source_id} must be a single file, without members")
-    if not _words_members(sources[dataset.words], meeting):
-        raise ValueError(f"{where}: {dataset.words} has no {meeting}.<speaker>.words.xml member")
+    for meeting in dataset.meetings:
+        if not _words_members(sources[dataset.words], meeting):
+            raise ValueError(f"{where}: {dataset.words} has no {meeting}.<speaker>.words.xml member")
     if (dataset.crop is None) != (dataset.derived_sha256 is None):
         raise ValueError(f"{where}: crop and derived_sha256 go together")
     if dataset.crop is not None and dataset.crop <= 0:
         raise ValueError(f"{where}: crop must be positive")
+    if dataset.crop is not None and len(dataset.meetings) > 1:
+        raise ValueError(f"{where}: crop is allowed only with one meeting")
 
 
-def _source_ids(dataset):
-    return (dataset.source,) if dataset.kind == "librispeech" else (dataset.audio, dataset.words, dataset.rttm)
+def _check_concat(dataset, datasets, where):
+    """A concat dataset joins slices of an ami dataset above it: one per meeting, in its order, each from 0."""
+    of = datasets.get(dataset.of)
+    if of is None or of.kind != "ami":
+        raise ValueError(f"{where}: of must name an ami dataset above it, not {dataset.of!r}")
+    if any(p.member is not None for p in dataset.concat):
+        raise ValueError(f"{where}: a concat dataset's pieces are slices, {{source, start, end}}")
+    if tuple(p.source for p in dataset.concat) != of.audio:
+        raise ValueError(f"{where}: concat must be one slice of each of {of.name}'s meetings' audio, in its order")
+    if any(p.start != 0 for p in dataset.concat):
+        raise ValueError(f"{where}: each slice starts at 0")
+    if dataset.gap < 0:
+        raise ValueError(f"{where}: gap must be at least 0")
+    if dataset.cut is not None and dataset.cut <= 0:
+        raise ValueError(f"{where}: cut must be positive")
+
+
+def _source_ids(dataset, datasets):
+    """The sources the dataset's recipe reads. A concat dataset reads only its pieces before the cut, and their
+    meetings' annotations and RTTMs."""
+    if dataset.kind == "librispeech":
+        return (dataset.source,)
+    if dataset.kind == "ami":
+        return (*dataset.audio, dataset.words, *dataset.rttm)
+    of, read = datasets[dataset.of], _read_pieces(dataset)
+    return (*(p.source for p, _ in read), of.words, *of.rttm[:len(read)])
+
+
+def _read_pieces(dataset):
+    """(piece, offset in seconds) of a concat dataset's pieces that start before its cut, as `concat` places
+    them: in whole samples, with round(gap × 16000) between pieces."""
+    gap, at, read = round(dataset.gap * SAMPLE_RATE), 0, []
+    for i, piece in enumerate(dataset.concat):
+        if i:
+            at += gap
+        if dataset.cut is not None and at >= round(dataset.cut * SAMPLE_RATE):
+            break
+        read.append((piece, at / SAMPLE_RATE))
+        at += round(piece.end * SAMPLE_RATE) - round(piece.start * SAMPLE_RATE)
+    return read
 
 
 def _flac_members(source):
@@ -704,11 +758,12 @@ def fetch(set_name: str) -> list[Item]:
     if not chosen:
         names = sorted({d.set for d in manifests.datasets.values()})
         raise UsageError(set_name, f"not a set in sets.toml ({', '.join(names)})")
-    for source_id in dict.fromkeys(s for d in chosen for s in _source_ids(d)):
+    for source_id in dict.fromkeys(s for d in chosen for s in _source_ids(d, manifests.datasets)):
         fetch_source(manifests.sources[source_id])
+    recipes = {"librispeech": _librispeech, "ami": _ami, "concat": _joined}
     items = []
     for dataset in chosen:
-        items += _librispeech(dataset, manifests) if dataset.kind == "librispeech" else _ami(dataset, manifests)
+        items += recipes[dataset.kind](dataset, manifests)
     return items
 
 
@@ -724,7 +779,7 @@ def sample_meeting(*, offline: bool = False) -> Path:
         return path
     if offline:
         raise InputError("LMT_DATA_DIR", "the sample meeting isn't downloaded; run once without --offline")
-    source = manifests.sources[dataset.audio]
+    source = manifests.sources[dataset.audio[0]]
     fetch_source(source)
     return _crop(source_file(source), dataset)
 
@@ -742,20 +797,63 @@ def _librispeech(dataset, manifests):
 
 
 def _ami(dataset, manifests):
-    """The meeting's one item: the audio (cropped when `crop` is set), its words as ref_text and its RTTM turns."""
-    (meeting,) = dataset.meetings
+    """One item per meeting: its audio (cropped when `crop` is set), its words as ref_text and its RTTM turns."""
+    items = []
+    for i, meeting in enumerate(dataset.meetings):
+        words, turns = _meeting_references(dataset, manifests, i)
+        audio = source_file(manifests.sources[dataset.audio[i]])
+        if dataset.crop is not None:
+            audio = _crop(audio, dataset)
+            words, turns = crop_references(words, turns, dataset.crop)
+        items.append(_item(dataset.name, meeting, audio, words, turns))
+    return items
+
+
+def _meeting_references(dataset, manifests, i):
+    """The words and turns of an ami dataset's i-th meeting, from the cache."""
+    meeting = dataset.meetings[i]
     words_root = data_dir() / "sources" / dataset.words
     words = ami_words([(letter, words_root / path) for letter, path in
                        _words_members(manifests.sources[dataset.words], meeting)])
-    turns = rttm_turns(source_file(manifests.sources[dataset.rttm]), meeting)
-    audio = source_file(manifests.sources[dataset.audio])
-    if dataset.crop is not None:
-        audio = _crop(audio, dataset)
-        words, turns = crop_references(words, turns, dataset.crop)
+    return words, rttm_turns(source_file(manifests.sources[dataset.rttm[i]]), meeting)
+
+
+def _item(name, id, audio, words, turns):
     with wave.open(str(audio), "rb") as w:
         duration = w.getnframes() / w.getframerate()
-    return [Item(dataset.name, meeting, audio, duration, ref_text=" ".join(text for _, _, text in words if text),
-                 ref_turns=tuple(turns))]
+    return Item(name, id, audio, duration, ref_text=" ".join(text for _, _, text in words if text),
+                ref_turns=tuple(turns))
+
+
+def _joined(dataset, manifests):
+    """A concat dataset's one item, derived/<name>/<name>.wav: the slices before the cut joined by `concat` and
+    checked against derived_sha256, with each slice's words and turns from its meeting in `of`, placed with
+    `place_references` and cropped at the cut as AMI-ci's are."""
+    of, read = manifests.datasets[dataset.of], _read_pieces(dataset)
+    path = data_dir() / "derived" / dataset.name / f"{dataset.name}.wav"
+    if not _verified(path, dataset.derived_sha256):
+        content = joined_wav(dataset, manifests)
+        digest = hashlib.sha256(content).hexdigest()
+        if digest != dataset.derived_sha256:
+            raise InputError(str(path), f"the joined WAV's SHA-256, {digest}, doesn't match sets.toml")
+        _write_member(io.BytesIO(content), path, dataset.derived_sha256)
+    words, turns = [], []
+    for i, (piece, offset) in enumerate(read):
+        placed_words, placed_turns = place_references(*_meeting_references(of, manifests, i), piece.start,
+                                                      piece.end, offset)
+        words += placed_words
+        turns += placed_turns
+    if dataset.cut is not None:
+        words, turns = crop_references(words, turns, dataset.cut)
+    return [_item(dataset.name, dataset.name, path, words, turns)]
+
+
+def joined_wav(dataset: Dataset, manifests: Manifests) -> bytes:
+    """A concat dataset's WAV bytes, from the slices that start before its cut, in the cache."""
+    samples = [slice_wav(source_file(manifests.sources[piece.source]), piece.start, piece.end)
+               for piece, _ in _read_pieces(dataset)]
+    joined, _ = concat(samples, dataset.gap, dataset.cut)
+    return _wav_bytes(joined.astype("<i2").tobytes())
 
 
 def ami_words(files: list[tuple[str, Path]]) -> list[tuple[float, float, str]]:

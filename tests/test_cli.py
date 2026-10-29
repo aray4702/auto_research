@@ -172,8 +172,10 @@ class UsageErrorTest(unittest.TestCase):
         cli.validate(args)
         self.assertEqual(args.formats, ["vtt", "txt"])
 
+    @pytest.mark.criterion("G1-4")
     def test_default_formats(self):
         args = cli.build_parser().parse_args(["transcribe", "a.wav"])
+        self.assertEqual(args.formats, "txt,srt,vtt,json")
         cli.validate(args)
         self.assertEqual(args.formats, ["txt", "srt", "vtt", "json"])
 
@@ -205,6 +207,25 @@ class UsageErrorTest(unittest.TestCase):
     def test_update_readme_only_with_full(self):
         self.assertUsageError(["eval", "--set", "ci", "--update-readme"], "--update-readme")
         self.assertUsageError(["eval", "--check-readme", "--update-readme"], "--update-readme")
+
+
+def every_parser(parser):
+    """`parser` and each parser under it, at any depth."""
+    yield parser
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                yield from every_parser(sub)
+
+
+class EnglishOnlyTest(unittest.TestCase):
+    @pytest.mark.criterion("G1-7")
+    def test_no_language_option(self):
+        found = {option for parser in every_parser(cli.build_parser()) for action in parser._actions
+                 for option in action.option_strings}
+        self.assertIn("--num-speakers", found)  # guards the walk: it reached transcribe's parser
+        self.assertIn("--bytes", found)  # and one two levels down
+        self.assertEqual([o for o in found if "lang" in o.lower()], [])
 
 
 class HandlerTest(unittest.TestCase):
