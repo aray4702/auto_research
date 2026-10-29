@@ -78,3 +78,41 @@ class TestCommittedClip:
         with wave.open(str(ROOT / clip["path"]), "rb") as w:
             assert (w.getframerate(), w.getnchannels(), w.getsampwidth()) == (16000, 1, 2)
             assert 55.0 <= w.getnframes() / 16000 <= 70.0
+
+
+class TestEncodings:
+    """The clip's five encodings in sets.toml (design/internal/g1-formats.md, "sets.toml")."""
+
+    SETS_TEXT = (datasets.MANIFEST_DIR / "sets.toml").read_text(encoding="utf-8")
+
+    def test_the_clip_has_the_five_encodings_and_an_ffmpeg_version(self):
+        clip = next(f for f in SETS["fixture"] if f["name"] == "clip")
+        assert [e["format"] for e in clip["encodings"]] == ["flac", "mp3", "m4a", "mp4", "mov"]
+        assert all(HEX64.match(e["sha256"]) for e in clip["encodings"])
+        assert isinstance(clip["ffmpeg"], str) and clip["ffmpeg"]
+
+    def test_the_loader_reads_them(self):
+        fixture = datasets.load_manifests().fixtures["clip"]
+        assert [(e.format, e.sha256) for e in fixture.encodings] == [
+            (e["format"], e["sha256"]) for e in next(f for f in SETS["fixture"] if f["name"] == "clip")["encodings"]]
+        assert fixture.ffmpeg
+
+    @pytest.mark.parametrize("old, new, problem", [
+        (re.compile(r'^ffmpeg = .*\n', re.MULTILINE), "", "ffmpeg and encodings must be given together"),
+        (re.compile(r'^encodings = \[.*?^\]\n', re.MULTILINE | re.DOTALL), "",
+         "ffmpeg and encodings must be given together"),
+        ('format = "mov"', 'format = "wav"', "format 'wav' isn't one of flac, mp3, m4a, mp4, mov"),
+        ('format = "mov"', 'format = "mp4"', "format 'mp4' is repeated"),
+        (re.compile(r'(format = "flac", sha256 = ")([0-9a-f]{64})'), lambda m: m[1] + m[2].upper(),
+         "isn't a SHA-256 in lower-case hex"),
+    ])
+    def test_a_bad_entry_raises(self, tmp_path, old, new, problem):
+        if isinstance(old, str):
+            text = self.SETS_TEXT.replace(old, new)
+        else:
+            text = old.sub(new, self.SETS_TEXT)
+        assert text != self.SETS_TEXT
+        (tmp_path / "sets.toml").write_text(text, encoding="utf-8")
+        (tmp_path / "sources.toml").write_bytes((datasets.MANIFEST_DIR / "sources.toml").read_bytes())
+        with pytest.raises(ValueError, match=re.escape(problem)):
+            datasets.load_manifests(tmp_path)

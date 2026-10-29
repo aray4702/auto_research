@@ -2,9 +2,11 @@
 
 Every file that's downloaded is listed in `manifests/sources.toml`, with its SHA-256, and only the archive members
 listed there are extracted. `manifests/sets.toml` says what's built from them. The cache is
-`<LMT_DATA_DIR>/sources/<source id>/<member path>`. Nothing here imports the eval extra.
+`<LMT_DATA_DIR>/sources/<source id>/<member path>`. Nothing here imports the eval extra. The fixture's encodings
+are made by ffmpeg, with the arguments in ENCODINGS (design/internal/g1-formats.md).
 
     python -m lmt.eval.datasets build-fixture clip [--write]
+    python -m lmt.eval.datasets encode-fixture clip [--write]
 """
 
 import argparse
@@ -13,6 +15,7 @@ import http.client
 import io
 import os
 import re
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -34,6 +37,25 @@ CHUNK = 1 << 20
 TIMEOUT = 60  # seconds without data before a download fails
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
+
+# The arguments after `ffmpeg` for each encoding, in the order they're made (design/internal/g1-formats.md,
+# "The recipe"). <wav> is the fixture's absolute path and <out> a temporary file beside it. They're never read
+# from the manifest, so the tool can run only these.
+_AUDIO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-map", "0:a:0", "-map_metadata", "-1",
+             "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1")
+_VIDEO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1",
+             "-map", "0:a:0", "-map", "1:v:0", "-shortest", "-map_metadata", "-1", "-fflags", "+bitexact",
+             "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1")
+_AAC = ("-c:a", "aac", "-profile:a", "aac_low", "-b:a", "128k", "-ar", "48000", "-ac", "1")
+_STILL = ("-c:v", "mpeg4", "-pix_fmt", "yuv420p")
+ENCODINGS: dict[str, tuple[str, ...]] = {
+    "flac": (*_AUDIO_IN, "-c:a", "flac", "-compression_level", "8", "-sample_fmt", "s16", "-ar", "16000", "-ac", "1",
+             "-f", "flac", "<out>"),
+    "mp3": (*_AUDIO_IN, "-c:a", "libmp3lame", "-b:a", "128k", "-ar", "44100", "-ac", "1", "-f", "mp3", "<out>"),
+    "m4a": (*_AUDIO_IN, *_AAC, "-f", "ipod", "<out>"),
+    "mp4": (*_VIDEO_IN, *_AAC, *_STILL, "-f", "mp4", "<out>"),
+    "mov": (*_VIDEO_IN, *_AAC, *_STILL, "-f", "mov", "<out>"),
+}
 
 
 @dataclass(frozen=True)
@@ -60,6 +82,12 @@ class Piece:
 
 
 @dataclass(frozen=True)
+class Encoding:
+    format: str  # a key of ENCODINGS; the file is the fixture's path with this as its suffix
+    sha256: str
+
+
+@dataclass(frozen=True)
 class Fixture:
     name: str
     path: str  # from the repository root
@@ -68,6 +96,8 @@ class Fixture:
     derived_sha256: str
     reference_sha256: str
     concat: tuple[Piece, ...]
+    ffmpeg: str | None = None  # the version that made the encodings
+    encodings: tuple[Encoding, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -120,6 +150,7 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
             reference_sha256=_hex64(_get(entry, "reference_sha256", str, where), where),
             concat=tuple(Piece(source=_get(p, "source", str, where), member=_get(p, "member", str, where))
                          for p in _get(entry, "concat", list, where)),
+            **_encodings(entry, where),
         )
         if fixture.name in fixtures:
             raise ValueError(f"{where}: name {fixture.name!r} is repeated")
@@ -155,6 +186,24 @@ def _hex64(value, where):
     if not _HEX64.match(value):
         raise ValueError(f"{where}: {value!r} isn't a SHA-256 in lower-case hex")
     return value
+
+
+def _encodings(entry, where):
+    """The fixture's `ffmpeg` and `encodings`, which come together or not at all."""
+    if ("ffmpeg" in entry) != ("encodings" in entry):
+        raise ValueError(f"{where}: ffmpeg and encodings must be given together")
+    if "ffmpeg" not in entry:
+        return {}
+    encodings = []
+    for j, e in enumerate(_get(entry, "encodings", list, where)):
+        at = f"{where}, encoding {j + 1}"
+        encoding = Encoding(format=_get(e, "format", str, at), sha256=_hex64(_get(e, "sha256", str, at), at))
+        if encoding.format not in ENCODINGS:
+            raise ValueError(f"{at}: format {encoding.format!r} isn't one of {', '.join(ENCODINGS)}")
+        if encoding.format in {x.format for x in encodings}:
+            raise ValueError(f"{at}: format {encoding.format!r} is repeated")
+        encodings.append(encoding)
+    return {"ffmpeg": _get(entry, "ffmpeg", str, where), "encodings": tuple(encodings)}
 
 
 def _member(entry, where):
@@ -327,6 +376,39 @@ def _transcript(flac):
     raise ValueError(f"{flac.parent}: no transcript line for {utterance}")
 
 
+# --- The encodings ---------------------------------------------------------------------------------------------
+
+
+def ffmpeg_version() -> str:
+    """The token after "ffmpeg version " on the first line of `ffmpeg -version`."""
+    try:
+        r = subprocess.run(["ffmpeg", "-version"], check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise InputError("ffmpeg", "not found on PATH") from None
+    first = r.stdout.splitlines()[0] if r.stdout else ""
+    if r.returncode != 0 or not first.startswith("ffmpeg version "):
+        raise InputError("ffmpeg", "`ffmpeg -version` didn't give its version")
+    return first.removeprefix("ffmpeg version ").split()[0]
+
+
+def encoding_path(fixture: Fixture, fmt: str) -> Path:
+    """tests/fixtures/clip.<fmt>: the fixture's path with the format as its suffix, never from the manifest."""
+    return Path(fixture.path).with_suffix(f".{fmt}")
+
+
+def encode(fixture: Fixture, fmt: str, out: Path) -> None:
+    """One encoding of the fixture's WAV to `out`, by ENCODINGS[fmt]. A failed ffmpeg raises InputError."""
+    wav = str(Path(fixture.path).resolve())
+    argv = ["ffmpeg", *(wav if a == "<wav>" else str(out) if a == "<out>" else a for a in ENCODINGS[fmt])]
+    try:
+        r = subprocess.run(argv, check=False, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise InputError("ffmpeg", "not found on PATH") from None
+    if r.returncode != 0:
+        last = (r.stderr.strip().splitlines() or [f"exit status {r.returncode}"])[-1]
+        raise InputError(str(encoding_path(fixture, fmt)), f"ffmpeg failed: {last}")
+
+
 # --- The entry point -------------------------------------------------------------------------------------------
 
 
@@ -337,19 +419,60 @@ def main(argv=None) -> int:
     b = commands.add_parser("build-fixture", help="Fetch a fixture's sources, build it and check its hashes.")
     b.add_argument("name", help="The fixture's name in sets.toml.")
     b.add_argument("--write", action="store_true", help="Write the fixture and its reference to their paths first.")
+    e = commands.add_parser("encode-fixture", help="Encode a fixture with ffmpeg and check the files' hashes.")
+    e.add_argument("name", help="The fixture's name in sets.toml.")
+    e.add_argument("--write", action="store_true", help="Write the encodings beside the fixture first.")
     args = parser.parse_args(argv)
+    command = _build_fixture_command if args.command == "build-fixture" else _encode_fixture_command
     try:
-        return _build_fixture_command(args.name, args.write)
+        return command(args.name, args.write)
     except LmtError as e:
         print(f"lmt: error: {e}", file=sys.stderr)
         return e.exit_code
 
 
-def _build_fixture_command(name, write):
+def _fixture(name):
     manifests = load_manifests(MANIFEST_DIR)
     fixture = manifests.fixtures.get(name)
     if fixture is None:
         raise UsageError(name, f"not a fixture in sets.toml ({', '.join(sorted(manifests.fixtures))})")
+    return manifests, fixture
+
+
+def _encode_fixture_command(name, write):
+    _, fixture = _fixture(name)
+    if not fixture.encodings:
+        raise UsageError(name, "has no encodings in sets.toml")
+    version = ffmpeg_version()
+    temps, hashes = {}, {}
+    try:
+        for fmt in ENCODINGS:
+            fd, temp = tempfile.mkstemp(dir=Path(fixture.path).parent, suffix=f".{fmt}.tmp")
+            os.close(fd)
+            temps[fmt] = Path(temp)
+            encode(fixture, fmt, temps[fmt])
+            hashes[fmt] = _sha256_file(temps[fmt])
+        if write:
+            for fmt, temp in temps.items():
+                temp.replace(encoding_path(fixture, fmt))
+    finally:
+        for temp in temps.values():
+            temp.unlink(missing_ok=True)
+    for fmt, digest in hashes.items():
+        print(f"{encoding_path(fixture, fmt)} {digest}")
+    print(f"ffmpeg {version}")
+    if version != fixture.ffmpeg:
+        raise InputError("ffmpeg", f"version {version} here, sets.toml records {fixture.ffmpeg}; "
+                                   "the hashes can't be compared")
+    expected = {e.format: e.sha256 for e in fixture.encodings}
+    for fmt, digest in hashes.items():
+        if digest != expected.get(fmt):
+            raise InputError(str(encoding_path(fixture, fmt)), "the encoded file's SHA-256 doesn't match sets.toml")
+    return 0
+
+
+def _build_fixture_command(name, write):
+    manifests, fixture = _fixture(name)
     for source_id in dict.fromkeys(p.source for p in fixture.concat):
         fetch_source(manifests.sources[source_id])
     audio, text = build_fixture(fixture, manifests)
