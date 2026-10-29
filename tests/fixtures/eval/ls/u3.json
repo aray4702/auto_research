@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "lmt_version": "0.1.0",
+  "source": {"file": "u3.flac", "duration": 1.5},
+  "models": {"asr": {"name": "distil-large-v3", "repository": "Systran/faster-distil-whisper-large-v3", "revision": "0"}, "diarization": null},
+  "speakers": [],
+  "segments": []
+}
