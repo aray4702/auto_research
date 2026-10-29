@@ -6,13 +6,23 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11"
-dependencies = []                      # 1b (#122) adds the planned ones
+dependencies = [
+  "faster-whisper>=1.1",
+  "pyannote.audio>=3.3,<4",            # answer 8a
+  "torch>=2.5,<2.9",                   # direct, so the CPU index applies on Linux; <2.9 while pyannote.audio 3.x reads audio through torchaudio's I/O
+  "torchaudio>=2.5,<2.9",
+  "huggingface_hub>=0.25",
+]
+
+[project.optional-dependencies]
+eval = ["jiwer>=3.1", "pyannote.metrics>=3.2,<4", "regex", "more-itertools"]   # regex and more-itertools: the vendored normalizer
 
 [project.scripts]
 lmt = "lmt.cli:run"
 
 [dependency-groups]
-dev = ["pytest", "ruff"]               # 1b adds the eval extra's packages here too
+# The eval extra, so the agents' `uv run --frozen pytest` has it; stage 2's test libraries.
+dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "jsonschema", "srt", "webvtt-py"]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,6 +36,15 @@ environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
