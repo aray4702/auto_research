@@ -73,6 +73,6 @@ def merge_notice(action, pr, head, url):
     texts = {
         "ask-owner-to-merge": f"PR #{pr} is approved and green: please turn on auto-merge, or merge it. {url}",
         "ask-owner-to-approve": f"PR #{pr} touches protected paths. The Reviewer approved it and its gate is green: it needs your code-owner approval from the second account. {url}",
-        "ask-owner-to-reapprove": f"PR #{pr} was refreshed from main, which dismissed your code-owner approval. Please approve it again from the second account. {url}",
+        "ask-owner-to-reapprove": f"PR #{pr} changed since your code-owner approval, so the approval no longer covers it. Please approve it again from the second account. {url}",
     }
     return (f"{action}:{pr}:{head}", texts[action])
