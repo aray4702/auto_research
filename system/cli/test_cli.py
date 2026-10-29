@@ -231,7 +231,10 @@ class DashboardServerTest(unittest.TestCase):
             servers.append((addr, server))
             started.set()
             return server
+        from system.cli.test_progress import ProgressViewTest, RolesTest
         with mock.patch.object(arsys.data, "collect", return_value=sample()), \
+             mock.patch.object(arsys.data, "progress", return_value=ProgressViewTest().page_data()), \
+             mock.patch.object(arsys.data, "roles", return_value=RolesTest().roles()), \
              mock.patch.object(arsys.http.server, "ThreadingHTTPServer", side_effect=capture), \
              mock.patch("builtins.print"):
             t = threading.Thread(target=arsys.serve, args=({}, 8765), daemon=True)
@@ -242,6 +245,12 @@ class DashboardServerTest(unittest.TestCase):
             base = f"http://127.0.0.1:{server.server_address[1]}"
             page = urllib.request.urlopen(base + "/").read().decode()
             self.assertIn("auto_research", page)
+            self.assertIn('<a href="/" aria-current=page>Progress</a>', page, "Progress is the default tab (#246)")
+            self.assertIn("Met: 0 of 2 features", page)
+            roles = urllib.request.urlopen(base + "/roles").read().decode()
+            self.assertIn('<a href="/roles" aria-current=page>Roles</a>', roles)
+            overview = urllib.request.urlopen(base + "/overview").read().decode()
+            self.assertIn('<a href="/overview" aria-current=page>Overview</a>', overview)
             icon = urllib.request.urlopen(base + "/favicon.svg")
             self.assertEqual(icon.headers["Content-Type"], "image/svg+xml")
             self.assertEqual(icon.read().decode(), views.ICON_SVG)
