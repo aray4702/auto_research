@@ -39,7 +39,7 @@ def denials(runs, now, explained=()):
         if len(ids) < 3:
             continue
         where = f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}."
-        if set(sig.split()) & set(usage.OPERATORS):
+        if set(sig.split()) & set(usage.COMPOUND):
             out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
                         f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
         else:
