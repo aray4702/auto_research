@@ -15,6 +15,8 @@ IDENTITY = post.load_identity()
 CAPS = tomllib.loads((ROOT / "system" / "caps.toml").read_text())
 NOW = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)
 BOT, SECOND = IDENTITY["reviewer_app"]["bot_login"], IDENTITY["second_login"]
+# A protected file SR3 leaves to the Owner (#221), for the tests of what the Owner is asked.
+OWNERS = ["blueprint.md"]
 
 
 def issue(n, *labels, title="t"):
@@ -235,7 +237,7 @@ class MergePlanTest(unittest.TestCase):
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("refresh", 8, "behind main")])
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", reviews=app)])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("auto-merge", 9, "h2")])
-        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, reviews=app)])
+        s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, files=OWNERS, reviews=app)])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 9, "h2")], "protected, no Owner approval yet (#127)")
         s = snap(prs=[pr(9, merge_state="CLEAN", decision="APPROVED", protected=True, files=["system/standing-rules.md"],
                          reviews=app + [(SECOND, "APPROVED", "h2")])])
@@ -248,13 +250,13 @@ class MergePlanTest(unittest.TestCase):
 
     def test_a_protected_pr_is_refreshed_before_the_owner_is_asked_once(self):
         # Behind main and waiting only on the Owner: refresh first, ask nothing yet.
-        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BEHIND", reviews=[(BOT, "APPROVED", "h1")], head="h1")])
+        s = snap(prs=[pr(23, role="architect", protected=True, files=OWNERS, merge_state="BEHIND", reviews=[(BOT, "APPROVED", "h1")], head="h1")])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("refresh", 23, "behind main")])
         # Refreshed: the App's approval is on the old head, so renew it, and still don't ask the Owner.
-        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h1")], head="h2")])
+        s = snap(prs=[pr(23, role="architect", protected=True, files=OWNERS, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h1")], head="h2")])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("renew", 23, "h1")])
         # Renewed on the new head and up to date: now ask the Owner, once.
-        s = snap(prs=[pr(23, role="architect", protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")], head="h2")])
+        s = snap(prs=[pr(23, role="architect", protected=True, files=OWNERS, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")], head="h2")])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 23, "h2")])
         # The Owner approved the same head: SR1 merges it (#116).
         s = snap(prs=[pr(23, role="architect", protected=True, merge_state="CLEAN", decision="APPROVED",
@@ -299,7 +301,7 @@ class MergePlanTest(unittest.TestCase):
 
     def test_an_owner_held_pr_goes_behind_one_sr1_can_merge_and_is_asked_to_reapprove(self):
         # #113 waited on the Owner's re-approval and held #115, which SR1 could merge (#127).
-        held = pr(113, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h1")])
+        held = pr(113, protected=True, files=OWNERS, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h1")])
         held["fresh"] = {SECOND: False}
         ready = pr(115, protected=True, merge_state="CLEAN", decision="APPROVED", reviews=[(BOT, "APPROVED", "h2"), (SECOND, "APPROVED", "h2")])
         acts = merge_rules.merge_plan(snap(prs=[held, ready]), IDENTITY)
@@ -349,17 +351,17 @@ class MergePlanTest(unittest.TestCase):
 
     def test_the_owner_is_not_asked_while_github_is_still_working_out_the_merge_state(self):
         # Right after main moves, GitHub reports mergeStateStatus UNKNOWN; #34 was really 12 commits behind.
-        s = snap(prs=[pr(34, protected=True, merge_state="UNKNOWN", reviews=[(BOT, "APPROVED", "h2")])])
+        s = snap(prs=[pr(34, protected=True, files=OWNERS, merge_state="UNKNOWN", reviews=[(BOT, "APPROVED", "h2")])])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [])
-        s = snap(prs=[pr(34, protected=True, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")])])
+        s = snap(prs=[pr(34, protected=True, files=OWNERS, merge_state="BLOCKED", reviews=[(BOT, "APPROVED", "h2")])])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 34, "h2")])
 
     def test_renewals_and_owner_approvals(self):
         s = snap(prs=[pr(9, reviews=[(BOT, "APPROVED", "h1")])])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("renew", 9, "h1")])
-        s = snap(prs=[pr(9, protected=True, reviews=[(BOT, "APPROVED", "h2")])])
+        s = snap(prs=[pr(9, protected=True, files=OWNERS, reviews=[(BOT, "APPROVED", "h2")])])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("ask-owner-to-approve", 9, "h2")])
-        s = snap(prs=[pr(9, protected=True, reviews=[(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h1")])])
+        s = snap(prs=[pr(9, protected=True, files=OWNERS, reviews=[(BOT, "APPROVED", "h1"), (SECOND, "APPROVED", "h1")])])
         self.assertEqual(merge_rules.merge_plan(s, IDENTITY), [("renew", 9, "h1"), ("ask-owner-to-reapprove", 9, "h2")])
 
 
@@ -367,7 +369,7 @@ class SR2Test(unittest.TestCase):
     """#150: a refreshed PR whose own lines are unchanged goes to the Coordinator, not straight back to the Owner."""
     A, H = "a" * 40, "c" * 40
 
-    def refreshed(self, n=113, labels=(), files=(), merge_state="BLOCKED", same_lines=True, sign_off=None, fresh_sign_off=None,
+    def refreshed(self, n=113, labels=(), files=OWNERS, merge_state="BLOCKED", same_lines=True, sign_off=None, fresh_sign_off=None,
                   role="developer"):
         p = pr(n, role=role, protected=True, merge_state=merge_state, decision="APPROVED", head=self.H, labels=labels, files=files,
                reviews=[(BOT, "APPROVED", self.H), (SECOND, "APPROVED", self.A)])
@@ -389,8 +391,10 @@ class SR2Test(unittest.TestCase):
     def test_changed_own_lines_go_to_the_builder_unless_it_wrote_the_pr(self):
         self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False)]), IDENTITY),
                          [("ask-builder-to-sign-off", 113, self.A)])
-        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False, files=["system/dispatcher/plan.py"])]), IDENTITY),
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False, files=OWNERS + ["system/dispatcher/plan.py"])]), IDENTITY),
                          [("ask-builder-to-sign-off", 113, self.A)], "a change to the dispatch order too (#150)")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False, files=["system/dispatcher/plan.py"])]), IDENTITY),
+                         [("ask-builder-to-approve", 113, self.H)], "a PR SR3 covers goes to SR3 instead (#221)")
         self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=False, role="builder")]), IDENTITY),
                          [("ask-owner-to-reapprove", 113, self.H)], "the builder never judges its own changes for the Owner")
         self.assertEqual(merge_rules.merge_plan(snap(prs=[self.refreshed(same_lines=True, role="builder")]), IDENTITY),
@@ -476,6 +480,111 @@ class SR2Test(unittest.TestCase):
         p = pr(113, labels=["needs-decision:coordinator"], reviews=[(BOT, "APPROVED", "h2")])
         self.assertIn(("coordinator", 113, "Item #113 needs your decision (needs-decision:coordinator).", "decision"),
                       plan.candidates(snap(prs=[p]), set(), IDENTITY))
+
+
+class SR3Test(unittest.TestCase):
+    """#221: the builder approves a protected PR in the Owner's place; the Owner keeps a few files."""
+    H, OLD = "c" * 40, "d" * 40
+
+    def waiting(self, files=("system/rules.md",), labels=(), merge_state="BLOCKED", approval=None, fresh=None, app=None):
+        p = pr(120, role="developer", protected=True, merge_state=merge_state, decision="APPROVED", head=self.H, labels=labels,
+               files=files, reviews=[(BOT, "APPROVED", app or self.H)])
+        p["fresh"], p["builder_approval"] = {}, approval
+        if fresh is not None:
+            p["fresh"]["sr3"] = fresh
+        return p
+
+    def plan(self, *prs):
+        return merge_rules.merge_plan(snap(prs=list(prs)), IDENTITY)
+
+    @staticmethod
+    def reviewed(p, at):
+        p["reviews"][0]["at"] = at.isoformat().replace("+00:00", "Z")
+        return p
+
+    def test_the_builder_is_asked_once_instead_of_the_owner(self):
+        ask = [("ask-builder-to-approve", 120, self.H)]
+        self.assertEqual(self.plan(self.waiting()), ask)
+        self.assertEqual(self.plan(self.waiting(files=["system/dispatcher/plan.py", ".github/workflows/product.yml", "spec/acceptance.md"])), ask)
+        self.assertEqual(self.plan(self.waiting(merge_state="BEHIND")), [("refresh", 120, "behind main")] + ask)
+        for level in ("builder", "owner"):
+            self.assertEqual(self.plan(self.waiting(labels=[f"needs-decision:{level}"])), [], f"already with the {level}")
+        self.assertEqual(self.plan(self.waiting(app="e" * 40)), [], "the Reviewer's approval isn't current: nobody is asked")
+
+    def test_the_owner_keeps_the_blueprint_requirements_caps_and_the_rules_check(self):
+        for f in merge_rules.SR3_EXCLUDED:
+            self.assertEqual(self.plan(self.waiting(files=["system/rules.md", f])), [("ask-owner-to-approve", 120, self.H)], f)
+            self.assertEqual(self.plan(self.waiting(files=[f], merge_state="CLEAN", approval=self.H)), [("ask-owner-to-approve", 120, self.H)],
+                             f"{f}: a builder approval doesn't count")
+        for f in ("blueprint.md", "project_requirements.md", "system/standing-rules.md", "system/caps.toml"):
+            self.assertIn(f, merge_rules.SR3_EXCLUDED, "the Owner kept it")
+
+    def test_a_builder_approval_merges_and_survives_a_conflict_free_refresh(self):
+        self.assertEqual(self.plan(self.waiting(merge_state="CLEAN", approval=self.H)), [("auto-merge", 120, self.H)])
+        self.assertEqual(self.plan(self.waiting(merge_state="CLEAN", approval=self.OLD, fresh=True)), [("auto-merge", 120, self.H)])
+        self.assertEqual(self.plan(self.waiting(merge_state="CLEAN", approval=self.OLD, fresh=False)), [("ask-builder-to-approve", 120, self.H)],
+                         "the PR changed after the approval: judge again")
+        unprotected = self.waiting(approval=None)
+        unprotected["protected"] = False
+        self.assertFalse(merge_rules.sr3_covers(unprotected))
+
+    def test_only_a_recorded_builder_run_that_started_after_the_reviewers_approval_approves(self):
+        reviewed = NOW
+        target = self.reviewed(self.waiting(), reviewed)
+        runs = [{"event": "start", "run_id": "b-new", "role": "builder", "item": 120, "at": (reviewed + timedelta(minutes=5)).isoformat()},
+                {"event": "start", "run_id": "b-wrote", "role": "builder", "item": 120, "at": (reviewed - timedelta(minutes=5)).isoformat()},
+                {"event": "start", "run_id": "c-1", "role": "coordinator", "item": 120, "at": (reviewed + timedelta(minutes=5)).isoformat()},
+                {"event": "start", "run_id": "b-other", "role": "builder", "item": 99, "at": (reviewed + timedelta(minutes=5)).isoformat()}]
+        owner = IDENTITY["owner_login"]
+
+        def approved(role, run, head=self.H, login=owner, pr_=target):
+            body = post.with_marker(post.SR3_APPROVAL.format(head=head) + "\n\nchecked", role, run)
+            return merge_rules.builder_approved(pr_, [comment(1, login, body, 0)], runs, IDENTITY, post.MARKER)
+        self.assertEqual(approved("builder", "b-new"), self.H)
+        self.assertIsNone(approved("builder", "b-wrote"), "the run that wrote the PR: never its own approver")
+        self.assertIsNone(approved("builder", "b-new", pr_=self.reviewed(self.waiting(), reviewed + timedelta(minutes=10))),
+                          "the Reviewer approved again after the run started: it may have pushed what was approved")
+        self.assertIsNone(approved("builder", "b-new", pr_=self.waiting()), "no time on the review: nothing counts")
+        self.assertIsNone(approved("coordinator", "c-1"), "only the builder")
+        self.assertIsNone(approved("builder", "c-1"), "the run was a Coordinator's")
+        self.assertIsNone(approved("builder", "b-other"), "a run on another item")
+        self.assertIsNone(approved("builder", "b-9"), "a run the Dispatcher never recorded")
+        self.assertIsNone(approved("builder", "b-new", login="someone"), "not posted through post.py")
+        self.assertIsNone(approved("builder", "b-new", pr_=self.waiting(files=["blueprint.md"])), "a file the Owner kept")
+        quoted = post.with_marker("**Needs a decision: owner.**\n\nI would post:\n" + post.SR3_APPROVAL.format(head=self.H), "builder", "b-new")
+        self.assertIsNone(merge_rules.builder_approved(target, [comment(1, owner, quoted, 0)], runs, IDENTITY, post.MARKER),
+                          "an approval line quoted further down isn't an approval")
+
+    def test_a_writer_that_backdates_its_commit_still_cant_approve_it(self):
+        # The run that wrote the PR pushes a commit dated before its own start, then approves it. GitHub's time of
+        # the Reviewer's approval decides, not the date the writer set.
+        reviewed, owner = NOW, IDENTITY["owner_login"]
+        target = self.reviewed(self.waiting(), reviewed)
+        runs = [{"event": "start", "run_id": "b-wrote", "role": "builder", "item": 120, "at": (reviewed - timedelta(minutes=5)).isoformat()}]
+        approval = post.with_marker(post.SR3_APPROVAL.format(head=self.H) + "\n\nchecked", "builder", "b-wrote")
+        asked = []
+
+        class GitHub:
+            repo = "o/r"
+
+            def api(self, method, path, body=None, paginate=False):
+                asked.append(path)
+                if "/comments" in path:
+                    return [comment(1, owner, approval, 0)]
+                backdated = (reviewed - timedelta(days=1)).isoformat().replace("+00:00", "Z")
+                return {"commit": {"committer": {"date": backdated}}}
+        merge_rules.annotate(GitHub(), snap(prs=[target]), runs, IDENTITY, post.MARKER)
+        self.assertIsNone(target["builder_approval"])
+        self.assertEqual(asked, ["repos/o/r/issues/120/comments?per_page=100"], "no commit's own date is read")
+        self.assertEqual(merge_rules.merge_plan(snap(prs=[target]), IDENTITY), [("ask-builder-to-approve", 120, self.H)])
+
+    def test_the_builder_is_started_on_the_pr_and_its_escalation_reaches_the_owner(self):
+        p = pr(120, protected=True, labels=["needs-decision:builder"], reviews=[(BOT, "APPROVED", "h2")])
+        self.assertIn(("builder", 120, "Item #120 needs your decision (needs-decision:builder).", "decision"),
+                      plan.candidates(snap(prs=[p]), set(), IDENTITY))
+        question = dispatch.approval_question(self.waiting())
+        self.assertIn(f"post.py builder-approve 120 --head {self.H}", question)
+        self.assertIn("post.py escalate 120 --level owner", question)
 
 
 def comment(cid, login, body, minutes):

@@ -43,6 +43,8 @@ required_approvals = 1
 # false: a conflict-free refresh from main keeps an approval; the Dispatcher checks that nothing else
 # changed since (merge_rules.current, #118), as GitHub's dismissal did.
 dismiss_stale_reviews = false
-require_code_owner_reviews = true
+# false: GitHub no longer requires the second account's review on protected paths. The Dispatcher counts the
+# Owner's approval, an SR2 sign-off or the builder's SR3 approval instead (merge_rules.owner_approves, #221).
+require_code_owner_reviews = false
 allow_force_pushes = false
 allow_deletions = false
