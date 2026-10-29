@@ -2,6 +2,8 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #349 | Reviewer's findings on #386: a pull request runs tier 1 at most (933f962), so P6b's and P7c's PRs show the Developer's local `pytest -m models` result, P6b's with the four ffmpeg commands and their exit codes (G1-4's "the PR shows"); the ffmpeg step and `isolated` true are first confirmed on `main`'s `test-models`, a failure there is `sev:1`, and P10 marks G1-4 and G1-13 only after it. In `g3-stage1.md`, item 2a needs P7b too, and items 1 and 4b need P6a |
+| 2026-10-29 | architect, #349 | The Owner's "Break down L and XL items into S items" (2026-10-29): P6 (#349) splits into P6a (the subtitle checks, on the export goldens and a fake ffmpeg) and P6b (G1-4's test, with the real ffmpeg in `test-models`); P7 (#350) into P7a (the guard), P7b (`isolation.py`) and P7c (G1-13's test). Each has its own files, test, Needs and tier. `isolation.py` gains `wrap`, so P7b can test the namespace without the models. G1-4 and G1-13 are unchanged |
 | 2026-10-29 | architect, #372 | Reviewer's finding on #383: P12's step 6 could cut before a turn's first word and leave a piece with no words. A cut now also needs the piece to hold a word, and the tests gain both cases |
 | 2026-10-29 | architect, #372 | #372's measurement: AMI-ci's product DER is 0.426, mostly missed speech, and segments built from the diarization turns give 0.203. New item P12 makes `align.build` turns-first when there are turns, and keeps today's rule without them. #343 (P2b's reading) waits for it. `architecture.md`'s alignment paragraph changes with it, for the Owner's approval |
 | 2026-10-29 | architect, #345 | Reviewer's findings on #370: P11's fresh-process test runs the VAD through `get_speech_timestamps`, which pads to 512 samples; the `fake` fixture also fakes `onnxruntime` (and `faster_whisper.vad` for the fallback); the PR shows the Linux failure with a red ubuntu run on the tests alone, then the green one; the fallback's capture overlapping diarization's load is accepted, with the reasons |
@@ -24,22 +26,25 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | **P3** | One test per CLI option and per bad input (G1-6); no language option (G1-7) | P1 | `tests/test_g1_6.py` (new), `tests/test_cli.py`, `tests/test_models.py` (tags) | 2 |
 | **P4** | Bad input never crashes it (G1-11) | P1, E1 (#296/#299), P11 | `tests/bad_inputs.py` (new), `tests/test_g1_11.py` (new), `tests/test_decode_fuzz.py` (new) | 2 |
 | **P5** | The two-speaker product run and G1-3's test | #123's two-speaker clip | `tests/conftest.py`, `tests/test_g1_3.py` (new) | 2 |
-| **P6** | The exports' checks (G1-4) | P5 | `tests/subtitle_checks.py` (new), `tests/test_g1_4.py` (new), `.github/workflows/product.yml` (`test-models` only) | 3 |
-| **P7** | The network and files (G1-13) | P5 | `tests/isolation.py` (new), `tests/netguard/sitecustomize.py` (new), `tests/test_netguard.py` (new), `tests/test_g1_13.py` (new) | 2 |
+| **P6a** | The subtitle checks, on the export goldens and a fake ffmpeg (G1-4's helpers) | — | `tests/subtitle_checks.py` (new), `tests/test_subtitle_checks.py` (new) | 2 |
+| **P6b** | G1-4's test on both clips' product runs, with the real ffmpeg | P5, P6a | `tests/test_g1_4.py` (new), `.github/workflows/product.yml` (`test-models` only) | 3 |
+| **P7a** | The network guard (G1-13's `socket.connect` block, and G3's) | — | `tests/netguard/sitecustomize.py` (new), `tests/test_netguard.py` (new) | 2 |
+| **P7b** | `unshare --net` and the tree snapshot (G1-13's isolation and file compare) | — | `tests/isolation.py` (new), `tests/test_isolation.py` (new) | 2 |
+| **P7c** | G1-13's test on the two-speaker clip | P5, P7a, P7b | `tests/test_g1_13.py` (new) | 2 |
 | **P8** | `lmt eval --set full` and `--update-readme`, on fakes (G1-6's last two options), and the README table's RTF note | P2a | `src/lmt/eval/runner.py`, `src/lmt/eval/cli.py`, `src/lmt/eval/readme.py`, `tests/test_eval_full.py` (new), `tests/test_readme_table.py` | 3 |
 | **P9** | `lmt.transcript.load`, `jsonschema` at run time, and the code for #286 as `g1-slice.md` decides it | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
 | **P10** | The registry: `complete = true` for each criterion whose checks have passed on `main` | the items it marks | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 |
 | **P11** | onnxruntime's log down to errors, so a run's stderr is the product's own (P4's finding on #364) | — | `src/lmt/asr.py`, `tests/test_asr.py` | 3 |
 | **P12** | Turns-first segments, so the product's DER follows diarization (#372's finding on G1-8c) | — | `src/lmt/align.py`, `tests/test_align.py` | 3 |
 
-**Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. The one pair that may run at the same time and share a file is P2b and P6, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
+**Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. P6b uses P6a's helpers, and P7c uses P7a's guard and P7b's `isolation.py`, so each waits for them. The one pair that may run at the same time and share a file is P2b and P6b, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
 
 **Order, for G1's CI deadline (2026-10-30, end of day).** The shortest path to the most criteria met. Two Developer runs at a time (`system/caps.toml`):
 
 1. **P1 ∥ P2a.** Both are small and need nothing unmerged.
 2. **P2b ∥ P3.** P2b is the first measurement of G1-8c, the criterion most likely to need a product fix or an Owner question, so it goes as soon as P2a merges. If it is held for the Architect, only the `eval-ci` job's check waits: P2a's runner and `--set ci` are already on `main`, and P8 doesn't need P2b. G1-7 needs only P3.
 3. **P4 ∥ P8** (P4 once E1 has merged). G1-11 needs P4; P8 completes G1-6. P4's PR (#364) merges after **P11**, rebased onto it.
-4. **#123's two-speaker clip**, then **P5**, then **P6 ∥ P7**. These carry G1-3, G1-4 and G1-13. **Recommendation to the Coordinator:** #123 lands the two-speaker clip first, as an item of its own (rules, "If the item is bigger than one run"), with LS full, AMI full and the one-hour recording after it, since only stage 3 needs those.
+4. **#123's two-speaker clip**, then **P5**, then P6 and P7 as five items: **P6a ∥ P7a**, then **P6b ∥ P7b**, then **P7c**. P6a, P7a and P7b need nothing unmerged, so any of them may go earlier when a run is free. These carry G1-3, G1-4 and G1-13. **Recommendation to the Coordinator:** #123 lands the two-speaker clip first, as an item of its own (rules, "If the item is bigger than one run"), with LS full, AMI full and the one-hour recording after it, since only stage 3 needs those.
 5. **P10**, once the others have passed on `main`. If the deadline nears first, it marks what has passed, and a second P10 run marks the rest.
 6. **P9** whenever a run is free: no G1 criterion waits on it, but G3's stage 1 does.
 
@@ -143,7 +148,7 @@ On top of #110's steps, which restore the data cache and run `pytest -m data`:
 | `--overwrite` | An existing output is replaced. Without the option, it exits 2 and the file is unchanged. |
 | `-v`, `--verbose` | Six stage lines on stderr, and none without it. |
 
-The other commands' options are tagged where their tests already are: `models download --model`, `list --bytes` and `verify` in `tests/test_models.py`; and `--version` and `--help` already in `tests/test_cli.py`. P3 also tags `tests/test_cli.py`'s `test_default_formats` `G1-4`, for P6 (below). `eval --set ci` and `--out` are P2a's; `--set full`, `--update-readme` and the tag on `eval --check-readme` in `tests/test_readme_table.py` are P8's, which edits that file.
+The other commands' options are tagged where their tests already are: `models download --model`, `list --bytes` and `verify` in `tests/test_models.py`; and `--version` and `--help` already in `tests/test_cli.py`. P3 also tags `tests/test_cli.py`'s `test_default_formats` `G1-4`, for P6b (below). `eval --set ci` and `--out` are P2a's; `--set full`, `--update-readme` and the tag on `eval --check-readme` in `tests/test_readme_table.py` are P8's, which edits that file.
 
 **Bad input,** through `lmt transcribe` in a subprocess (`conftest.run_lmt`), with no model needed since P1:
 
@@ -214,9 +219,13 @@ def run_bounded(argv, *, cwd, timeout=120) -> subprocess.CompletedProcess
 4. **How long a turn lasts:** from its first piece's start to its last piece's end in the clip. That is its utterances' durations plus the 0.5 s gaps *between its own utterances*, so a turn of `k` utterances counts `k − 1` gaps. The gap after a turn's last utterance, before the next speaker, isn't counted. An utterance's duration is its decoded sample count at 16 kHz over 16,000. So the test is exact in whole samples: the sum of its `k` utterances' sample counts, plus `8,000 × (k − 1)`, is at least 216,000. The clip is then the four turns plus the three 0.5 s gaps between them, at least 4 × 13.5 + 3 × 0.5 = 55.5 s.
 5. **The references.** `tests/fixtures/two_speakers.rttm` has one `SPEAKER two_speakers 1 <start> <duration> <NA> <NA> <LibriSpeech speaker id> <NA> <NA>` line per piece, at its offset in the clip, with times to the millisecond. `two_speakers.txt` holds the texts in order, as `clip.txt` does.
 
-## P6. The exports' checks (G1-4)
+## P6a and P6b. The exports' checks (G1-4)
 
-**`tests/subtitle_checks.py`** (G3's items call these names):
+Two items. **P6a** builds the helpers below and tests them on the committed export goldens, with a fake `ffmpeg`, so it needs no model and no ffmpeg. **P6b** runs them, with the real ffmpeg, on the two clips' product runs: that is G1-4's test, exactly as the spec gives it.
+
+### `tests/subtitle_checks.py` (P6a)
+
+G3's items call these names:
 
 ```python
 def check_srt(path)          # srt.parse, strict; the ffmpeg re-encode to srt
@@ -230,7 +239,18 @@ def words(path, fmt, labels) -> list[str]
 - **`ffmpeg_reencode`** fails, saying so, when `shutil.which("ffmpeg")` is `None`: it never skips.
 - **`words`** gives each format's words in order. For `json`, each segment's `text` split on white space. For `txt`, each line after its `] <label>: `. For `srt`, each cue's lines joined, after its `<label>: `. For `vtt`, each cue's text after its voice tag and its `<label>: `, with character references decoded (`html.unescape`).
 
-**`tests/test_g1_4.py`**, marked `models` and tagged `G1-4`, runs for both `clip_run` and `two_speakers_run`. Those runs pass no option, so they write the default formats. The spec's run names `--formats txt,srt,vtt,json`, and the two are the same run only because the default is exactly those four, in that order. `tests/test_cli.py::…test_default_formats` checks that, and P3 tags it `G1-4` (P3 already edits `tests/test_cli.py`, so P6 doesn't touch it). Running the defaults keeps one product run per clip, which G1-13's byte comparison also uses. The test checks:
+**`tests/test_subtitle_checks.py`** (P6a; the `test` job, no model), tagged `G1-4`. It uses `tests/fixtures/export/transcript.{json,txt,srt,vtt}`, whose labels include `José & Ana`, escaped in the WebVTT. Its fake `ffmpeg` is an executable `sh` script in `tmp_path`, put first on `PATH` with `monkeypatch`, that writes its arguments, one per line, to a file beside it. Each case sets what it prints and how it exits.
+
+- **The goldens pass.** With the silent fake exiting 0, `check_srt` and `check_vtt` pass on the goldens. The fake's recorded arguments are exactly `-v error -i <file> -map 0:s:0 -c:s srt -f srt -y /dev/null`, and the same with `webvtt` in place of both `srt`s.
+- **`ffmpeg_reencode` fails** (an `AssertionError`, or `pytest.fail`, never a skip) when the fake exits 1, when it prints a line on stdout, when it prints a line on stderr, and when no `ffmpeg` is on `PATH` (`PATH` set to an empty directory). Each failure's message names the file and the command.
+- **The parsers are strict.** An SRT whose first timestamp reads `00:00:0x,480` fails `check_srt`, and so does an SRT with no cue. A WebVTT without its `WEBVTT` line fails `check_vtt`, and so does one with no cue.
+- **`words`** gives the same list for all four goldens, with the JSON's labels, and that list is the JSON's segments' texts split on white space. `José & Ana`'s cue gives `Yes,`, `the`, `Q&A`, `<draft>`, … in the WebVTT, unescaped.
+
+**Test of P6a:** `tests/test_subtitle_checks.py`, in the PR's `test` job (tier 2, for `tests/`).
+
+### G1-4's test (P6b)
+
+**`tests/test_g1_4.py`**, marked `models` and tagged `G1-4`, runs for both `clip_run` and `two_speakers_run`. Those runs pass no option, so they write the default formats. The spec's run names `--formats txt,srt,vtt,json`, and the two are the same run only because the default is exactly those four, in that order. `tests/test_cli.py::…test_default_formats` checks that, and P3 tags it `G1-4` (P3 already edits `tests/test_cli.py`, so P6b doesn't touch it). Running the defaults keeps one product run per clip, which G1-13's byte comparison also uses. The test checks:
 
 1. stdout lists four paths, and `<stem>.txt`, `.srt`, `.vtt` and `.json` exist.
 2. The JSON validates against `schema/transcript.schema.json` with `jsonschema.Draft202012Validator`.
@@ -238,31 +258,61 @@ def words(path, fmt, labels) -> list[str]
 4. `check_srt` and `check_vtt`.
 5. `words(...)` is the same list for all four formats.
 
-Each ffmpeg command and its exit code go to `$GITHUB_STEP_SUMMARY`, which is the spec's "the PR shows both commands exiting 0 on the fixtures' files".
+Each ffmpeg command, as run, and its exit code are printed, and go to `$GITHUB_STEP_SUMMARY` when it is set.
 
 **`product.yml`, `test-models`:** a step before pytest, `command -v ffmpeg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg; }`, then `ffmpeg -version | head -n 1` to the log. The ffmpeg CLI is only CI's checking tool, never shipped, so G1-15's inventory doesn't change.
 
-**Test of the item:** the test passing in the PR's `test-models` (tier 3, for `product.yml`), with the commands in the summary.
+**Test of P6b.** A pull request runs tier 1 at most (`tiers.py`'s `PULL_REQUEST_MAX_TIER`), so the PR's CI runs neither `test-models` nor this test. The PR shows instead:
+- the Developer's local `uv run --frozen pytest -m models` result, with `tests/test_g1_4.py` passing on both clips;
+- the four ffmpeg commands (SRT and WebVTT, for each clip's product run) and their exit codes, all 0, from `uv run --frozen pytest -m models -rP tests/test_g1_4.py`, whose passed-test output holds what the test printed. That is G1-4's "the PR that adds the test shows both commands exiting 0 on the fixtures' files".
+- **If the Mac has no ffmpeg CLI,** `ffmpeg_reencode` fails, saying so, and the test can't pass. A run can't install software on the Mac, so the Developer escalates to the Owner: "P6b needs an ffmpeg CLI on the Mac's `PATH` for its local run. 1. Install it with Homebrew (`brew install ffmpeg`), recommended. 2. Put another build on `PATH`, named in your answer." The PR waits for the answer, then shows the commands and their exit codes. G1-4's sentence isn't met any other way.
 
-## P7. The network and files (G1-13)
+It fails without the change: on `main` there is no `tests/test_g1_4.py`, so G1-4 has no check of the exports.
+
+**First confirmed on `main`, after the merge:** the ffmpeg install step and the test in `main`'s `test-models` (tier 3, for `product.yml`), with the commands in its summary. If that run fails, it is `sev:1` (a broken `main`): revert first, as the next Developer item, then fix the cause. P10 marks G1-4 only after `main`'s `test-models` has passed with this test.
+
+**If a check fails** on a product run (a cue ffmpeg rejects, say, or words that differ between formats), that is a product finding: the Developer reports it on the item for the Architect, and the check doesn't change.
+
+## P7a, P7b and P7c. The network and files (G1-13)
+
+Three items. **P7a** is the guard and its test, and **P7b** is `isolation.py` and its test, both in the `test` job with no model. **P7c** puts them together on the two-speaker clip: that is G1-13's test, exactly as the spec gives it.
+
+### The guard (P7a)
 
 **`tests/netguard/sitecustomize.py`**, active only when `LMT_NETGUARD_LOG` is set. It wraps `socket.socket.connect` and `connect_ex`. A connection to an address not in `LMT_NETGUARD_ALLOW` (comma-separated, empty by default) appends one line to the log, `<family> <address>`, and raises `OSError(errno.ENETUNREACH)`. Every family counts, `AF_UNIX` included. It is put on `PYTHONPATH` for a subprocess, so it applies to `lmt` without changing it. G3's guard (`g3-stage1.md`, "The network guard") is this file, with `LMT_NETGUARD_ALLOW=127.0.0.1`.
 
-**`tests/isolation.py`** (G2's and G3's designs assume these names):
+**`tests/test_netguard.py`** (the `test` job), tagged `G1-13`. It is the guard's one test, G1's and G3's (`g3-stage1.md`, "The network guard"). The guard refuses before the system tries, so no case depends on the machine's interfaces. Each case is a subprocess, `[sys.executable, "-c", <the connection>]`, with `PYTHONPATH` set to `tests/netguard` (absolute) and `LMT_NETGUARD_LOG` to a file in `tmp_path`:
+- **With the default empty allowance,** connections to `127.0.0.1`, `::1` and `192.0.2.1:80` are each logged and refused.
+- **With `LMT_NETGUARD_ALLOW=127.0.0.1`** (G3's setting), a connection to a closed port on `127.0.0.1` is refused by the system (`ECONNREFUSED`) and not logged, and connections to `127.0.0.2`, `::1` and `192.0.2.1:80` are each logged and refused with `ENETUNREACH`.
+- **`connect_ex`** to `192.0.2.1:80` is logged and refused too, and an `AF_UNIX` connection to a path in `tmp_path` is logged and refused.
+- **Without `LMT_NETGUARD_LOG`,** the guard is off: a connection to a closed port on `127.0.0.1` gets `ECONNREFUSED`, and no log file is made.
+- Only the `::1` cases are skipped, saying so, where an IPv6 socket can't be made.
+
+**Test of P7a:** `tests/test_netguard.py`, in the PR's `test` job (tier 2, for `tests/`).
+
+### `tests/isolation.py` (P7b)
+
+G2's and G3's designs assume these names:
 
 ```python
 def snapshot(*dirs) -> dict[str, tuple]     # absolute path -> ("file", size, sha256) | ("dir",) | ("link", target), recursive
+def wrap(command, *, env) -> tuple[list[str], bool]   # the command as run_isolated runs it, and whether it is isolated
 def run_isolated(argv, *, env, cwd) -> Isolated     # CompletedProcess fields, plus .isolated: bool
 ```
 
-`run_isolated` runs `python -m lmt <argv>`. Where `sudo -n true` succeeds and `unshare` and `setpriv` are on `PATH` (the CI runner), it wraps the run: `sudo -n unshare --net -- setpriv --reuid=<uid> --regid=<gid> --clear-groups -- env -i <env as K=V …> <sys.executable> -m lmt <argv>`, with `isolated = True`. So the run has no network interface but a down loopback, and runs as the runner's own user. Elsewhere it runs `lmt` with `env` alone, and sets `isolated = False`.
+- **`snapshot`** walks each directory with `os.walk(followlinks=False)`, and records every entry under it, the directory itself excluded. A symbolic link is recorded as a link with its `os.readlink` target, and never followed. A file's SHA-256 is read in 1 MiB blocks.
+- **`wrap`.** Where `sudo -n true` succeeds and `unshare` and `setpriv` are on `PATH` (the CI runner), it gives `sudo -n unshare --net -- setpriv --reuid=<uid> --regid=<gid> --clear-groups -- env -i <env as K=V …> <command>`, with `True`. So the command has no network interface but a down loopback, and runs as the runner's own user. Elsewhere it gives `command` unchanged, with `False`, and the caller runs it with `env` alone.
+- **`run_isolated`** is `wrap([sys.executable, "-m", "lmt", *argv], env=env)`, run with `subprocess.run(…, env=env, cwd=cwd, capture_output=True, text=True, check=False)`.
 
-**`tests/test_netguard.py`** (the `test` job). It is the guard's one test, G1's and G3's (`g3-stage1.md`, "The network guard"). The guard refuses before the system tries, so no case depends on the machine's interfaces. A subprocess with the guard:
-- **With the default empty allowance,** connections to `127.0.0.1`, `::1` and `192.0.2.1:80` are each logged and refused.
-- **With `LMT_NETGUARD_ALLOW=127.0.0.1`** (G3's setting), a connection to a closed port on `127.0.0.1` is refused by the system (`ECONNREFUSED`) and not logged, and connections to `127.0.0.2`, `::1` and `192.0.2.1:80` are each logged and refused with `ENETUNREACH`.
-- Only the `::1` cases are skipped, saying so, where an IPv6 socket can't be made.
+**`tests/test_isolation.py`** (the `test` job, no model), tagged `G1-13`:
+- **`snapshot`:** a tree in `tmp_path` with a file, an empty file, a subdirectory holding a file, and a link to a path that doesn't exist gives exactly the expected dictionary, with each file's size and SHA-256 computed in the test. Snapshotting it twice gives equal results. Changing one byte of a file, adding a file, removing one, or retargeting the link each changes exactly that entry.
+- **`wrap`,** with `command = [sys.executable, "-c", <code>]` and `env` holding `PATH`, `HOME` (set to `tmp_path`) and `LMT_TEST_MARK=1`, run as `run_isolated` runs it. The child prints its `os.environ` as JSON and its `os.getuid()`. Its environment holds `LMT_TEST_MARK` and not `LMT_TEST_PARENT`, a variable the test sets in its own environment with `monkeypatch`. Its uid is the test's.
+- **Where `wrap` isolates,** a child that calls `socket.create_connection(("192.0.2.1", 80), timeout=3)` fails with `OSError`. That shows the namespace has no route. **Under `CI` on Linux**, `wrap` must isolate, and the test fails if it doesn't. Elsewhere the isolated case skips, saying so.
+- **`run_isolated(["--version"], …)`** exits 0, and its stdout holds `lmt.__version__`.
 
-Where `run_isolated` isolates, a child that calls `socket.create_connection(("192.0.2.1", 80), timeout=3)` inside it fails with `OSError`. That shows the namespace has no route.
+**Test of P7b:** `tests/test_isolation.py`, in the PR's `test` job (tier 2, for `tests/`), with the ubuntu run's isolated case passing, not skipped.
+
+### G1-13's test (P7c)
 
 **`tests/test_g1_13.py`**, marked `models`, tagged `G1-13`:
 
@@ -273,7 +323,9 @@ Where `run_isolated` isolates, a child that calls `socket.create_connection(("19
 5. `after = snapshot(...)`. The only difference from `before` is four new files, `work/two_speakers.{txt,srt,vtt,json}`. Nothing under `home`, `tmp`, `xdg` or the cache is new, changed or gone, the cache compared by path, size and SHA-256.
 6. Each of the four is byte-identical to `two_speakers_run`'s, the run with the network up.
 
-**Test of the item:** the tests above in the `test` and `test-models` jobs of the PR. **If a library writes a file** (a config or cache under `home`, say) **or opens a socket,** that is a product finding. The Developer reports the path or address on the item for the Architect. The test doesn't allow it.
+**Test of P7c.** A pull request runs tier 1 at most, so the PR's CI doesn't run this test. The PR shows the Developer's local `uv run --frozen pytest -m models` result, with `tests/test_g1_13.py` passing: the guard's log empty, the snapshot's only difference the four outputs, and the bytes equal. On the Mac, `wrap` can't isolate (no `unshare` or `setpriv`), so `isolated` is false there, and the PR says so. It fails without the change: on `main` there is no `tests/test_g1_13.py`.
+
+**First confirmed on `main`, after the merge:** the test in `main`'s `test-models` (tier 2, for `tests/`), with `isolated` true, which is G1-13's `sudo unshare --net` check. If that run fails, it is `sev:1` (a broken `main`): revert first, as the next Developer item, then fix the cause. P10 marks G1-13 only after `main`'s `test-models` has passed with this test and `isolated` true. **If a library writes a file** (a config or cache under `home`, say) **or opens a socket,** that is a product finding. The Developer reports the path or address on the item for the Architect. The test doesn't allow it.
 
 ## P8. `lmt eval --set full` and `--update-readme`
 
@@ -316,13 +368,13 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 | Criterion | Complete when | Its tests |
 | --- | --- | --- |
 | G1-3 | P5 | `tests/test_g1_3.py` |
-| G1-4 | P3 and P6 | `tests/test_g1_4.py`, `tests/test_cli.py` (`test_default_formats`) |
+| G1-4 | P3, P6a and P6b, with `main`'s `test-models` passing `tests/test_g1_4.py` | `tests/test_g1_4.py`, `tests/test_subtitle_checks.py`, `tests/test_cli.py` (`test_default_formats`) |
 | G1-5 | P2b | `tests/test_eval_ci.py` |
 | G1-6 | P3, P2a and P8 | `tests/test_cli.py`, `tests/test_g1_6.py`, `tests/test_models.py`, `tests/test_readme_table.py`, `tests/test_eval_runner.py`, `tests/test_eval_full.py` |
 | G1-7 | P3 and #110, with the Reviewer's reading of `public-api.md` on this PR | `tests/test_asr.py`, `tests/test_manifests.py`, `tests/test_cli.py` |
 | G1-8c | P2b | `tests/test_eval_ci.py` |
 | G1-11 | P4 | `tests/test_g1_11.py`, `tests/test_decode_fuzz.py` |
-| G1-13 | P7 (its `owner` line stays) | `tests/test_g1_13.py` |
+| G1-13 | P7a, P7b and P7c, with `main`'s `test-models` passing `tests/test_g1_13.py` with `isolated` true (its `owner` line stays) | `tests/test_g1_13.py`, `tests/test_netguard.py`, `tests/test_isolation.py` |
 
 **G1-12 stays incomplete.** Its Mac half, the two runs before the full run, is read from `results/full.json` by stage 3's `check_results.py` (`criteria.md` §2).
 
@@ -408,6 +460,6 @@ Words are rounded first, by `_rounded`, as now (`g1-slice.md` S4, "Times, rounde
 - **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move. It missed AMI-ci's DER (0.426, #343), and P12 is the fix.
 - **P12 rests on one meeting.** #372 measured turns-first on ES2004a alone, which is all of AMI-ci. AMI full, in stage 3 (G1-8), tests whether it holds across meetings. P12's other risk is WER where turns overlap (P12, "Where turns overlap"): its PR measures AMI-ci's WER, and #343's 0.182 leaves 0.068 to the bound.
 - **Determinism of the double run.** ASR and diarization run side by side. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3.
-- **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
+- **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7c), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
 - **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
 - **Other libraries' output on stderr.** onnxruntime's was the first (P11). Any other library line that reaches stderr is a product finding too, fixed in the stage that loads the library. The test that found it doesn't change.
