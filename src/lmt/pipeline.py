@@ -40,8 +40,9 @@ def transcribe(path, *, model=None, offline=False, diarize=True, num_speakers=No
     needed = models.default_models(manifest, asr=model)
     if not diarize:
         needed = needed[:1]
-    dirs = _timed(timings, "models", lambda: models.ensure(needed, offline=offline))
+    # Decode first, so a bad input exits 3 without hashing or downloading a model (g1-stage2.md, P1).
     samples = _timed(timings, "decode", lambda: audio.decode(path))
+    dirs = _timed(timings, "models", lambda: models.ensure(needed, offline=offline))
 
     asr_model = needed[0]
 
