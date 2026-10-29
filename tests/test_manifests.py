@@ -64,8 +64,11 @@ class TestManifests:
         ids = {s["id"] for s in SOURCES["source"]}
         for dataset in SETS["dataset"]:
             for key in ("source", "audio", "words", "rttm"):
-                if key in dataset:
-                    assert dataset[key] in ids, (dataset["name"], key)
+                values = dataset.get(key, [])
+                for value in [values] if isinstance(values, str) else values:
+                    assert value in ids, (dataset["name"], key)
+            for piece in dataset.get("concat", []):
+                assert piece["source"] in ids, (dataset["name"], piece)
 
 
 class TestCISubset:
@@ -113,6 +116,60 @@ class TestLSFull:
         assert len(set(utterances)) == len(utterances) == 2620
         assert len({u.split("-")[0] for u in utterances}) == 40
         assert list(utterances) == sorted(utterances)
+
+
+AMI_FULL = [f"{series}{part}" for series in ("EN2002", "ES2004", "IS1009", "TS3003") for part in "abcd"]
+
+
+class TestAMIFull:
+    """AMI full and the one-hour recording (design/internal/g1-stage1.md §5b, decisions 4 and 5)."""
+
+    @pytest.fixture
+    def entries(self):
+        return {d["name"]: d for d in SETS["dataset"]}
+
+    def test_it_is_the_specs_16_meetings_in_order_with_their_sources(self, entries):
+        ami = entries["AMI full"]
+        assert (ami["set"], ami["kind"], ami["words"]) == ("full", "ami", "ami-annotations-1.6.2")
+        assert ami["meetings"] == AMI_FULL
+        assert ami["audio"] == [f"ami-{m}" for m in AMI_FULL]
+        assert ami["rttm"] == [f"ami-rttm-{m}" for m in AMI_FULL]
+        assert "crop" not in ami
+        sources = {s["id"]: s for s in SOURCES["source"]}
+        for meeting in AMI_FULL:
+            assert sources[f"ami-{meeting}"]["urls"] == [
+                f"https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{meeting}/audio/{meeting}.Mix-Headset.wav"]
+            assert sources[f"ami-rttm-{meeting}"]["urls"] == [
+                f"{URL_PREFIXES[-1]}only_words/rttms/test/{meeting}.rttm"]
+
+    def test_the_annotations_have_each_meetings_four_words_files(self):
+        (annotations,) = [s for s in SOURCES["source"] if s["id"] == "ami-annotations-1.6.2"]
+        assert sorted(m["path"] for m in annotations["member"]) == sorted(
+            f"words/{meeting}.{speaker}.words.xml" for meeting in AMI_FULL for speaker in "ABCD")
+
+    def test_ami_ci_uses_the_list_form(self, entries):
+        assert (entries["AMI-ci"]["audio"], entries["AMI-ci"]["rttm"]) == (["ami-ES2004a"], ["ami-rttm-ES2004a"])
+
+    def test_the_one_hour_recording_is_ami_full_joined_and_cut_at_3600_s(self, entries):
+        one_hour = entries["one-hour"]
+        assert (one_hour["set"], one_hour["kind"], one_hour["of"]) == ("full", "concat", "AMI full")
+        assert (one_hour["gap"], one_hour["cut"]) == (0.0, 3600.0)
+        assert HEX64.match(one_hour["derived_sha256"])
+        assert [p["source"] for p in one_hour["concat"]] == [f"ami-{m}" for m in AMI_FULL]
+        sources = {s["id"]: s for s in SOURCES["source"]}
+        for piece in one_hour["concat"]:
+            # Each slice is its whole WAV: end × 16,000 whole 16-bit mono frames, plus a header.
+            frames = piece["end"] * 16000
+            assert piece["start"] == 0 and frames == int(frames), piece
+            assert 44 <= sources[piece["source"]]["size"] - 2 * int(frames) <= 4096, piece
+
+    def test_only_en2002a_and_en2002b_are_read_for_the_one_hour_recording(self):
+        manifests = datasets.load_manifests()
+        one_hour = manifests.datasets["one-hour"]
+        read = datasets._read_pieces(one_hour)
+        assert [(p.source, offset) for p, offset in read] == [("ami-EN2002a", 0.0), ("ami-EN2002b", 2142.709375)]
+        assert datasets._source_ids(one_hour, manifests.datasets) == (
+            "ami-EN2002a", "ami-EN2002b", "ami-annotations-1.6.2", "ami-rttm-EN2002a", "ami-rttm-EN2002b")
 
 
 class TestCommittedClip:
@@ -196,7 +253,7 @@ class TestCommittedTwoSpeakers:
     SETS_TEXT = (datasets.MANIFEST_DIR / "sets.toml").read_text(encoding="utf-8")
 
     @pytest.mark.parametrize("old, new, problem", [
-        (re.compile(r'^rttm = .*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
+        (re.compile(r'^rttm = ".*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
         (re.compile(r'^rttm_sha256 = .*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
         (re.compile(r'^(rttm_sha256 = ")([0-9a-f]{64})', re.MULTILINE), lambda m: m[1] + m[2].upper(),
          "isn't a SHA-256 in lower-case hex"),
