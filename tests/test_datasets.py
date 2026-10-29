@@ -290,6 +290,136 @@ class TestRecipe:
             "lmt: error: tests/fixtures/clip.txt: the rebuilt file's SHA-256 doesn't match sets.toml"]
 
 
+FORMATS =("flac", "mp3", "m4a", "mp4", "mov")
+
+
+def recipe(wav, out):
+    """The table in design/internal/g1-formats.md, "The recipe", word for word."""
+    mp4 = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1:d=57",
+           "-map", "0:a:0", "-map", "1:v:0", "-map_metadata", "-1", "-fflags", "+bitexact",
+           "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1", "-c:a", "aac", "-profile:a", "aac_low",
+           "-b:a", "128k", "-ar", "48000", "-ac", "1", "-c:v", "mpeg4", "-pix_fmt", "yuv420p",
+           "-max_interleave_delta", "0"]
+    return {
+        "flac": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
+                 "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "flac",
+                 "-compression_level", "8", "-sample_fmt", "s16", "-ar", "16000", "-ac", "1", "-f", "flac", out],
+        "mp3": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "libmp3lame",
+                "-b:a", "128k", "-ar", "44100", "-ac", "1", "-f", "mp3", out],
+        "m4a": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "aac",
+                "-profile:a", "aac_low", "-b:a", "128k", "-ar", "48000", "-ac", "1", "-f", "ipod", out],
+        "mp4": [*mp4, "-f", "mp4", out],
+        "mov": [*mp4, "-f", "mov", out],
+    }
+
+
+def encoded(fmt):
+    return f"encoded as {fmt}\n".encode()
+
+
+class FakeFfmpeg:
+    """Stands in for subprocess.run: answers `ffmpeg -version`, and for each encoding records its argv and writes
+    encoded(<format>) to the last argument, or fails on the format `fail`."""
+
+    def __init__(self, version="8.0", fail=None):
+        self.version, self.fail = version, fail
+        self.calls = []
+
+    def __call__(self, argv, check=None, capture_output=None, text=None):
+        if argv == ["ffmpeg", "-version"]:
+            return subprocess.CompletedProcess(argv, 0, f"ffmpeg version {self.version} Copyright (c)\n", "")
+        fmt = FORMATS[len(self.calls)]
+        self.calls.append(argv)
+        if fmt == self.fail:
+            return subprocess.CompletedProcess(argv, 1, "", "[mp3 @ 0x1] warning\nUnknown encoder 'libmp3lame'\n")
+        datasets.Path(argv[-1]).write_bytes(encoded(fmt))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+
+class TestEncodeFixture:
+    @pytest.fixture
+    def fixtures(self, cache, tmp_path, monkeypatch):
+        """A WAV in a temporary tests/fixtures, and manifests giving it encodings recorded by ffmpeg 8.0."""
+        setup(tmp_path, monkeypatch)
+        (tmp_path / "tests/fixtures").mkdir(parents=True)
+        (tmp_path / "tests/fixtures/clip.wav").write_bytes(b"the clip")
+        self.record(tmp_path)
+        return tmp_path / "tests/fixtures"
+
+    @staticmethod
+    def record(tmp_path, version="8.0", hashes=None):
+        hashes = {fmt: sha256(encoded(fmt)) for fmt in FORMATS} | (hashes or {})
+        listed = "".join(f'  {{format = "{fmt}", sha256 = "{hashes[fmt]}"}},\n' for fmt in FORMATS)
+        sets = tmp_path / "manifests" / "sets.toml"
+        sets.write_text(sets.read_text() + f'ffmpeg = "{version}"\nencodings = [\n{listed}]\n')
+
+    @staticmethod
+    def fake(monkeypatch, **kwargs):
+        ffmpeg = FakeFfmpeg(**kwargs)
+        monkeypatch.setattr(datasets.subprocess, "run", ffmpeg)
+        return ffmpeg
+
+    def test_write_runs_the_recipe_in_order_writes_the_files_and_exits_0(self, fixtures, monkeypatch, capsys):
+        ffmpeg = self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip", "--write"]) == 0
+        wav = str((fixtures / "clip.wav").resolve())
+        for fmt, argv in zip(FORMATS, ffmpeg.calls, strict=True):
+            out = datasets.Path(argv[-1])
+            assert out.parent == fixtures.resolve() and out.name.endswith(f".{fmt}.tmp")
+            assert argv == recipe(wav, argv[-1])[fmt]
+        assert sorted(p.name for p in fixtures.iterdir()) == sorted(["clip.wav", *(f"clip.{f}" for f in FORMATS)])
+        for fmt in FORMATS:
+            assert (fixtures / f"clip.{fmt}").read_bytes() == encoded(fmt)
+        out, err = capsys.readouterr()
+        assert out.splitlines() == [f"tests/fixtures/clip.{fmt} {sha256(encoded(fmt))}" for fmt in FORMATS] + [
+            "ffmpeg 8.0"]
+        assert err == ""
+
+    def test_without_write_nothing_is_written(self, fixtures, monkeypatch):
+        ffmpeg = self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip"]) == 0
+        assert len(ffmpeg.calls) == 5
+        assert [p.name for p in fixtures.iterdir()] == ["clip.wav"]
+
+    def test_a_hash_that_doesnt_match_exits_3_naming_the_first(self, fixtures, tmp_path, monkeypatch, capsys):
+        setup(tmp_path, monkeypatch)
+        self.record(tmp_path, hashes={"m4a": "e" * 64, "mov": "e" * 64})
+        self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip", "--write"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: tests/fixtures/clip.m4a: the encoded file's SHA-256 doesn't match sets.toml"]
+        assert (fixtures / "clip.m4a").read_bytes() == encoded("m4a")  # --write writes before it compares
+
+    def test_another_ffmpeg_version_exits_3(self, fixtures, monkeypatch, capsys):
+        self.fake(monkeypatch, version="7.1")
+        assert datasets.main(["encode-fixture", "clip"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: ffmpeg: version 7.1 here, sets.toml records 8.0; the hashes can't be compared"]
+
+    def test_a_failed_encoding_exits_3_and_leaves_no_file(self, fixtures, monkeypatch, capsys):
+        self.fake(monkeypatch, fail="mp3")
+        assert datasets.main(["encode-fixture", "clip", "--write"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: tests/fixtures/clip.mp3: ffmpeg failed: Unknown encoder 'libmp3lame'"]
+        assert [p.name for p in fixtures.iterdir()] == ["clip.wav"]
+
+    def test_no_ffmpeg_on_path_is_one_error_line(self, fixtures, monkeypatch, capsys):
+        def missing(argv, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", argv[0])
+
+        monkeypatch.setattr(datasets.subprocess, "run", missing)
+        assert datasets.main(["encode-fixture", "clip"]) == 3
+        assert capsys.readouterr().err.splitlines() == ["lmt: error: ffmpeg: not found on PATH"]
+
+    def test_a_fixture_without_encodings_is_a_usage_error(self, cache, tmp_path, monkeypatch, capsys):
+        setup(tmp_path, monkeypatch)
+        self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip"]) == 2
+        assert capsys.readouterr().err.splitlines() == ["lmt: error: clip: has no encodings in sets.toml"]
+
+
 # --- The CI subset (design/internal/g1-stage1.md §5a) ----------------------------------------------------------
 
 AMI_WAV_URL = "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004a/audio/ES2004a.Mix-Headset.wav"
@@ -587,6 +717,168 @@ class TestDatasetManifests:
         (tmp_path / "sets.toml").write_text("schema_version = 1\n")
         with pytest.raises(ValueError, match="a source without members is a single file, so keep must be true"):
             datasets.load_manifests(tmp_path)
+
+
+# --- The concatenation's slices, cut and references (design/internal/g1-stage1.md §5b) -------------------------
+
+
+def slices_fixture(tmp_path, monkeypatch, concat, *, gap=0.0625, cut=None, sources=None):
+    """Manifests with the meeting WAV as a single-file source, and a fixture of `concat`'s slices of it."""
+    dir = tmp_path / "manifests"
+    dir.mkdir(parents=True, exist_ok=True)
+    audio = wav(meeting_samples())
+    (dir / "sources.toml").write_text(
+        "schema_version = 1\n" + (sources if sources is not None else source_toml("ami-ES2004a", AMI_WAV_URL, audio)))
+    pieces = ",\n".join(f"  {{source = \"ami-ES2004a\", {piece}}}" for piece in concat)
+    (dir / "sets.toml").write_text(
+        f'schema_version = 1\n\n[[fixture]]\nname = "hour"\npath = "hour.wav"\nreference = "hour.txt"\ngap = {gap}\n'
+        f'{"" if cut is None else f"cut = {cut}{chr(10)}"}derived_sha256 = "{"0" * 64}"\n'
+        f'reference_sha256 = "{"0" * 64}"\nconcat = [\n{pieces},\n]\n')
+    monkeypatch.setattr(datasets, "MANIFEST_DIR", dir)
+    serve(monkeypatch, {AMI_WAV_URL: audio})
+    return dir
+
+
+class TestConcat:
+    def test_offsets_count_the_pieces_and_the_gaps(self):
+        a, b, c = pieces()  # 800 samples, 0.05 s, each
+        samples, offsets = datasets.concat([a, b, c], gap=0.25)
+        assert offsets == [0.0, 0.3, 0.6]
+        silence = np.zeros(4000, dtype=np.int16)
+        assert np.array_equal(samples, np.concatenate([a, silence, b, silence, c]))
+
+    def test_the_cut_keeps_the_first_cut_seconds_and_the_offsets_stay(self):
+        a, b, c = pieces()
+        samples, offsets = datasets.concat([a, b, c], gap=0.25, cut=0.33)
+        assert np.array_equal(samples, np.concatenate([a, np.zeros(4000, dtype=np.int16), b[:480]]))
+        assert offsets == [0.0, 0.3, 0.6]
+
+    def test_a_fixture_of_slices_with_a_gap_and_a_cut(self, cache, tmp_path, monkeypatch):
+        dir = slices_fixture(tmp_path, monkeypatch, ["start = 0.25, end = 0.5", "start = 0, end = 0.125"], cut=0.3)
+        manifests = datasets.load_manifests(dir)
+        fixture = manifests.fixtures["hour"]
+        assert fixture.concat[0] == datasets.Piece("ami-ES2004a", start=0.25, end=0.5)
+        assert fixture.cut == 0.3
+        datasets.fetch_source(manifests.sources["ami-ES2004a"])
+        audio, text = datasets.build_fixture(fixture, manifests)
+        meeting = meeting_samples()
+        expected = np.concatenate([meeting[4000:8000], np.zeros(1000, dtype=np.int16), meeting[:2000]])[:4800]
+        assert np.array_equal(TestRecipe.frames(audio), expected)
+        assert text == "\n"  # a slice's references are its dataset's, not a .trans.txt line
+
+    def test_a_slice_past_the_end_of_its_source_raises(self, cache, tmp_path, monkeypatch):
+        dir = slices_fixture(tmp_path, monkeypatch, ["start = 0.5, end = 1.5"])
+        manifests = datasets.load_manifests(dir)
+        datasets.fetch_source(manifests.sources["ami-ES2004a"])
+        with pytest.raises(ValueError, match=r"1.0 s, shorter than the slice's end, 1.5 s"):
+            datasets.build_fixture(manifests.fixtures["hour"], manifests)
+
+    def test_a_slice_of_a_wav_that_isnt_16_khz_mono_16_bit_raises(self, tmp_path):
+        path = tmp_path / "stereo.wav"
+        soundfile.write(path, np.zeros((1600, 2), dtype=np.int16), 16000, subtype="PCM_16")
+        with pytest.raises(ValueError, match="16000 Hz, 2 channels, 16-bit; the recipe takes 16 kHz mono 16-bit"):
+            datasets.slice_wav(path, 0.0, 0.05)
+
+    @pytest.mark.parametrize("concat, cut, problem", [
+        (["start = 0.5, end = 0.5"], None, "a slice needs 0 <= start < end"),
+        (["start = -0.1, end = 0.5"], None, "a slice needs 0 <= start < end"),
+        (["start = 0, end = 0.5"], 0, "cut must be positive"),
+        (['member = "words/x.xml", start = 0, end = 0.5'], None, "a piece is a member or a slice, not both"),
+        (["start = 0"], None, "end is missing or has the wrong type"),
+    ])
+    def test_a_bad_slice_or_cut_is_refused(self, tmp_path, monkeypatch, concat, cut, problem):
+        dir = slices_fixture(tmp_path, monkeypatch, concat, cut=cut)
+        with pytest.raises(ValueError, match=problem):
+            datasets.load_manifests(dir)
+
+    def test_a_slice_of_an_archive_is_refused(self, tmp_path, monkeypatch):
+        archive = zip_of(WORDS)
+        sources = source_toml("ami-ES2004a", AMI_ZIP_URL, archive, keep=False,
+                              members={name: sha256(data.encode()) for name, data in WORDS.items()})
+        dir = slices_fixture(tmp_path, monkeypatch, ["start = 0, end = 0.5"], sources=sources)
+        with pytest.raises(ValueError, match="a slice's source ami-ES2004a must be a single file, without members"):
+            datasets.load_manifests(dir)
+
+
+class TestPlaceReferences:
+    WORDS = ((0.9, 1.3, "before"), (1.1, 1.3, "first"), (2.0, 2.4, "inside"), (2.8, 3.4, "last"),
+             (2.9, 3.5, "after"))
+    TURNS = (datasets.Turn(0.0, 0.5, "A"), datasets.Turn(0.8, 1.6, "A"), datasets.Turn(1.8, 2.6, "B"),
+             datasets.Turn(2.9, 4.0, "B"), datasets.Turn(3.2, 3.6, "A"))
+
+    def test_words_by_midpoint_inside_the_slice_are_shifted_to_the_offset(self):
+        words, _ = datasets.place_references(self.WORDS, [], start=1.0, end=3.2, offset=10.0)
+        # Midpoints 1.1, 1.2, 2.2, 3.1 and 3.2: "before"'s is inside [1.0, 3.2), "after"'s isn't.
+        assert [(round(s, 6), round(e, 6), t) for s, e, t in words] == [
+            (9.9, 10.3, "before"), (10.1, 10.3, "first"), (11.0, 11.4, "inside"), (11.8, 12.4, "last")]
+
+    def test_turns_overlapping_the_slice_are_clipped_to_it_and_shifted(self):
+        _, turns = datasets.place_references([], self.TURNS, start=1.0, end=3.2, offset=10.0)
+        assert [(round(t.start, 6), round(t.end, 6), t.speaker) for t in turns] == [
+            (10.0, 10.6, "A"), (10.8, 11.6, "B"), (11.9, 12.2, "B")]
+
+    def test_then_the_cut_crops_them_as_ami_cis_crop_does(self):
+        words, turns = datasets.place_references(self.WORDS, self.TURNS, start=1.0, end=3.2, offset=10.0)
+        words, turns = datasets.crop_references(words, turns, 11.5)
+        assert [t for _, _, t in words] == ["before", "first", "inside"]
+        assert [(round(t.start, 6), round(t.end, 6), t.speaker) for t in turns] == [
+            (10.0, 10.6, "A"), (10.8, 11.5, "B")]
+
+
+class TestPin:
+    def test_an_archive_prints_its_hash_then_the_matching_members_with_their_audio_facts(
+            self, cache, monkeypatch, capsys):
+        files = members()
+        archive = tar_gz(files)
+        serve(monkeypatch, {URLS[0]: archive})
+        assert datasets.main(["pin", URLS[0], "--member", "*.flac", "--member", "*/61-70968.trans.txt"]) == 0
+        assert capsys.readouterr().out.splitlines() == [
+            f"{URLS[0]} {len(archive)} {sha256(archive)}",
+            *(f"{CHAPTER}/{uid}.flac {sha256(files[f'{CHAPTER}/{uid}.flac'])} 800 16000 1" for uid in IDS),
+            f"{TRANS} {sha256(files[TRANS])}",
+        ]
+        assert cached_files(cache) == []
+
+    def test_a_zip_prints_only_the_regular_members_that_match(self, cache, monkeypatch):
+        archive = zip_of(WORDS)
+        serve(monkeypatch, {AMI_ZIP_URL: archive})
+        assert datasets.pin(AMI_ZIP_URL, ("words/ES2004a.*",)) == [
+            f"{AMI_ZIP_URL} {len(archive)} {sha256(archive)}",
+            *(f"{name} {sha256(data.encode())}" for name, data in WORDS.items()),
+        ]
+
+    def test_a_wav_prints_its_frames_rate_and_channels(self, cache, monkeypatch):
+        audio = wav(meeting_samples())
+        serve(monkeypatch, {AMI_WAV_URL: audio})
+        assert datasets.pin(AMI_WAV_URL) == [f"{AMI_WAV_URL} {len(audio)} {sha256(audio)} 16000 16000 1"]
+        assert cached_files(cache) == []
+
+    @pytest.mark.parametrize("url", [
+        "https://example.com/resources/12/test-clean.tar.gz",
+        "http://www.openslr.org/resources/12/test-clean.tar.gz",
+        "https://www.openslr.org/resources/13/test-clean.tar.gz",
+        "https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/main/only_words/rttms/test/x.rttm",
+    ])
+    def test_a_url_outside_the_pinned_prefixes_exits_2_without_a_request(self, cache, monkeypatch, capsys, url):
+        server = serve(monkeypatch, {})
+        assert datasets.main(["pin", url]) == 2
+        assert server.requests == []
+        assert capsys.readouterr().err.splitlines() == [
+            f"lmt: error: {url}: isn't under a pinned LibriSpeech or AMI prefix"]
+
+    def test_member_on_a_single_file_exits_2(self, cache, monkeypatch):
+        server = serve(monkeypatch, {})
+        assert datasets.main(["pin", AMI_WAV_URL, "--member", "*"]) == 2
+        assert server.requests == []
+
+    def test_a_failed_download_exits_3(self, cache, monkeypatch, capsys):
+        serve(monkeypatch, {})
+        assert datasets.main(["pin", AMI_WAV_URL]) == 3
+        assert "download failed" in capsys.readouterr().err
+
+    def test_the_prefixes_are_the_manifest_tests(self):
+        assert datasets.URL_PREFIXES[-1] == ("https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/"
+                                             f"{datasets.BUT_COMMIT}/")
 
 
 # --- The CI subset itself ---------------------------------------------------------------------------------------
