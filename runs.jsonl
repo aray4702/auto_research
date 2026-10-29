@@ -627,3 +627,4 @@
 {"at": "2026-10-29T00:01:08+00:00", "event": "start", "item": 219, "pid": 24562, "role": "reviewer", "run_id": "reviewer-20261029T000102Z", "task": "Review PR #219."}
 {"at": "2026-10-29T00:01:09+00:00", "event": "start", "item": 122, "pid": 24584, "role": "builder", "run_id": "builder-20261029T000102Z", "task": "Item #122 needs your decision (needs-decision:builder)."}
 {"at": "2026-10-29T00:02:14+00:00", "cost_usd": 0.29887, "denials": 0, "denied": [], "event": "end", "five_hour": 0.37, "item": 219, "role": "reviewer", "run_id": "reviewer-20261029T000102Z", "seven_day": 0.42, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 18}
+{"at": "2026-10-29T00:03:19+00:00", "event": "start", "item": 206, "pid": 25527, "role": "architect", "run_id": "architect-20261029T000313Z", "task": "Work on your item, as the work order schedules it."}
