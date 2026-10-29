@@ -2,7 +2,7 @@
 
 ## What it is
 
-Local Meeting Transcriber is planned to turn a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. So far only the `lmt` command's skeleton is built and tested: `lmt --help` works, and each command says it isn't built yet. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
+Local Meeting Transcriber is planned to turn a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. So far only the `lmt` command's skeleton is built and tested: `lmt --help` and the results table's check, `lmt eval --check-readme`, work, and the other commands say they aren't built yet. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
 
 ## Build
 
@@ -30,6 +30,14 @@ python3 -I system/gate/generic.py --base origin/main
 ```
 
 The product's CI jobs live in [`.github/workflows/product.yml`](.github/workflows/product.yml), which the gate calls. Among them, the `readme` job checks this file against its criteria in [`spec/acceptance.md`](spec/acceptance.md), and the `test` job runs the product's tests, which you can run with `uv run --frozen pytest`.
+
+## Results
+
+The table below is rendered from [`results/full.json`](results/full.json), the results of the full evaluation. `lmt eval --set full --update-readme` regenerates it (planned: G1 stage 2 builds the evaluation run). `lmt eval --check-readme` checks that it equals what `results/full.json` renders, and the `readme` job runs that check, so the table can't drift from its results file.
+
+<!-- results:start -->
+No full-set results yet. The Owner's run of `lmt eval --set full` fills this table (G1 stage 3).
+<!-- results:end -->
 
 ## Licences
 
