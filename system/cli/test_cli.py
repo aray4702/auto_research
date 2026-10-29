@@ -151,6 +151,15 @@ def sample():
 
 
 class ViewsTest(unittest.TestCase):
+    def test_each_overview_section_is_a_tab_of_its_own(self):
+        d = sample()
+        heads = {path: views.html_page(d, path) for path, _ in views.OVERVIEW}
+        self.assertIn("<h2>Waiting on you</h2>", heads["/waiting"])
+        self.assertNotIn("<h2>Pull requests</h2>", heads["/waiting"])
+        self.assertIn("<h2>Usage against the caps</h2>", heads["/usage"])
+        self.assertIn("<h2>Open items</h2>", heads["/items"])
+        self.assertEqual([p for p, _ in views.TABS][:2], ["/", "/roles"], "Progress, then Roles, first")
+
     def test_usage_counts_the_window_the_roles_and_the_active_runs(self):
         u = sample()["usage"]
         self.assertEqual((u["cost_window"], u["seven_day"], len(u["active"])), (1.07, 0.07, 1))
@@ -166,8 +175,9 @@ class ViewsTest(unittest.TestCase):
 
     def test_html_escapes_github_text_and_carries_the_icon_and_favicon(self):
         page = views.html_page(sample())
-        self.assertNotIn("<script>alert(1)</script>", page)
-        self.assertIn("&lt;script&gt;", page)
+        every = "".join(views.html_page(sample(), path) for path, _ in views.OVERVIEW)
+        self.assertNotIn("<script>alert(1)</script>", every)
+        self.assertIn("&lt;script&gt;", every)
         self.assertIn('<link rel="icon" type="image/svg+xml" href="/favicon.svg">', page)
         self.assertIn('rel="alternate icon" href="data:image/svg+xml,', page)
         self.assertIn("<header><svg", page)
@@ -177,7 +187,8 @@ class ViewsTest(unittest.TestCase):
     def test_the_kill_switch_is_impossible_to_miss(self):
         d = sample()
         d.update(paused=True, pause_reason="AGENTS_PAUSED is 'true'")
-        self.assertIn("Kill switch thrown", views.html_page(d))
+        for path, _ in views.OVERVIEW:
+            self.assertIn("Kill switch thrown", views.html_page(d, path), f"{path}: on every Overview tab (#253)")
         self.assertIn("KILL SWITCH: THROWN", views.text(d))
 
 
@@ -231,7 +242,10 @@ class DashboardServerTest(unittest.TestCase):
             servers.append((addr, server))
             started.set()
             return server
+        from system.cli.test_progress import ProgressViewTest, RolesTest
         with mock.patch.object(arsys.data, "collect", return_value=sample()), \
+             mock.patch.object(arsys.data, "progress", return_value=ProgressViewTest().page_data()), \
+             mock.patch.object(arsys.data, "roles", return_value=RolesTest().roles()), \
              mock.patch.object(arsys.http.server, "ThreadingHTTPServer", side_effect=capture), \
              mock.patch("builtins.print"):
             t = threading.Thread(target=arsys.serve, args=({}, 8765), daemon=True)
@@ -242,6 +256,16 @@ class DashboardServerTest(unittest.TestCase):
             base = f"http://127.0.0.1:{server.server_address[1]}"
             page = urllib.request.urlopen(base + "/").read().decode()
             self.assertIn("auto_research", page)
+            self.assertIn('<a href="/" aria-current=page>Progress</a>', page, "Progress is the default tab (#246)")
+            self.assertIn("Met: 0 of 2 features", page)
+            roles = urllib.request.urlopen(base + "/roles").read().decode()
+            self.assertIn('<a href="/roles" aria-current=page>Roles</a>', roles)
+            for path, name in views.OVERVIEW:
+                tab = urllib.request.urlopen(base + path).read().decode()
+                self.assertIn(f'<a href="{path}" aria-current=page>{name}</a>', tab)
+            old = urllib.request.urlopen(base + "/overview").read().decode()
+            self.assertIn('<a href="/waiting" aria-current=page>Waiting on you</a>', old, "a saved Overview link still opens")
+            self.assertEqual(arsys.data.collect.call_count, 1, "the Overview tabs share one read")
             icon = urllib.request.urlopen(base + "/favicon.svg")
             self.assertEqual(icon.headers["Content-Type"], "image/svg+xml")
             self.assertEqual(icon.read().decode(), views.ICON_SVG)
