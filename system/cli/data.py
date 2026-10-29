@@ -3,8 +3,10 @@ dispatcher/state branch and this Mac's runner; nothing is kept. Reads only.
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from system.cli import progress as progress_table
 from system.dispatcher import github_state, killswitch, merge_rules, notify, plan, state, usage
 from system.tools import post, runner
 
@@ -156,3 +158,20 @@ def collect(config, gh=None, store=None, now=None, with_runner=True):
         "runner": runner_view(config) if with_runner else None,
         "merges": merges_by_owner_account(gh, identity),
     }
+
+
+def progress(config, gh=None, store=None, root=None):
+    """The Progress tab (#241): the requirements and spec on this checkout of main, every issue and PR, the runs."""
+    identity = config["identity"]
+    gh = gh or post.GitHub(identity["repo"])
+    store = store or state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
+    root = Path(root or Path(__file__).resolve().parents[2])
+    everything = gh.api("GET", f"repos/{gh.repo}/issues?state=all&per_page=100", paginate=True)  # PRs too
+    issues = {x["number"]: {"title": x["title"], "body": x.get("body") or "", "state": x["state"].upper(),
+                            "labels": {lab["name"] for lab in x["labels"]}}
+              for x in everything if "pull_request" not in x}
+    prs = [{"number": x["number"], "body": x.get("body") or ""} for x in everything if "pull_request" in x]
+    out = progress_table.table((root / "project_requirements.md").read_text(), (root / "spec" / "acceptance.md").read_text(),
+                               issues, prs, store.read("runs"))
+    out.update(now=datetime.now(timezone.utc).isoformat(), repo=identity["repo"], time_zone=identity["time_zone"])
+    return out
