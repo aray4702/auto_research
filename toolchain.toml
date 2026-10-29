@@ -372,10 +372,18 @@ source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE
 
 [[licences.library]]
 distribution = "scipy"
-files = "scipy*/libg*"
-library = "GCC's Fortran and support runtimes (libgfortran, libgcc_s)"
+files = "scipy*/libgfortran*"
+library = "GCC's Fortran runtime"
 licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
 platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE.txt)"
+
+[[licences.library]]
+distribution = "scipy"
+files = "scipy/.dylibs/libgcc_s*"
+library = "GCC's support runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["macos-arm64"]
 source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE.txt)"
 
 [[licences.library]]
@@ -549,8 +557,9 @@ licence = "LGPL-2.1-or-later AND LGPL-2.0-or-later AND LGPL-2.1-only AND BSD-3-C
 platforms = ["linux-x86_64", "macos-arm64"]
 source = "https://github.com/libsndfile/libsndfile/blob/master/COPYING, https://lame.sourceforge.io/license.txt, https://www.mpg123.de/ (COPYING), https://xiph.org/licenses/"
 
-# torch 2.8.0 and torchaudio 2.8.0 (torio is part of torchaudio's wheel): their own libraries, and the
-# OpenMP and C++ runtimes they ship. The first entry that matches a file applies, so the runtimes come first.
+# torch 2.8.0 and torchaudio 2.8.0 (torio is part of torchaudio's wheel): the OpenMP and C++ runtimes they
+# ship, and their own libraries by name, so a third-party library added to torch/lib, torchaudio/lib or
+# torio/lib has no entry and fails.
 [[licences.library]]
 distribution = "torch"
 files = "torch/lib/libgomp.so.1"
@@ -569,23 +578,63 @@ source = "https://github.com/llvm/llvm-project/blob/main/openmp/LICENSE.TXT"
 
 [[licences.library]]
 distribution = "torch"
-files = "torch/lib/*"
-library = "PyTorch"
+files = "torch/lib/libtorch*"
+library = "PyTorch (libtorch, libtorch_cpu, libtorch_global_deps, libtorch_python, libtorchbind_test)"
 licence = "BSD-3-Clause"
 platforms = ["linux-x86_64", "macos-arm64"]
 source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
 
 [[licences.library]]
+distribution = "torch"
+files = "torch/lib/libc10.*"
+library = "PyTorch (libc10)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libshm.*"
+library = "PyTorch (libshm)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libaoti_custom_ops.so"
+library = "PyTorch (AOTInductor test ops)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libbackend_with_compiler.so"
+library = "PyTorch (TorchScript backend test library)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libjitbackend_test.so"
+library = "PyTorch (TorchScript backend test library)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
 distribution = "torchaudio"
-files = "torchaudio/lib/*"
-library = "torchaudio"
+files = "torchaudio/lib/*torchaudio*"
+library = "torchaudio (_torchaudio, _torchaudio_sox, libtorchaudio, libtorchaudio_sox)"
 licence = "BSD-2-Clause"
 platforms = ["linux-x86_64", "macos-arm64"]
 source = "https://github.com/pytorch/audio/blob/v2.8.0/LICENSE"
 
 [[licences.library]]
 distribution = "torchaudio"
-files = "torio/lib/*"
+files = "torio/lib/*torio_ffmpeg*"
 library = "torio (part of torchaudio's wheel)"
 licence = "BSD-2-Clause"
 platforms = ["linux-x86_64", "macos-arm64"]
