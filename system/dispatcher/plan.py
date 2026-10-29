@@ -88,7 +88,9 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None, dail
             out.append(("developer", i["number"], f"Item #{i['number']} is sev:1: revert first (blueprint §3), then fix the cause.", "sev:1"))
     for pr in agent_prs:
         why = []
-        if pr["gate"] == "FAILURE":
+        # While main's own gate is red, a PR's red gate is main's: the author has nothing to change, and restarting it
+        # every poll only says so (#336). Main's fix is its own item; once main is green, the red PR is offered again.
+        if pr["gate"] == "FAILURE" and snap.get("main_gate") != "FAILURE":
             why.append("its gate is red")
         review = latest_review(pr, bot)
         # Once the author has answered, by a change or a comment, the PR goes back to the Reviewer (#257): an answer by
