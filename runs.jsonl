@@ -1148,3 +1148,4 @@
 {"at": "2026-10-29T18:03:46+00:00", "event": "end", "item": 351, "role": "developer", "run_id": "developer-20261029T174340Z", "status": "cut-off"}
 {"at": "2026-10-29T18:04:13+00:00", "event": "start", "item": null, "pid": 40506, "role": "coordinator", "run_id": "coordinator-20261029T180410Z", "task": "Items closed since your last run: #339. Record their goals' progress, close what is done, and chart and schedule what comes next."}
 {"at": "2026-10-29T18:04:17+00:00", "event": "start", "item": 357, "pid": 40618, "role": "developer", "run_id": "developer-20261029T180410Z", "task": "PR #357 needs work: the Reviewer asked for changes."}
+{"at": "2026-10-29T18:05:10+00:00", "cost_usd": 0.158272, "denials": 0, "denied": [], "event": "end", "five_hour": 0.2, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T180410Z", "seven_day": 0.03, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 17}
