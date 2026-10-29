@@ -39,6 +39,10 @@ class DenialsTest(unittest.TestCase):
         sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {
             "command": "cat <<'EOF' | python3 -I system/tools/post.py comment 138 --body-file -\nText | with; pipes\nEOF"}})
         self.assertIn(sig, explained, "the rules' cat pipe, #138")
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "sed -n '1,80p' system/rules.md"}})
+        self.assertIn(sig, explained, "sed, which can write files, #184")
+        allowed = runner.load_all()["runner"]["common"]["allow"]
+        self.assertFalse([a for a in allowed if a.startswith("Bash(sed")], "the explanation holds only while sed is denied")
 
     def test_file_tools_are_explained_only_while_every_role_has_them_without_limit(self):
         config = runner.load_all()["runner"]
@@ -51,11 +55,36 @@ class DenialsTest(unittest.TestCase):
                 self.assertIn(tool, role["tools"], "else a denial could be a real gap")
         self.assertIn("--restricted", config["runner"]["flags"])
 
+    def test_a_plain_ls_is_explained_only_while_every_role_may_run_it_and_a_compound_ls_is_not(self):
+        config = runner.load_all()["runner"]
+        explained = config["denials"]["explained"]
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls ~/Library/Logs/auto_research"}})
+        self.assertIn(sig, explained, "outside the worktree, --restricted denies it (#182)")
+        self.assertIn("Bash(ls:*)", config["common"]["allow"], "else a denial could be a real gap")
+        self.assertFalse([d for d in config["common"]["deny"] if d.startswith("Bash(ls")], "else a denial could be a real gap")
+        for role in config["roles"].values():
+            self.assertIn("Bash", role["tools"], "else a denial could be a real gap")
+        self.assertIn("--restricted", config["runner"]["flags"])
+        compound = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls system | head"}})
+        self.assertEqual(len(daily.denials([end(x, denied=[compound]) for x in "abc"], NOW, explained)), 1, "still the one-command rule")
+
     def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
         for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
                               ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
                               ("echo $(cat key) && ls; date", "Bash: echo $( && ;"), ("cat a\\|b", "Bash: cat")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
+
+    def test_a_second_line_is_marked_so_a_multiline_denial_is_raised_as_compound(self):
+        for command, want in [("git fetch origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
+                              ("git fetch origin main\n", "Bash: git fetch"), ("git fetch \\\n  origin main", "Bash: git fetch"),
+                              ("cat > a.md <<'EOF'\nx\nEOF", "Bash: cat > <<"), ("git log | head\ndate", "Bash: git log | ⏎"),
+                              ('git commit -m "Fix x\n\nCo-Authored-By: y"', "Bash: git commit"),
+                              ('gh pr create --body "a\nb \\" c\nd" | cat', "Bash: gh pr |"),
+                              ("git fetch \\\n  origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
+                              ("cat <<EOF > a.md\ngh x\nEOF\ngh pr diff 187", "Bash: cat << > ⏎")]:
+            self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
+        runs = [end(x, denied=["Bash: git fetch ⏎"]) for x in "abc"]
+        self.assertEqual([k for k, *_ in daily.denials(runs, NOW)], ["compound:Bash: git fetch ⏎"], "#178: not a git fetch gap")
 
     def test_signatures_keep_only_the_tool_and_first_two_words(self):
         self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "gh pr checks 34 --watch"}}), "Bash: gh pr")
@@ -87,6 +116,28 @@ class DenialsTest(unittest.TestCase):
             sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
             self.assertEqual(sig, want, command)
             self.assertNotIn(token, sig)
+
+    def test_a_first_word_that_isnt_a_command_is_recorded_by_its_shape(self):
+        token = "gh" + "p_" + "A1b2" * 9
+        for command, want in [("/opt/homebrew/bin/python3 -I system/tools/post.py read 1", "Bash: …/python3 -I system/tools/post.py"),
+                              ("~/.local/bin/arsys status", "Bash: …/arsys status"), ("./run.sh --x", "Bash: …/run.sh"),
+                              ("\"/Users/x/bin/gh\" pr list", "Bash: …/gh pr"), (f"/tmp/{token}", "Bash: …/?"),
+                              (f"/Users/x/{'a' * 21}", "Bash: …/?"), ("(cd /tmp; ls)", "Bash: (… ;"),
+                              (f"\"{token}\"", "Bash: \"…"), (f"${token} x", "Bash: $…"), ("Rscript a.R", "Bash: ?"),
+                              (f"{token} x", "Bash: ?")]:
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertEqual(sig, want, command)
+            self.assertNotIn(token, sig)
+            self.assertNotIn("/Users", sig)
+
+    def test_a_recurring_unrecognized_denial_asks_for_its_shape_not_a_grant(self):
+        for sig in ("Bash: ?", "Bash: …/?"):
+            got = daily.denials([end(x, denied=[sig]) for x in "abc"], NOW)
+            self.assertEqual([(k, lvl) for k, lvl, *_ in got], [(f"denial:{sig}", "builder")], "same key as before #176")
+            self.assertIn("unrecognized", got[0][2])
+            self.assertNotIn("Grant it", got[0][3])
+        got = daily.denials([end(x, denied=["Bash: …/python3 -I"]) for x in "abc"], NOW)
+        self.assertIn("Grant it by rule", got[0][3], "a named command is a permission gap")
 
 
 class BumpyTest(unittest.TestCase):
@@ -138,7 +189,7 @@ class ProtectionTest(unittest.TestCase):
     LIVE = {"required_status_checks": {"strict": True, "checks": [{"context": "gate", "app_id": 15368}]},
             "enforce_admins": {"enabled": True},
             "required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": False,
-                                              "require_code_owner_reviews": True},
+                                              "require_code_owner_reviews": False},
             "allow_force_pushes": {"enabled": False}, "allow_deletions": {"enabled": False}}
 
     def test_the_recorded_settings_pass_and_any_change_is_a_breach_for_the_owner(self):
