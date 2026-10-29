@@ -29,3 +29,641 @@ allow_write = [
 # The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
 [uv]
 version = "0.13.6"
+
+# G1-15's licence check (.github/scripts/check_licences.py), in the test job on both platforms' installs.
+[licences]
+# The Owner's answer 2a on #81, project_requirements.md §7. Only the Owner adds to these lists.
+# Licences a distribution's own metadata may give.
+distributions = [
+  "MIT", "BSD-2-Clause", "BSD-3-Clause", "Apache-2.0", "PSF-2.0", "ISC", "Unlicense", "HPND", "MPL-2.0",
+  "MIT-0", "0BSD", "Zlib", "CC0-1.0", "MIT-CMU", "CNRI-Python",   # the Owner's answer 1a on #122
+]
+# Further licences a bundled shared library may carry. LGPL is accepted only as a bundled library.
+bundled = [
+  "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later",
+  "GPL-3.0-or-later WITH GCC-exception-3.1",
+  "LicenseRef-Intel-Simplified-Software-License",
+  "Apache-2.0 WITH LLVM-exception",
+  # The Owner's answer 2a on #122.
+  "BSD-3-Clause-Open-MPI", "BSD-3-Clause-Clear", "IJG", "libpng-2.0", "libtiff", "bzip2-1.0.6", "FTL",
+  "MIT-Modern-Variant", "MIT-open-group", "X11",
+  # The Owner's answers 3a and 4a on #122: x264 and x265 in av, LAME in av and soundfile. A library still
+  # passes only through its own [[licences.library]] entry below, so these admit those files alone.
+  "GPL-2.0-or-later", "LGPL-2.0-or-later",
+]
+
+# Where a distribution's metadata gives no clear SPDX licence. Pinned to the version that was read, from the
+# licence file in the wheel's .dist-info.
+[[licences.override]]
+distribution = "cloudpickle"
+version = "3.1.2"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/cloudpickle/3.1.2/ (cloudpickle-3.1.2.dist-info/licenses/LICENSE)"
+
+[[licences.override]]
+distribution = "contourpy"
+version = "1.3.3"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/contourpy/1.3.3/ (contourpy-1.3.3.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "cycler"
+version = "0.12.1"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/cycler/0.12.1/ (cycler-0.12.1.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "Jinja2"
+version = "3.1.6"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/Jinja2/3.1.6/ (jinja2-3.1.6.dist-info/licenses/LICENSE.txt)"
+
+[[licences.override]]
+distribution = "kiwisolver"
+version = "1.5.1"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/kiwisolver/1.5.1/ (kiwisolver-1.5.1.dist-info/licenses/LICENSE)"
+
+[[licences.override]]
+distribution = "mpmath"
+version = "1.3.0"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/mpmath/1.3.0/ (mpmath-1.3.0.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "omegaconf"
+version = "2.4.0"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/omegaconf/2.4.0/ (omegaconf-2.4.0.dist-info/licenses/LICENSE; its vendored ANTLR runtime, licenses/ATTRIBUTION/LICENSE-antlr4, is BSD-3-Clause too)"
+
+[[licences.override]]
+distribution = "protobuf"
+version = "7.36.2"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/protobuf/7.36.2/ (protobuf-7.36.2.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "python-dateutil"
+version = "3.0.0"
+licence = "Apache-2.0 AND BSD-3-Clause"
+source = "https://pypi.org/project/python-dateutil/3.0.0/ (python_dateutil-3.0.0.dist-info/licenses/LICENSE)"
+
+[[licences.override]]
+distribution = "scipy"
+version = "1.17.1"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE.txt; its bundled libraries are entries below)"
+
+[[licences.override]]
+distribution = "semver"
+version = "3.1.0"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/semver/3.1.0/ (semver-3.1.0.dist-info/licenses/LICENSE.txt)"
+
+[[licences.override]]
+distribution = "soundfile"
+version = "0.14.0"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/soundfile/0.14.0/ (soundfile-0.14.0.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "sympy"
+version = "1.14.0"
+licence = "BSD-3-Clause AND MIT"
+source = "https://pypi.org/project/sympy/1.14.0/ (sympy-1.14.0.dist-info/licenses/LICENSE)"
+
+# torch's file is PyTorch's BSD-3-Clause, then the third-party code its source repository bundles, which the
+# file lists by third_party/ path; torch's bundled shared libraries are entries below.
+[[licences.override]]
+distribution = "torch"
+version = "2.8.0"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/torch/2.8.0/ (torch-2.8.0.dist-info/licenses/LICENSE, lines 1-84)"
+
+[[licences.override]]
+distribution = "torch"
+version = "2.8.0+cpu"
+licence = "BSD-3-Clause"
+source = "https://download.pytorch.org/whl/cpu/torch/ (torch-2.8.0+cpu.dist-info/licenses/LICENSE, lines 1-84)"
+
+[[licences.override]]
+distribution = "torchaudio"
+version = "2.8.0"
+licence = "BSD-2-Clause"
+source = "https://pypi.org/project/torchaudio/2.8.0/ (torchaudio-2.8.0.dist-info/licenses/LICENSE)"
+
+[[licences.override]]
+distribution = "torchaudio"
+version = "2.8.0+cpu"
+licence = "BSD-2-Clause"
+source = "https://download.pytorch.org/whl/cpu/torchaudio/ (torchaudio-2.8.0+cpu.dist-info/licenses/LICENSE)"
+
+# One entry per bundled shared library (or a family, by glob). `files` is an fnmatch glob relative to
+# site-packages, where `*` also matches `/`: `av*/libx264*` takes Linux's av.libs/ and macOS's av/.dylibs/.
+# A distribution's own libraries carry the distribution's licence.
+
+# av 18.1.0: FFmpeg, built with --enable-version3 and without --enable-gpl, and the codecs linked into it.
+[[licences.library]]
+distribution = "av"
+files = "av*/libav*"
+library = "FFmpeg (libavcodec, libavdevice, libavfilter, libavformat, libavutil)"
+licence = "LGPL-3.0-or-later"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://www.ffmpeg.org/legal.html (libavutil's configure string: --enable-version3, no --enable-gpl)"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libsw*"
+library = "FFmpeg (libswresample, libswscale)"
+licence = "LGPL-3.0-or-later"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://www.ffmpeg.org/legal.html"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libx26[45]*"
+library = "x264 and x265 (video encoders the product never calls)"
+licence = "GPL-2.0-or-later"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://code.videolan.org/videolan/x264/-/blob/master/COPYING, https://bitbucket.org/multicoreware/x265_git/src/master/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libmp3lame*"
+library = "LAME"
+licence = "LGPL-2.0-or-later"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://lame.sourceforge.io/license.txt"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libSvtAv1Enc*"
+library = "SVT-AV1"
+licence = "BSD-3-Clause-Clear"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://gitlab.com/AOMediaCodec/SVT-AV1/-/blob/master/LICENSE.md"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libdav1d*"
+library = "dav1d"
+licence = "BSD-2-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://code.videolan.org/videolan/dav1d/-/blob/master/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libopencore-amr*"
+library = "opencore-amr"
+licence = "Apache-2.0"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://sourceforge.net/p/opencore-amr/code/ci/master/tree/LICENSE"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libopus*"
+library = "Opus"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://opus-codec.org/license/"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libvpx*"
+library = "libvpx"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://chromium.googlesource.com/webm/libvpx/+/refs/heads/main/LICENSE"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libwebp*"
+library = "libwebp and libwebpmux"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av*/libsharpyuv*"
+library = "libsharpyuv (part of libwebp)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://chromium.googlesource.com/webm/libwebp/+/refs/heads/main/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libXau-*"
+library = "libXau"
+licence = "MIT-open-group"
+platforms = ["linux-x86_64"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxau/-/blob/master/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libxcb*"
+library = "libxcb, libxcb-shape, libxcb-shm and libxcb-xfixes"
+licence = "X11"
+platforms = ["linux-x86_64"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb/-/blob/master/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libasound-*"
+library = "alsa-lib"
+licence = "LGPL-2.1-or-later"
+platforms = ["linux-x86_64"]
+source = "https://github.com/alsa-project/alsa-lib/blob/master/COPYING"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libdrm-*"
+library = "libdrm"
+licence = "MIT"
+platforms = ["linux-x86_64"]
+source = "https://gitlab.freedesktop.org/mesa/drm (meson.build: license MIT)"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libvpl-*"
+library = "Intel oneVPL dispatcher"
+licence = "MIT"
+platforms = ["linux-x86_64"]
+source = "https://github.com/intel/libvpl/blob/main/LICENSE"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libgnutls-*"
+library = "GnuTLS"
+licence = "LGPL-2.1-or-later"
+platforms = ["linux-x86_64"]
+source = "https://gitlab.com/gnutls/gnutls/-/blob/master/LICENSE"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libgmp-*"
+library = "GMP"
+licence = "LGPL-3.0-or-later OR GPL-2.0-or-later"
+platforms = ["linux-x86_64"]
+source = "https://gmplib.org/manual/Copying"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libnettle-*"
+library = "Nettle"
+licence = "LGPL-3.0-or-later OR GPL-2.0-or-later"
+platforms = ["linux-x86_64"]
+source = "https://www.lysator.liu.se/~nisse/nettle/nettle.html#Copyright"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libhogweed-*"
+library = "Nettle's libhogweed"
+licence = "LGPL-3.0-or-later OR GPL-2.0-or-later"
+platforms = ["linux-x86_64"]
+source = "https://www.lysator.liu.se/~nisse/nettle/nettle.html#Copyright"
+
+[[licences.library]]
+distribution = "av"
+files = "av.libs/libunistring-*"
+library = "libunistring"
+licence = "LGPL-3.0-or-later OR GPL-2.0-or-later"
+platforms = ["linux-x86_64"]
+source = "https://www.gnu.org/software/libunistring/manual/libunistring.html#Licenses"
+
+# ctranslate2 4.8.4: its own library, with oneDNN (Apache-2.0) and Intel MKL linked in on Linux (the
+# strings "dnnl_version" and "Intel(R) oneAPI Math Kernel" in the binary), and spdlog (MIT) on both.
+[[licences.library]]
+distribution = "ctranslate2"
+files = "ctranslate2.libs/libctranslate2-*"
+library = "CTranslate2, with oneDNN and Intel MKL"
+licence = "MIT AND Apache-2.0 AND LicenseRef-Intel-Simplified-Software-License"
+platforms = ["linux-x86_64"]
+source = "https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE, https://github.com/uxlfoundation/oneDNN/blob/main/LICENSE, https://www.intel.com/content/www/us/en/developer/articles/license/onemkl-license-faq.html"
+
+[[licences.library]]
+distribution = "ctranslate2"
+files = "ctranslate2/.dylibs/libctranslate2*"
+library = "CTranslate2"
+licence = "MIT"
+platforms = ["macos-arm64"]
+source = "https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE"
+
+[[licences.library]]
+distribution = "ctranslate2"
+files = "ctranslate2.libs/libgomp-*"
+library = "GCC's OpenMP runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["linux-x86_64"]
+source = "https://gcc.gnu.org/onlinedocs/libgomp/Library-Index.html"
+
+# numpy 2.4.6 and scipy 1.17.1: OpenBLAS (with LAPACK) and the GCC runtimes, per each wheel's LICENSE.txt.
+[[licences.library]]
+distribution = "numpy"
+files = "numpy.libs/libscipy_openblas*"
+library = "OpenBLAS, with LAPACK"
+licence = "BSD-3-Clause AND BSD-3-Clause-Open-MPI"
+platforms = ["linux-x86_64"]
+source = "https://pypi.org/project/numpy/2.4.6/ (numpy-2.4.6.dist-info/licenses/LICENSE.txt)"
+
+[[licences.library]]
+distribution = "numpy"
+files = "numpy.libs/libgfortran-*"
+library = "GCC's Fortran runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["linux-x86_64"]
+source = "https://pypi.org/project/numpy/2.4.6/ (numpy-2.4.6.dist-info/licenses/LICENSE.txt)"
+
+[[licences.library]]
+distribution = "numpy"
+files = "numpy.libs/libquadmath-*"
+library = "GCC's libquadmath"
+licence = "LGPL-2.1-or-later"
+platforms = ["linux-x86_64"]
+source = "https://gcc.gnu.org/onlinedocs/libquadmath/"
+
+[[licences.library]]
+distribution = "scipy"
+files = "scipy.libs/libscipy_openblas*"
+library = "OpenBLAS, with LAPACK"
+licence = "BSD-3-Clause AND BSD-3-Clause-Open-MPI"
+platforms = ["linux-x86_64"]
+source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE.txt)"
+
+[[licences.library]]
+distribution = "scipy"
+files = "scipy*/libgfortran*"
+library = "GCC's Fortran runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE.txt)"
+
+[[licences.library]]
+distribution = "scipy"
+files = "scipy/.dylibs/libgcc_s*"
+library = "GCC's support runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["macos-arm64"]
+source = "https://pypi.org/project/scipy/1.17.1/ (scipy-1.17.1.dist-info/LICENSE.txt)"
+
+[[licences.library]]
+distribution = "scipy"
+files = "scipy*/libquadmath*"
+library = "GCC's libquadmath"
+licence = "LGPL-2.1-or-later"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://gcc.gnu.org/onlinedocs/libquadmath/"
+
+[[licences.library]]
+distribution = "scikit-learn"
+files = "scikit_learn.libs/libgomp-*"
+library = "GCC's OpenMP runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["linux-x86_64"]
+source = "https://gcc.gnu.org/onlinedocs/libgomp/Library-Index.html"
+
+[[licences.library]]
+distribution = "scikit-learn"
+files = "sklearn/.dylibs/libomp.dylib"
+library = "LLVM's OpenMP runtime"
+licence = "Apache-2.0 WITH LLVM-exception"
+platforms = ["macos-arm64"]
+source = "https://github.com/llvm/llvm-project/blob/main/openmp/LICENSE.TXT"
+
+[[licences.library]]
+distribution = "onnxruntime"
+files = "onnxruntime/capi/*onnxruntime*"
+library = "ONNX Runtime"
+licence = "MIT"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/microsoft/onnxruntime/blob/main/LICENSE"
+
+# pillow 13.0.0: per pillow-13.0.0.dist-info/licenses/LICENSE, or upstream's where that file is stale.
+[[licences.library]]
+distribution = "pillow"
+files = "*/libXau*"
+library = "libXau"
+licence = "MIT-open-group"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section XAU"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libxcb*"
+library = "libxcb"
+licence = "X11"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section XCB"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libavif*"
+library = "libavif, with AOM, dav1d and libyuv"
+licence = "BSD-2-Clause AND BSD-3-Clause AND IJG"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, sections AOM, DAV1D, LIBAVIF (with third_party/iccjpeg and libyuv) and LIBYUV"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libbrotli*"
+library = "Brotli"
+licence = "MIT"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section BROTLI"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libfreetype*"
+library = "FreeType, with bzip2 linked in"
+licence = "(FTL OR GPL-2.0-or-later) AND bzip2-1.0.6"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, sections FREETYPE2 and BZIP2 (BZ2_bzDecompress in the binary)"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libharfbuzz*"
+library = "HarfBuzz"
+licence = "MIT-Modern-Variant"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section HARFBUZZ"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libjpeg*"
+library = "libjpeg-turbo"
+licence = "IJG AND BSD-3-Clause AND Zlib"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section LIBJPEG; https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/LICENSE.md"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/liblcms2*"
+library = "Little CMS"
+licence = "MIT"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section LCMS2"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/liblzma*"
+library = "liblzma (XZ Utils 5.8)"
+licence = "0BSD"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/tukaani-project/xz/blob/master/COPYING (0BSD since 5.6; pillow's section LIBLZMA predates it)"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libopenjp2*"
+library = "OpenJPEG"
+licence = "BSD-2-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section OPENJPEG"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libpng16*"
+library = "libpng"
+licence = "libpng-2.0"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section LIBPNG"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libtiff*"
+library = "LibTIFF"
+licence = "libtiff"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section LIBTIFF"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libwebp*"
+library = "libwebp, libwebpdemux and libwebpmux"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section LIBWEBP"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libsharpyuv*"
+library = "libsharpyuv (part of libwebp)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "pillow's LICENSE, section LIBWEBP"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libz.*"
+library = "zlib-ng"
+licence = "Zlib"
+platforms = ["macos-arm64"]
+source = "pillow's LICENSE, section ZLIB"
+
+[[licences.library]]
+distribution = "pillow"
+files = "*/libzstd*"
+library = "Zstandard"
+licence = "BSD-3-Clause OR GPL-2.0-only"
+platforms = ["linux-x86_64"]
+source = "pillow's LICENSE, section ZSTD"
+
+# soundfile 0.14.0: libsndfile, with LAME, mpg123, FLAC, Ogg, Vorbis and Opus linked in (their symbols in
+# the binary).
+[[licences.library]]
+distribution = "soundfile"
+files = "_soundfile_data/libsndfile*"
+library = "libsndfile, with LAME, mpg123, FLAC, Ogg, Vorbis and Opus"
+licence = "LGPL-2.1-or-later AND LGPL-2.0-or-later AND LGPL-2.1-only AND BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/libsndfile/libsndfile/blob/master/COPYING, https://lame.sourceforge.io/license.txt, https://www.mpg123.de/ (COPYING), https://xiph.org/licenses/"
+
+# torch 2.8.0 and torchaudio 2.8.0 (torio is part of torchaudio's wheel): the OpenMP and C++ runtimes they
+# ship, and their own libraries by name, so a third-party library added to torch/lib, torchaudio/lib or
+# torio/lib has no entry and fails.
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libgomp.so.1"
+library = "GCC's OpenMP runtime"
+licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
+platforms = ["linux-x86_64"]
+source = "https://gcc.gnu.org/onlinedocs/libgomp/Library-Index.html"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libomp.dylib"
+library = "LLVM's OpenMP runtime"
+licence = "Apache-2.0 WITH LLVM-exception"
+platforms = ["macos-arm64"]
+source = "https://github.com/llvm/llvm-project/blob/main/openmp/LICENSE.TXT"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libtorch*"
+library = "PyTorch (libtorch, libtorch_cpu, libtorch_global_deps, libtorch_python, libtorchbind_test)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libc10.*"
+library = "PyTorch (libc10)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libshm.*"
+library = "PyTorch (libshm)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libaoti_custom_ops.so"
+library = "PyTorch (AOTInductor test ops)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libbackend_with_compiler.so"
+library = "PyTorch (TorchScript backend test library)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torch"
+files = "torch/lib/libjitbackend_test.so"
+library = "PyTorch (TorchScript backend test library)"
+licence = "BSD-3-Clause"
+platforms = ["linux-x86_64"]
+source = "https://github.com/pytorch/pytorch/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torchaudio"
+files = "torchaudio/lib/*torchaudio*"
+library = "torchaudio (_torchaudio, _torchaudio_sox, libtorchaudio, libtorchaudio_sox)"
+licence = "BSD-2-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/audio/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torchaudio"
+files = "torio/lib/*torio_ffmpeg*"
+library = "torio (part of torchaudio's wheel)"
+licence = "BSD-2-Clause"
+platforms = ["linux-x86_64", "macos-arm64"]
+source = "https://github.com/pytorch/audio/blob/v2.8.0/LICENSE"
+
+[[licences.library]]
+distribution = "torchaudio"
+files = "torchaudio/.dylibs/libc++*"
+library = "LLVM's libc++"
+licence = "Apache-2.0 WITH LLVM-exception"
+platforms = ["macos-arm64"]
+source = "https://github.com/llvm/llvm-project/blob/main/libcxx/LICENSE.TXT"
