@@ -9,9 +9,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import pytest
+
 from lmt import cli
 from lmt.errors import InputError
 from lmt.eval import readme
+
+pytestmark = pytest.mark.criterion("G1-14")
 
 ROOT = Path(__file__).resolve().parents[1]
 

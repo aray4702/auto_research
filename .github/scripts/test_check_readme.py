@@ -5,12 +5,14 @@ Run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
 
 import contextlib
 import io
+import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_readme
@@ -236,6 +238,57 @@ class ReadmeTest(unittest.TestCase):
         self.assertEqual(out.count("PASS"), 3, out)
         self.assertIn("SKIP S1-3", out)
         self.assertIn("SKIP S1-4", out)
+
+    def run_record(self, *flags):
+        path = self.root / "out" / "criteria-readme.json"
+        path.parent.mkdir(exist_ok=True)
+        code, _ = self.run_checks("--criteria-out", str(path), *flags)
+        self.assertEqual(sorted(p.name for p in path.parent.iterdir()), [path.name])  # no temporary left
+        return code, json.loads(path.read_text())
+
+    def test_record_lists_every_check(self):
+        self.commit(GOOD.replace("(blueprint.md)", "(docs/blueprint.md)"))
+        with mock.patch.dict(os.environ, {"GITHUB_SHA": "abc", "GITHUB_REF": "refs/heads/main",
+                                          "GITHUB_EVENT_NAME": "push", "GITHUB_RUN_ID": "7",
+                                          "GITHUB_RUN_ATTEMPT": "2", "LMT_TIER": "1"}):
+            code, record = self.run_record()
+        self.assertEqual(code, 1)
+        self.assertEqual({k: v for k, v in record.items() if k != "checks"}, {
+            "format": 1, "job": "readme", "commit": "abc", "ref": "refs/heads/main", "event": "push",
+            "run_id": 7, "run_attempt": 2, "tier": 1, "complete": True})
+        self.assertEqual(record["checks"], [
+            {"check": "check_readme.py::S1-1 title", "criteria": ["S1-1"], "outcome": "passed"},
+            {"check": "check_readme.py::S1-2 what it is", "criteria": ["S1-2"], "outcome": "passed"},
+            {"check": "check_readme.py::S1-3 build", "criteria": ["S1-3"], "outcome": "passed"},
+            {"check": "check_readme.py::S1-4 checks", "criteria": ["S1-4"], "outcome": "passed"},
+            {"check": "check_readme.py::S1-5 relative links", "criteria": ["S1-5"], "outcome": "failed"},
+        ])
+
+    def test_record_with_no_install(self):
+        self.commit(GOOD, {"FAIL_UV": "", "FAIL_GATE": ""})
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GITHUB_") and k != "LMT_TIER"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            code, record = self.run_record("--no-install")
+        self.assertEqual(code, 0)
+        self.assertEqual((record["job"], record["complete"], record["commit"], record["run_id"], record["tier"]),
+                         ("readme", True, None, None, None))
+        self.assertEqual([(c["criteria"], c["outcome"], c.get("reason")) for c in record["checks"]], [
+            (["S1-1"], "passed", None), (["S1-2"], "passed", None),
+            (["S1-3"], "not-run", "tier 0 runs no install"), (["S1-4"], "not-run", "tier 0 runs no install"),
+            (["S1-5"], "passed", None)])
+
+    def test_record_without_a_readme_fails_every_check(self):
+        self.commit(GOOD)
+        self.git("rm", "-q", "README.md")
+        code, record = self.run_record("--no-install")
+        self.assertEqual(code, 1)
+        self.assertEqual([c["outcome"] for c in record["checks"]],
+                         ["failed", "failed", "not-run", "not-run", "failed"])
+
+    def test_no_record_without_the_option(self):
+        self.commit(GOOD)
+        self.run_checks("--no-install")
+        self.assertEqual(list(self.root.glob("criteria-*")), [])
 
     def test_no_install_still_runs_the_static_checks(self):
         self.commit(GOOD.replace("# Local Meeting Transcriber", "# voice-app example"))
