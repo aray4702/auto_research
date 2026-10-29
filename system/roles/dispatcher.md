@@ -11,9 +11,9 @@ The Dispatcher is a script (`system/dispatcher/`), not an LLM run. It does every
    2. then open PRs that need work (feedback, red CI);
    3. then the work order, in sequence.
 
-   While an item is busy, only parallel-safe items start. Claim each item before starting its run, and never run two on one item. Never start a run that would cross what remains of a cap.
+   Within that order, work for a goal goes ahead of the system's own upkeep: a builder PR or a `type:system` item, unless it is `sev:1` or `sev:2` (#229). While an item is busy, only parallel-safe items start. Claim each item before starting its run, and never run two on one item. Never start a run that would cross what remains of a cap.
 4. **Merge one PR at a time,** by auto-merge only.
-   - Turn auto-merge on for unprotected PRs, and for protected ones under standing rule SR1: the Reviewer App and the Owner have both approved the current head (`system/standing-rules.md`). The Owner merges the rest of the protected ones.
+   - Turn auto-merge on for unprotected PRs, and for protected ones under standing rule SR1: the Reviewer App and the Owner (or the builder, under SR3) have both approved the current head (`system/standing-rules.md`). The Owner merges the rest of the protected ones.
    - Refresh only the PR that's next in line, protected ones included.
    - When a refresh dismisses an approval and the PR's own changes are unchanged, renew the approval once the gate is green. Ask the Owner to re-approve a code-owner approval, which can't be renewed.
 5. **Escalations.** Forward each new `needs-decision:owner` question to the Owner's Discord with its link and the CLI command that answers it. Remind once; never treat silence as an answer. Reopen an item that closed while its question to the Owner was unanswered, once per question, so the question still goes out (#114).
