@@ -1107,3 +1107,4 @@
 {"at": "2026-10-29T17:17:04+00:00", "event": "start", "item": 334, "pid": 4551, "role": "builder", "run_id": "builder-20261029T171657Z", "task": "PR #334 needs work: its gate is red."}
 {"at": "2026-10-29T17:17:05+00:00", "event": "start", "item": 123, "pid": 4584, "role": "developer", "run_id": "developer-20261029T171657Z", "task": "Work on your item, as the work order schedules it."}
 {"at": "2026-10-29T17:17:08+00:00", "event": "start", "item": 304, "pid": 4691, "role": "reviewer", "run_id": "reviewer-20261029T171657Z", "task": "Review PR #304."}
+{"at": "2026-10-29T17:18:53+00:00", "cost_usd": 0.696002, "denials": 0, "denied": [], "event": "end", "five_hour": 0.11, "item": 304, "role": "reviewer", "run_id": "reviewer-20261029T171657Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 25}
