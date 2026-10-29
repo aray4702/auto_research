@@ -36,6 +36,11 @@ complete = true
 [G1-7]
 complete = true
 
+# G1-3: tests/test_g1_3.py, the two-speaker product run, is the whole of its check (g1-stage2.md P5 and
+# its coverage table, #347, PR #376). It passes on main (9a15ca2, run 40965233774, every tier).
+[G1-3]
+complete = true
+
 [G1-4m]
 ci = false
 owner = "The two-speaker clip's SRT and WebVTT show their cues at the right times, with the speaker's label, in QuickTime Player and in VLC"
