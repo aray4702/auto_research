@@ -33,6 +33,36 @@ encodings = [      # each file is tests/fixtures/clip.<format>, made by the reci
   {format = "mov",  sha256 = "a29ebcb52a3657aac89f44f0ee49e06b62c2123acd988faa353579f53b9b3019"},
 ]
 
+[[fixture]]
+name = "two_speakers"
+path = "tests/fixtures/two_speakers.wav"
+reference = "tests/fixtures/two_speakers.txt"
+rttm = "tests/fixtures/two_speakers.rttm"
+gap = 0.5
+derived_sha256 = "fa430d37a857274a06cb463e81eef30785ca1cf701a4751de00c97ae422f3b82"
+reference_sha256 = "f33d40d2fbde15489acf3f025a1948826ac8224f8b6d22d9b2d8fe334bfd31ab"
+rttm_sha256 = "b37c535b58fdb558dcf34bc8d97e8a94b97c2fb220fa38bac94e2534d524f519"
+# The rule in design/internal/g1-stage2.md, "The two-speaker clip's rule (for #123)": in SPEAKERS.TXT, test-clean's
+# lowest-id F speaker is 121 and lowest-id M speaker is 61. Four turns, F, M, F, M, each the shortest run of the
+# speaker's next utterances, in ascending id order, whose samples plus 8,000 per gap between them reach 216,000:
+# 121-121726-0000 to 0001 (238,160), 61-70968-0000 to 0003 (276,800), 121-121726-0002 to 0004 (258,960) and
+# 61-70968-0004 to 0007 (271,040). 13 utterances, 1,068,960 samples with the gaps: 66.810 s.
+concat = [
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/121/121726/121-121726-0000.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/121/121726/121-121726-0001.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0000.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0001.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0002.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0003.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/121/121726/121-121726-0002.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/121/121726/121-121726-0003.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/121/121726/121-121726-0004.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0004.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0005.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0006.flac"},
+  {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0007.flac"},
+]
+
 # LS-ci: test-clean's 40 speakers in numeric order, the first 20, and for each the first utterance in sorted id
 # order that lasts 4–12 s (design/internal/g1-stage1.md §5a). 20 utterances, 162.360 s.
 [[dataset]]
