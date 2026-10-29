@@ -117,6 +117,28 @@ class DenialsTest(unittest.TestCase):
             self.assertEqual(sig, want, command)
             self.assertNotIn(token, sig)
 
+    def test_a_first_word_that_isnt_a_command_is_recorded_by_its_shape(self):
+        token = "gh" + "p_" + "A1b2" * 9
+        for command, want in [("/opt/homebrew/bin/python3 -I system/tools/post.py read 1", "Bash: …/python3 -I system/tools/post.py"),
+                              ("~/.local/bin/arsys status", "Bash: …/arsys status"), ("./run.sh --x", "Bash: …/run.sh"),
+                              ("\"/Users/x/bin/gh\" pr list", "Bash: …/gh pr"), (f"/tmp/{token}", "Bash: …/?"),
+                              (f"/Users/x/{'a' * 21}", "Bash: …/?"), ("(cd /tmp; ls)", "Bash: (… ;"),
+                              (f"\"{token}\"", "Bash: \"…"), (f"${token} x", "Bash: $…"), ("Rscript a.R", "Bash: ?"),
+                              (f"{token} x", "Bash: ?")]:
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertEqual(sig, want, command)
+            self.assertNotIn(token, sig)
+            self.assertNotIn("/Users", sig)
+
+    def test_a_recurring_unrecognized_denial_asks_for_its_shape_not_a_grant(self):
+        for sig in ("Bash: ?", "Bash: …/?"):
+            got = daily.denials([end(x, denied=[sig]) for x in "abc"], NOW)
+            self.assertEqual([(k, lvl) for k, lvl, *_ in got], [(f"denial:{sig}", "builder")], "same key as before #176")
+            self.assertIn("unrecognized", got[0][2])
+            self.assertNotIn("Grant it", got[0][3])
+        got = daily.denials([end(x, denied=["Bash: …/python3 -I"]) for x in "abc"], NOW)
+        self.assertIn("Grant it by rule", got[0][3], "a named command is a permission gap")
+
 
 class BumpyTest(unittest.TestCase):
     def test_two_unfinished_runs_or_three_runs_make_an_open_item_bumpy(self):
