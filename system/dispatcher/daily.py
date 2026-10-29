@@ -45,6 +45,10 @@ def denials(runs, now, explained=()):
         elif set(sig.split()) & set(usage.COMPOUND):
             out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
                         f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
+        elif set(sig.split()) & {"?", "…/?"}:
+            out.append((f"denial:{sig}", "builder", f"Recurring denial of an unrecognized command: {sig}",
+                        f"{where} The signature doesn't say what was denied, so nothing can be granted: find the commands in "
+                        "the runs' logs, and teach usage.first_word their shape (#176).", None))
         else:
             out.append((f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
                         f"{where} Grant it by rule, or say in the rules why not.", None))
