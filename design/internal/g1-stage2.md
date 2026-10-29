@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #387 | The four export goldens aren't one transcript: `transcript.json` is `test_export.py`'s two-segment `small()`, and `transcript.{txt,srt,vtt}` are `test_export_formats.py`'s five-segment one. P6a's `words` test and P9's golden test now take their JSON from `export.render(test_export_formats.small(), "json")` at test time, in `tmp_path`. No fixture is added or changed, and both items keep their file lists. P9's other golden test checks `transcript.json` against itself. G1-4 is unchanged |
 | 2026-10-29 | architect, #349 | Reviewer's findings on #386: a pull request runs tier 1 at most (933f962), so P6b's and P7c's PRs show the Developer's local `pytest -m models` result, P6b's with the four ffmpeg commands and their exit codes (G1-4's "the PR shows"); the ffmpeg step and `isolated` true are first confirmed on `main`'s `test-models`, a failure there is `sev:1`, and P10 marks G1-4 and G1-13 only after it. In `g3-stage1.md`, item 2a needs P7b too, and items 1 and 4b need P6a |
 | 2026-10-29 | architect, #349 | The Owner's "Break down L and XL items into S items" (2026-10-29): P6 (#349) splits into P6a (the subtitle checks, on the export goldens and a fake ffmpeg) and P6b (G1-4's test, with the real ffmpeg in `test-models`); P7 (#350) into P7a (the guard), P7b (`isolation.py`) and P7c (G1-13's test). Each has its own files, test, Needs and tier. `isolation.py` gains `wrap`, so P7b can test the namespace without the models. G1-4 and G1-13 are unchanged |
 | 2026-10-29 | architect, #372 | Reviewer's finding on #383: P12's step 6 could cut before a turn's first word and leave a piece with no words. A cut now also needs the piece to hold a word, and the tests gain both cases |
@@ -239,12 +240,12 @@ def words(path, fmt, labels) -> list[str]
 - **`ffmpeg_reencode`** fails, saying so, when `shutil.which("ffmpeg")` is `None`: it never skips.
 - **`words`** gives each format's words in order. For `json`, each segment's `text` split on white space. For `txt`, each line after its `] <label>: `. For `srt`, each cue's lines joined, after its `<label>: `. For `vtt`, each cue's text after its voice tag and its `<label>: `, with character references decoded (`html.unescape`).
 
-**`tests/test_subtitle_checks.py`** (P6a; the `test` job, no model), tagged `G1-4`. It uses `tests/fixtures/export/transcript.{json,txt,srt,vtt}`, whose labels include `José & Ana`, escaped in the WebVTT. Its fake `ffmpeg` is an executable `sh` script in `tmp_path`, put first on `PATH` with `monkeypatch`, that writes its arguments, one per line, to a file beside it. Each case sets what it prints and how it exits.
+**`tests/test_subtitle_checks.py`** (P6a; the `test` job, no model), tagged `G1-4`. It uses `tests/fixtures/export/transcript.{txt,srt,vtt}`, whose labels include `José & Ana`, escaped in the WebVTT. Those three are `test_export_formats.py`'s `small()`, while the committed `transcript.json` is `test_export.py`'s two-segment `small()`. So the test's JSON is `export.render(test_export_formats.small(), "json")`, written to `tmp_path`, and the committed `transcript.json` isn't used. The JSON renderer's bytes are already checked by `test_export.py`'s golden. Its fake `ffmpeg` is an executable `sh` script in `tmp_path`, put first on `PATH` with `monkeypatch`, that writes its arguments, one per line, to a file beside it. Each case sets what it prints and how it exits.
 
 - **The goldens pass.** With the silent fake exiting 0, `check_srt` and `check_vtt` pass on the goldens. The fake's recorded arguments are exactly `-v error -i <file> -map 0:s:0 -c:s srt -f srt -y /dev/null`, and the same with `webvtt` in place of both `srt`s.
 - **`ffmpeg_reencode` fails** (an `AssertionError`, or `pytest.fail`, never a skip) when the fake exits 1, when it prints a line on stdout, when it prints a line on stderr, and when no `ffmpeg` is on `PATH` (`PATH` set to an empty directory). Each failure's message names the file and the command.
 - **The parsers are strict.** An SRT whose first timestamp reads `00:00:0x,480` fails `check_srt`, and so does an SRT with no cue. A WebVTT without its `WEBVTT` line fails `check_vtt`, and so does one with no cue.
-- **`words`** gives the same list for all four goldens, with the JSON's labels, and that list is the JSON's segments' texts split on white space. `José & Ana`'s cue gives `Yes,`, `the`, `Q&A`, `<draft>`, … in the WebVTT, unescaped.
+- **`words`** gives the same list for the three goldens and that JSON, with the JSON's labels, and that list is the JSON's segments' texts split on white space. `José & Ana`'s cue gives `Yes,`, `the`, `Q&A`, `<draft>`, … in the WebVTT, unescaped.
 
 **Test of P6a:** `tests/test_subtitle_checks.py`, in the PR's `test` job (tier 2, for `tests/`).
 
@@ -354,7 +355,8 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 **#286's code.** #286 is decided in `g1-slice.md` S4 (PR #303), and P9 builds that text as it stands; this file doesn't restate it. That is: "The schema"'s patterns and its "Every pattern ends with `(?![\s\S])`" rule, in both schema copies; `write`'s `os.open(…, 0o666)` and "An output's mode", in `src/lmt/export/__init__.py`; and S4's Tests for both, in `tests/test_export.py`. Where S4 and this paragraph differ, S4 wins.
 
 **Tests.** `tests/test_transcript.py`:
-- `load` of the committed export golden (`tests/fixtures/export/transcript.json`) renders each format byte-identical to its golden.
+- `load` of the committed `tests/fixtures/export/transcript.json` gives `test_export.py`'s `small()` and renders JSON byte-identical to that file.
+- `test_export_formats.py`'s `small()`, written as JSON to `tmp_path` and read back with `load`, renders JSON, txt, srt and vtt byte-identical to the written file and to `transcript.{txt,srt,vtt}`. (The committed `transcript.json` is a different, two-segment transcript, so it can't be compared with those three.)
 - A missing file, a directory, `{` alone, `[]`, a document without `segments`, and `schema_version` `"2.0"` each raise `InputError` naming the path, with the problems above.
 
 `tests/test_export.py`: every #286 case in `g1-slice.md` S4's Tests that the file doesn't already have.
