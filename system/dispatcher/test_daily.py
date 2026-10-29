@@ -31,6 +31,30 @@ class DenialsTest(unittest.TestCase):
         self.assertIn("one command at a time", got[0][2])
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
+    def test_a_path_outside_the_worktree_is_raised_as_outside_not_a_gap(self):
+        wt = "/Users/x/runs/reviewer-1"
+        for command, want in [("git diff --no-index /Users/x/runs/system/a.md a.md", "Bash: git diff [outside]"),
+                              ("git diff HEAD -- ../reviewer-2", "Bash: git diff [outside]"),
+                              ("cat ~/notes.md", "Bash: cat [outside]"), ("git diff --output=/tmp/x.diff", "Bash: git diff [outside]"),
+                              ("git diff HEAD -- '/Users/x/runs/reviewer-1/../system/a.md'", "Bash: git diff [outside]"),
+                              ("git diff HEAD -- /Users/x/runs/reviewer-1/system/a.md", "Bash: git diff"),
+                              ("git diff origin/main...HEAD -- system/a.md", "Bash: git diff"),
+                              ("git diff HEAD -- system/../system/a.md", "Bash: git diff"),
+                              ("/opt/homebrew/bin/python3 -I system/tools/post.py read 1", "Bash: …/python3 -I system/tools/post.py"),
+                              ("X=/tmp ~/.local/bin/arsys status", "Bash: …/arsys status"),
+                              ("/usr/bin/git diff /tmp/a.md", "Bash: …/git diff [outside]")]:
+            self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}, wt), want, command)
+        self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "cat /etc/hosts"}}), "Bash: cat [outside]",
+                         "with no worktree known, any absolute path")
+        runs = [end(x, denied=["Bash: git diff [outside]"]) for x in "abc"]
+        got = daily.denials(runs, NOW)
+        self.assertEqual([(k, lvl) for k, lvl, *_ in got], [("outside:Bash: git diff [outside]", "builder")], "#177")
+        self.assertIn("outside the worktree", got[0][2])
+        self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
+        result = {"type": "result", "subtype": "success", "permission_denials": [
+            {"tool_name": "Bash", "tool_input": {"command": "git diff HEAD -- ../reviewer-2"}}]}
+        self.assertEqual(usage.summarize([json.dumps(result)], wt)["denied"], ["Bash: git diff [outside]"])
+
     def test_a_denial_the_rules_explain_is_not_raised(self):
         runs = [end(x, denied=["Bash: cat << |"]) for x in "abc"]
         self.assertEqual(daily.denials(runs, NOW, ["Bash: cat << |"]), [])
@@ -59,7 +83,9 @@ class DenialsTest(unittest.TestCase):
         config = runner.load_all()["runner"]
         explained = config["denials"]["explained"]
         sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls ~/Library/Logs/auto_research"}})
+        self.assertEqual(sig, "Bash: ls [outside]", "#177")
         self.assertIn(sig, explained, "outside the worktree, --restricted denies it (#182)")
+        self.assertIn("Bash: ls", explained, "the form runs recorded before #177")
         self.assertIn("Bash(ls:*)", config["common"]["allow"], "else a denial could be a real gap")
         self.assertFalse([d for d in config["common"]["deny"] if d.startswith("Bash(ls")], "else a denial could be a real gap")
         for role in config["roles"].values():
@@ -71,7 +97,10 @@ class DenialsTest(unittest.TestCase):
     def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
         for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
                               ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
-                              ("echo $(cat key) && ls; date", "Bash: echo $( && ;"), ("cat a\\|b", "Bash: cat")]:
+                              ("echo $(cat key) && ls; date", "Bash: echo $( && ;"), ("cat a\\|b", "Bash: cat"),
+                              ('git diff "$(git merge-base origin/main HEAD)"', "Bash: git diff $("),  # #177
+                              ('git diff "`git merge-base origin/main HEAD`" | head', "Bash: git diff ` |"),
+                              ("git diff '$(not expanded)'", "Bash: git diff")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
 
     def test_a_second_line_is_marked_so_a_multiline_denial_is_raised_as_compound(self):
@@ -81,7 +110,9 @@ class DenialsTest(unittest.TestCase):
                               ('git commit -m "Fix x\n\nCo-Authored-By: y"', "Bash: git commit"),
                               ('gh pr create --body "a\nb \\" c\nd" | cat', "Bash: gh pr |"),
                               ("git fetch \\\n  origin main\ngh pr diff 187", "Bash: git fetch ⏎"),
-                              ("cat <<EOF > a.md\ngh x\nEOF\ngh pr diff 187", "Bash: cat << > ⏎")]:
+                              ("cat <<EOF > a.md\ngh x\nEOF\ngh pr diff 187", "Bash: cat << > ⏎"),
+                              ('git diff "$(git merge-base\\\n origin/main HEAD)"\ndate', "Bash: git diff $( ⏎"),  # #177 with #178
+                              ('git commit -m "a\n\\$(b)"', "Bash: git commit")]:
             self.assertEqual(usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}}), want, command)
         runs = [end(x, denied=["Bash: git fetch ⏎"]) for x in "abc"]
         self.assertEqual([k for k, *_ in daily.denials(runs, NOW)], ["compound:Bash: git fetch ⏎"], "#178: not a git fetch gap")
@@ -91,7 +122,7 @@ class DenialsTest(unittest.TestCase):
         self.assertEqual(usage.denial_signature({"tool_name": "Write", "tool_input": {"file_path": "/tmp/x"}}), "Write")
         token = "gh" + "p_" + "A1b2" * 9
         for command, want in [(f"GH_TOKEN={token} gh pr list", "Bash: gh pr"), (f"export API_KEY={token}", "Bash: export"),
-                              (f"curl -H 'Authorization: {token}' x", "Bash: curl"), ("cat /Users/x/secret.txt", "Bash: cat"),
+                              (f"curl -H 'Authorization: {token}' x", "Bash: curl"), ("cat /Users/x/secret.txt", "Bash: cat [outside]"),
                               ("echo " + "a1b2c3d4" * 5, "Bash: echo"), ("echo xoxb-" + "1234-5678-abcd", "Bash: echo"),
                               ("cat secret.txt", "Bash: cat"), ("git push", "Bash: git push"), ("gh pr checks 34", "Bash: gh pr")]:
             sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
@@ -110,7 +141,7 @@ class DenialsTest(unittest.TestCase):
                               ("python3 -m pytest -q", "Bash: python3 -m pytest"),
                               (f"python3 -c \"print('{token}')\"", "Bash: python3 -c"),
                               (f"GH_TOKEN={token} python3 -I system/tools/post.py read 1", "Bash: python3 -I system/tools/post.py"),
-                              ("python3 /Users/x/secret.py", "Bash: python3"), ("python3 -I secrets/" + "a" * 60 + ".py", "Bash: python3 -I"),
+                              ("python3 /Users/x/secret.py", "Bash: python3 [outside]"), ("python3 -I secrets/" + "a" * 60 + ".py", "Bash: python3 -I"),
                               (f"python3 -I system/tools/post.py {token}", "Bash: python3 -I system/tools/post.py"),
                               ("python3", "Bash: python3")]:
             sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
@@ -122,7 +153,7 @@ class DenialsTest(unittest.TestCase):
         for command, want in [("/opt/homebrew/bin/python3 -I system/tools/post.py read 1", "Bash: …/python3 -I system/tools/post.py"),
                               ("~/.local/bin/arsys status", "Bash: …/arsys status"), ("./run.sh --x", "Bash: …/run.sh"),
                               ("\"/Users/x/bin/gh\" pr list", "Bash: …/gh pr"), (f"/tmp/{token}", "Bash: …/?"),
-                              (f"/Users/x/{'a' * 21}", "Bash: …/?"), ("(cd /tmp; ls)", "Bash: (… ;"),
+                              (f"/Users/x/{'a' * 21}", "Bash: …/?"), ("(cd /tmp; ls)", "Bash: (… ; [outside]"),
                               (f"\"{token}\"", "Bash: \"…"), (f"${token} x", "Bash: $…"), ("Rscript a.R", "Bash: ?"),
                               (f"{token} x", "Bash: ?")]:
             sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})

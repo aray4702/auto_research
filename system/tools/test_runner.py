@@ -84,6 +84,24 @@ class SettingsTest(unittest.TestCase):
                 open_ended = [r for r in allow if r.startswith(("Bash(uv run --frozen pytest", "Bash(uv run --frozen ruff")) and r.endswith(":*)")]
                 self.assertEqual(open_ended, [], role)
 
+    def test_the_licence_inventory_installs_only_the_locks_wheels_and_only_for_writers(self):
+        # #122's first step: both platforms' installs and check_licences.py --inventory, before any PR (#220).
+        check = "python3 -I .github/scripts/check_licences.py --site .venv/lib/python3.11/site-packages --platform macos-arm64 --inventory"
+        export = "uv export --frozen --all-extras --no-emit-project -o tmp/requirements.txt"
+        install = ("uv pip install --no-deps --require-hashes --no-build --target tmp/linux "
+                   "--python-platform x86_64-manylinux_2_28 --python-version 3.11 -r tmp/requirements.txt")
+        never = ["uv pip install requests", "uv pip install --target tmp/x -r tmp/requirements.txt",
+                 "uv pip install --no-deps --require-hashes --target tmp/x -r tmp/requirements.txt", "uv pip sync tmp/r.txt"]
+        for role, r in CONFIG["runner"]["roles"].items():
+            allow = runner.role_settings(CONFIG, role)["permissions"]["allow"]
+            prefixes = [a[len("Bash("):-len(":*)")] for a in allow if a.startswith("Bash(") and a.endswith(":*)")]
+            allowed = lambda cmd: f"Bash({cmd})" in allow or any(cmd == p or cmd.startswith(p + " ") for p in prefixes)
+            self.assertEqual(allowed(check), r["product_tools"], role)
+            writer = r["product_tools"] and "Write" in r["tools"]
+            self.assertEqual((allowed(export), allowed(install)), (writer, writer), role)
+            for cmd in never:  # a build runs a package's code; an unhashed install takes any package
+                self.assertFalse(allowed(cmd), f"{role}: {cmd}")
+
     def test_every_role_may_list_a_commits_files(self):
         # A :* rule matches whole words, so git ls-files doesn't cover git ls-tree (#179).
         for role in CONFIG["runner"]["roles"]:
