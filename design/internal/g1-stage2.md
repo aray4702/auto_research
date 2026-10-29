@@ -2,6 +2,8 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #372 | Reviewer's finding on #383: P12's step 6 could cut before a turn's first word and leave a piece with no words. A cut now also needs the piece to hold a word, and the tests gain both cases |
+| 2026-10-29 | architect, #372 | #372's measurement: AMI-ci's product DER is 0.426, mostly missed speech, and segments built from the diarization turns give 0.203. New item P12 makes `align.build` turns-first when there are turns, and keeps today's rule without them. #343 (P2b's reading) waits for it. `architecture.md`'s alignment paragraph changes with it, for the Owner's approval |
 | 2026-10-29 | architect, #345 | Reviewer's findings on #370: P11's fresh-process test runs the VAD through `get_speech_timestamps`, which pads to 512 samples; the `fake` fixture also fakes `onnxruntime` (and `faster_whisper.vad` for the fallback); the PR shows the Linux failure with a red ubuntu run on the tests alone, then the green one; the fallback's capture overlapping diarization's load is accepted, with the reasons |
 | 2026-10-29 | architect, #345 | P4's finding on PR #364: onnxruntime's warning on Linux breaks G1-11's one stderr line. New item P11 turns onnxruntime's log down to errors in `asr.py`, and P4 waits for it. P4's input and expected result don't change |
 | 2026-10-29 | architect, #289 | Reviewer's 01:32 findings on #304: P2 splits into P2a (the runner, on fakes) and P2b (the `eval-ci` job, and the command in the README), and P8 needs only P2a; the three RTFs' timing bases are stated, in P2a and in the README table's note (P8), with `public-api.md`'s wording asked of the Owner in #328; a two-speaker turn's 13.5 s counts the gaps between its own utterances, in whole samples; P7's guard test covers G3's `LMT_NETGUARD_ALLOW=127.0.0.1` cases, and `g3-stage1.md` points to it |
@@ -28,6 +30,7 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | **P9** | `lmt.transcript.load`, `jsonschema` at run time, and the code for #286 as `g1-slice.md` decides it | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
 | **P10** | The registry: `complete = true` for each criterion whose checks have passed on `main` | the items it marks | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 |
 | **P11** | onnxruntime's log down to errors, so a run's stderr is the product's own (P4's finding on #364) | — | `src/lmt/asr.py`, `tests/test_asr.py` | 3 |
+| **P12** | Turns-first segments, so the product's DER follows diarization (#372's finding on G1-8c) | — | `src/lmt/align.py`, `tests/test_align.py` | 3 |
 
 **Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. The one pair that may run at the same time and share a file is P2b and P6, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
 
@@ -39,6 +42,8 @@ This is what a Developer needs to build each item below in one run. It finishes 
 4. **#123's two-speaker clip**, then **P5**, then **P6 ∥ P7**. These carry G1-3, G1-4 and G1-13. **Recommendation to the Coordinator:** #123 lands the two-speaker clip first, as an item of its own (rules, "If the item is bigger than one run"), with LS full, AMI full and the one-hour recording after it, since only stage 3 needs those.
 5. **P10**, once the others have passed on `main`. If the deadline nears first, it marks what has passed, and a second P10 run marks the rest.
 6. **P9** whenever a run is free: no G1 criterion waits on it, but G3's stage 1 does.
+
+**P12 goes ahead of every other open item** (#372's finding, 2026-10-29). P2b's reading (#343) is blocked by it, and G1-5 and G1-8c with it. It shares no file with any other item.
 
 **What the deadline can carry.** It's 09:46 PT on 2026-10-29. Every item is one Developer run, and most are tier 2 or 3, so roughly an hour of CI each, plus review and the Owner's merge where the path is protected. All eleven fit by the end of 2026-10-30 if #123's two-speaker clip merges by the evening of 2026-10-29 (#110 has merged). The criteria at risk are: G1-3, G1-4 and G1-13, behind #123; and G1-5 and G1-8c, if G1-8c's first reading misses a bound. Next most exposed is G1-6, which waits for P8 behind P2a.
 
@@ -345,9 +350,63 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 
 **Test of the item:** those tests in the `test` job on both platforms, the red and green ubuntu runs above, and G1-1's test still passing in `test-models`. Then #364, rebased onto P11, shows `silence.wav` and `noise.wav` passing in `test-models` with their test unchanged.
 
+## P12. Turns-first segments
+
+**The finding** (#372: the builder's measurement at befdef7, one AMI-ci product run, ES2004a's 300 s, rescored offline with `score.der`'s metric and UEM). The product's DER is 0.426, and 0.390 of that is missed speech. Words-first segments run from their first word's start to their last word's end, and Whisper's word times sit inside the speech. So 48 s of the 55 s that no segment covers is in 67 slivers under 2 s each, at segment edges and pauses. Splitting at pauses, clipping to turns and padding (#372's H3, H4 and H7) don't reach the bound. Segments that take the diarization turns' spans and speakers (H8) give **0.203** (miss 0.144, false alarm 0.035, confusion 0.025), against pyannote alone's 0.181. So, when there are turns, `align.build` makes its segments from the turns, not from runs of words. That adds no parameter: `MAX_SEGMENT` is today's, and nothing is fitted to ES2004a. G1-8c's bounds and scoring, and G1-1 to G1-4, stay exactly as the spec gives them.
+
+### `align.build` with turns
+
+Words are rounded first, by `_rounded`, as now (`g1-slice.md` S4, "Times, rounded once"). Everything below is in whole milliseconds, as integers.
+
+1. **The turns, rounded and clipped.** Each turn's `start` and `end` become `round(t × 1000)`, clipped to `[0, D]`. A turn whose `end` isn't after its `start` is dropped. The rest are ordered by `(start, end, index in the input)`. "The turns" below are these, and "earlier" means earlier in this order.
+2. **Each word goes to one turn:** the turns whose `[start, end)` holds the word's midpoint, tested as `2 × start ≤ word.start + word.end < 2 × end`. Of those, the one that overlaps the word most (`min(ends) − max(starts)`), and on a tie the earlier.
+3. **A stray word,** whose midpoint no turn holds, goes to the nearest turn by the gap `max(turn.start − word.end, word.start − turn.end, 0)`, however far, and on a tie the earlier. `NEAREST` doesn't apply. Once every word is placed, each turn that took stray words stretches to cover them: `start = min(start, their starts)` and `end = max(end, their ends)`. So no word is lost, and every word's midpoint lies inside its turn.
+4. **A turn with no words is dropped,** since the schema needs `text` on every segment. A diarization speaker left with no turn doesn't appear.
+5. **Each turn left is a segment:** the turn's `start`, `end` and speaker, its words in ASR's order, and `segment_text(words)` as its text. No pause and no sentence end breaks it.
+6. **A turn longer than `MAX_SEGMENT` splits at word boundaries,** greedily. The first piece starts at the turn's `start`. Walking the turn's words in order, the current piece ends before word `w` when all four hold: the piece already holds a word; `w.end − piece start > 30 000` (`breaks`' rule); `w.start` is at or after the end of every earlier word in the piece; and `w.start > piece start`. That piece ends at `w.start`, where the next one starts, and the last piece ends at the turn's `end`. So every piece holds a word, as step 4 needs, and every word's midpoint lies inside its piece. `export/cues.py` needs that: a cue runs from a word's start to a word's end, the first from the segment's start and the last to its end, so each cue has `start < end`. A piece passes 30 s only where no word boundary allows less. The speech after a piece's last word, up to the next piece's first word or the turn's end, stays in it, so DER loses none.
+7. **Order and speakers.** The segments are sorted by `start`, stably, after being made in step 1's turn order with each turn's pieces in order. Speakers are numbered by first appearance in that order, `S1`, `S2`, …, labelled `Speaker 1`, ….
+
+**Where turns overlap,** their segments overlap in time. `public-api.md`'s rules allow that: segments sorted by `start`, with 0 ≤ `start` < `end` ≤ `source.duration`, and every segment with `speaker` and `text`. The transcript's words then follow segment order, which can differ from ASR's where a word went to a turn that starts later, nested in a longer one. That can change the transcript's WER, so P12's PR measures it (below). Step 2's tie rule keeps such moves to words that overlap the nested turn more than the long one.
+
+**Without turns** (`--no-diarize`, diarization finding none, or none left after step 1), **today's rule stands, unchanged:** segments are runs of words, broken at a pause of 1 s or more, at a sentence end and at 30 s (`breaks`), all one speaker, `S1`. `--no-diarize`'s outputs are byte-identical to `main`'s, LS-ci's figures with them, since LS-ci runs with `--no-diarize`. The turn branch of `_speakers_of`, and the first word's earliest-turn rule with it, go: `build` no longer uses them.
+
+**What else stays.** `assign_speaker`, `breaks`, `ends_sentence`, `segment_text`, `PAUSE`, `MAX_SEGMENT` and `NEAREST` stay as they are, with their tests. G2's live join uses them (`g2-stage1.md`, item 3a) and stays words-first. `build`'s signature and the `Transcript` it returns don't change, and neither do the exports, the schema, `pipeline` or the eval code.
+
+**`architecture.md`'s alignment paragraph** ("Pipeline") changes in this design PR, which says so for the Owner's approval, and `g1-slice.md` S4's "Segments" bullet points here. Until it merges, this item waits.
+
+### Tests
+
+`tests/test_align.py` gains `TurnsFirstTest`, one test per rule, each building with `samples = 16_000 × 60` unless it says otherwise:
+
+| Rule | Words | Turns | Segments `(start, end, speaker, text)` |
+| --- | --- | --- | --- |
+| A turn's span and speaker | `[1.5, 2.0] a`, `[2.5, 3.0] b` | A `[1.0, 4.0]` | `(1.0, 4.0, S1, "a b")` |
+| The midpoint, `[start, end)` | `[0.9, 1.1] x` (midpoint 1.0) | A `[0.0, 1.0]`, B `[1.0, 2.0]` | `(1.0, 2.0, S1, "x")` |
+| The midpoint, not the most overlap | `[0.0, 1.2] x` (midpoint 0.6; A overlaps it 0.1, B 0.5) | A `[0.55, 0.65]`, B `[0.7, 3.0]` | `(0.55, 0.65, S1, "x")`; B, wordless, is gone |
+| Two turns hold it: most overlap | `[0.5, 1.0] x`, `[2.0, 2.5] y` | A `[0.0, 2.3]`, B `[2.0, 4.0]` | `(0.0, 2.3, S1, "x")`, `(2.0, 4.0, S2, "y")` |
+| Two turns hold it: a tie goes to the earlier | `[0.5, 1.0] x`, `[2.2, 2.6] y` | A `[0.0, 5.0]`, B `[2.0, 3.0]` | `(0.0, 5.0, S1, "x y")` |
+| A wordless turn goes, with its speaker | `[0.2, 0.5] a`, `[4.2, 4.5] b` | A `[0.0, 1.0]`, B `[2.0, 3.0]`, A `[4.0, 5.0]` | `(0.0, 1.0, S1, "a")`, `(4.0, 5.0, S1, "b")`; one speaker |
+| A stray word joins the nearest turn, which stretches | `[0.2, 0.5] a`, `[1.6, 1.9] s`, `[3.2, 3.5] b` | A `[0.0, 1.0]`, B `[3.0, 4.0]` | `(0.0, 1.9, S1, "a s")`, `(3.0, 4.0, S2, "b")` |
+| A stray word's tie goes to the earlier | `[0.2, 0.5] a`, `[1.25, 1.75] s`, `[2.2, 2.5] b` | A `[0.0, 1.0]`, B `[2.0, 3.0]` | `(0.0, 1.75, S1, "a s")`, `(2.0, 3.0, S2, "b")` |
+| However far | `[0.2, 0.5] a`, `[6.0, 6.5] s` | A `[0.0, 1.0]` | `(0.0, 6.5, S1, "a s")` |
+| Turns rounded and clipped (`samples = 16_000`, so `D` = 1000) | `[0.1, 0.3] a`, `[0.7, 0.9] b` | A `[−0.5, 0.4]`, C `[0.45, 0.4504]`, B `[0.6, 3.0]` | `(0.0, 0.4, S1, "a")`, `(0.6, 1.0, S2, "b")`; C, rounded to zero length, is gone |
+| Order and numbering by first segment | `[0.2, 0.5] a`, `[2.2, 2.5] b` | B `[2.0, 3.0]`, A `[0.0, 1.0]` | `(0.0, 1.0, S1, "a")`, `(2.0, 3.0, S2, "b")`; `S1` is A |
+
+- **Over 30 s:** one turn A `[0.0, 40.0]` and words `[i × 0.5, i × 0.5 + 0.5]` for `i` in 0 to 79 give `(0.0, 30.0)` with 60 words and `(30.0, 40.0)` with 20, both `S1`. **An overlapping word moves the cut:** turn A `[0.0, 32.0]`, the words `[i × 0.5, i × 0.5 + 0.5]` for `i` in 0 to 58, then `[29.4, 30.2]`, `[30.1, 30.6]` and `[30.6, 31.0]`, give `(0.0, 30.6)` with 61 words and `(30.6, 32.0)` with 1. **No piece without a word:** turn A `[0.0, 1.0]` with words `[0.2, 0.5] a` and the stray `[40.0, 40.5] s` stretches to `[0.0, 40.5]` and gives `(0.0, 40.0, S1, "a")` and `(40.0, 40.5, S1, "s")`; with `s` alone, it gives `(0.0, 40.5, S1, "s")`, one piece over 30 s, since its only word has no boundary before it.
+- **Without turns, today's rule.** Every existing test with no turns stands as it is. `test_build_breaks_at_a_pause_a_sentence_and_a_speaker` becomes two cases: its four words with no turns give `["a", "b.", "c d"]`; with its turns, A `[0.0, 2.6]` and B `[2.6, 3.5]`, they give `["a b. c", "d"]`, since nothing but a turn breaks a segment there. Turns that step 1 drops entirely (`[Turn(0.5, 0.5, "A")]`) give exactly the transcript that `None` gives.
+- **`test_first_word_with_no_turn_near_takes_the_earliest_turns_speaker` goes,** along with its rule. The stray-word rows replace it. `AssignSpeakerTest`'s other tests call `assign_speaker` directly and stay.
+- **`test_random_words_always_valid`** keeps its 200 cases and its checks for every case: 0 ≤ `start` < `end` ≤ `D` for every segment and word, segments sorted by `start`, each segment's words with starts in order, and `speakers` exactly the segments' ones, numbered by first appearance. Without turns, the joined text is still the input's, in order. With turns, the segments' words, as `(start, end, text)`, are the rounded input words, each exactly once (compared as sorted lists), and each word's midpoint lies in its segment: `2 × start ≤ w.start + w.end < 2 × end`, in milliseconds. The check that word starts are in order across segments applies only without turns.
+
+**Test of the item:**
+- `tests/test_align.py` in the `test` job.
+- G1-1's, G1-2's, G1-3's and G1-4's tests passing, unchanged, in the PR's `test-models` (tier 3, for `src/lmt/`).
+- The PR body gives one local `uv run --frozen lmt eval --set ci` at the PR's head, with `dirty: false`. AMI-ci's product DER must be below 0.250 after rounding (P2b's rule), with AMI-ci's product WER ≤ 0.250 and LS-ci's ≤ 0.050 (LS-ci's should be unchanged at 0.006912). If any of them misses, the Developer reports the figures on the item and holds it for the Architect (`needs-decision:architect`), with no bound, scoring, fixture or subset changed.
+- After P12 merges, #343's PR #368 refreshes from `main`, and its `eval-ci` job takes G1-8c's reading in CI. Nothing in P2b's design changes.
+
 ## Risks
 
-- **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move.
+- **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move. It missed AMI-ci's DER (0.426, #343), and P12 is the fix.
+- **P12 rests on one meeting.** #372 measured turns-first on ES2004a alone, which is all of AMI-ci. AMI full, in stage 3 (G1-8), tests whether it holds across meetings. P12's other risk is WER where turns overlap (P12, "Where turns overlap"): its PR measures AMI-ci's WER, and #343's 0.182 leaves 0.068 to the bound.
 - **Determinism of the double run.** ASR and diarization run side by side. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3.
 - **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
 - **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
