@@ -8,9 +8,11 @@ recipe makes is under `<LMT_DATA_DIR>/derived/<dataset name>/`. Nothing here imp
 
     python -m lmt.eval.datasets fetch ci
     python -m lmt.eval.datasets build-fixture clip [--write]
+    python -m lmt.eval.datasets pin <url> [--member GLOB ...]
 """
 
 import argparse
+import fnmatch
 import hashlib
 import http.client
 import io
@@ -20,6 +22,7 @@ import sys
 import tarfile
 import tempfile
 import tomllib
+import urllib.parse
 import urllib.request
 import wave
 import xml.etree.ElementTree as ET
@@ -40,6 +43,19 @@ CHUNK = 1 << 20
 TIMEOUT = 60  # seconds without data before a download fails
 SAMPLE_MEETING = "AMI-ci"  # lmt demo --sample's meeting (design/internal/g3-stage1.md)
 KINDS = ("librispeech", "ami")
+
+# The manifests name only LibriSpeech and AMI sources (design/internal/g1-stage1.md §5a). AMI's RTTMs come from
+# BUT's diarization setup, at the one commit the manifests pin. `pin` refuses any other URL, and
+# tests/test_manifests.py checks every manifest URL against the same list.
+BUT_COMMIT = "2509d8933721023fab4def2618aabd5c28eb82e9"
+URL_PREFIXES = (
+    "https://www.openslr.org/resources/12/",
+    "https://us.openslr.org/resources/12/",
+    "https://groups.inf.ed.ac.uk/ami/",
+    f"https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/{BUT_COMMIT}/",
+)
+ARCHIVE_SUFFIXES = (".zip", ".tar.gz", ".tgz", ".tar")
+AUDIO_SUFFIXES = (".flac", ".wav")
 
 _HEX64 = re.compile(r"^[0-9a-f]{64}$")
 _UTTERANCE = re.compile(r"^\d+-\d+-\d+$")
@@ -64,8 +80,12 @@ class Source:
 
 @dataclass(frozen=True)
 class Piece:
+    """An archive member, or the slice [start, end) seconds of a single-file WAV source."""
+
     source: str
-    member: str
+    member: str | None = None
+    start: float | None = None
+    end: float | None = None
 
 
 @dataclass(frozen=True)
@@ -77,6 +97,7 @@ class Fixture:
     derived_sha256: str
     reference_sha256: str
     concat: tuple[Piece, ...]
+    cut: float | None = None  # seconds kept from the start of the joined audio
 
 
 @dataclass(frozen=True)
@@ -139,6 +160,7 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
     fixtures = {}
     for i, entry in enumerate(sets.get("fixture", [])):
         where = f"{sets_file}: fixture {i + 1}"
+        cut = entry.get("cut")
         fixture = Fixture(
             name=_get(entry, "name", str, where),
             path=_get(entry, "path", str, where),
@@ -146,19 +168,15 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
             gap=float(_get(entry, "gap", (int, float), where)),
             derived_sha256=_hex64(_get(entry, "derived_sha256", str, where), where),
             reference_sha256=_hex64(_get(entry, "reference_sha256", str, where), where),
-            concat=tuple(Piece(source=_get(p, "source", str, where), member=_get(p, "member", str, where))
-                         for p in _get(entry, "concat", list, where)),
+            concat=tuple(_piece(p, sources, where) for p in _get(entry, "concat", list, where)),
+            cut=None if cut is None else float(_get(entry, "cut", (int, float), where)),
         )
         if fixture.name in fixtures:
             raise ValueError(f"{where}: name {fixture.name!r} is repeated")
         if fixture.gap < 0 or not fixture.concat:
             raise ValueError(f"{where}: gap must be at least 0, and concat must have a piece")
-        for piece in fixture.concat:
-            source = sources.get(piece.source)
-            if source is None:
-                raise ValueError(f"{where}: source {piece.source!r} isn't in {sources_file.name}")
-            if piece.member not in {m.path for m in source.members}:
-                raise ValueError(f"{where}: {piece.member} isn't a member of {piece.source}")
+        if fixture.cut is not None and fixture.cut <= 0:
+            raise ValueError(f"{where}: cut must be positive")
         fixtures[fixture.name] = fixture
 
     datasets = {}
@@ -201,6 +219,28 @@ def _member(entry, where):
     if not parts or path.startswith("/") or "\\" in path or any(p in ("", ".", "..") for p in parts):
         raise ValueError(f"{where}: {path!r} isn't a relative path inside the archive")
     return Member(path=path, sha256=_hex64(_get(entry, "sha256", str, where), where))
+
+
+def _piece(entry, sources, where):
+    """{source, member} for an archive member, or {source, start, end} for a slice of a single-file source."""
+    source_id = _get(entry, "source", str, where)
+    source = sources.get(source_id)
+    if source is None:
+        raise ValueError(f"{where}: source {source_id!r} isn't in sources.toml")
+    if "member" in entry:
+        member = _get(entry, "member", str, where)
+        if "start" in entry or "end" in entry:
+            raise ValueError(f"{where}: a piece is a member or a slice, not both")
+        if member not in {m.path for m in source.members}:
+            raise ValueError(f"{where}: {member} isn't a member of {source_id}")
+        return Piece(source=source_id, member=member)
+    start = float(_get(entry, "start", (int, float), where))
+    end = float(_get(entry, "end", (int, float), where))
+    if source.members:
+        raise ValueError(f"{where}: a slice's source {source_id} must be a single file, without members")
+    if not 0 <= start < end:
+        raise ValueError(f"{where}: a slice needs 0 <= start < end")
+    return Piece(source=source_id, start=start, end=end)
 
 
 def _dataset(entry, where):
@@ -339,30 +379,41 @@ def _download(source, archive):
     failure = None
     for url in source.urls:
         fd, part = tempfile.mkstemp(dir=archive.parent, prefix=f".{archive.name}.", suffix=".part")
+        os.close(fd)
         part = Path(part)
         try:
-            digest, size = hashlib.sha256(), 0
-            with os.fdopen(fd, "wb") as out, urllib.request.urlopen(url, timeout=TIMEOUT) as response:
-                while block := response.read(CHUNK):
-                    out.write(block)
-                    digest.update(block)
-                    size += len(block)
-        except (OSError, http.client.HTTPException) as e:  # URLError, HTTPError and timeouts are OSErrors
-            part.unlink(missing_ok=True)
-            failure = InputError(url, f"download failed: {getattr(e, 'reason', e)}")
+            size, sha256 = _save(url, part)
+        except InputError as e:
+            failure = e
             continue
-        except BaseException:
-            part.unlink(missing_ok=True)
-            raise
         if size != source.size:
             part.unlink()
             raise InputError(url, f"size {size} doesn't match the manifest's {source.size}")
-        if digest.hexdigest() != source.sha256:
+        if sha256 != source.sha256:
             part.unlink()
             raise InputError(url, "SHA-256 doesn't match the manifest")
         part.replace(archive)
         return
     raise failure
+
+
+def _save(url, path):
+    """Download `url` to `path`, and return its size and SHA-256. A failed download deletes `path` and raises
+    InputError."""
+    try:
+        digest, size = hashlib.sha256(), 0
+        with open(path, "wb") as out, urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+            while block := response.read(CHUNK):
+                out.write(block)
+                digest.update(block)
+                size += len(block)
+    except (OSError, http.client.HTTPException) as e:  # URLError, HTTPError and timeouts are OSErrors
+        path.unlink(missing_ok=True)
+        raise InputError(url, f"download failed: {getattr(e, 'reason', e)}") from e
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
+    return size, digest.hexdigest()
 
 
 def _extract(archive, root, members):
@@ -425,33 +476,75 @@ def _write_member(stream, dest, sha256):
 
 
 def build_fixture(fixture: Fixture, manifests: Manifests) -> tuple[bytes, str]:
-    """The fixture's WAV bytes and reference text, from the members in the cache.
+    """The fixture's WAV bytes and reference text, from the sources in the cache.
 
-    Each piece is read as 16-bit samples, which decodes FLAC exactly, and must be 16 kHz mono. The pieces are
-    joined in order with round(gap × 16000) zero samples between them, and written as one-channel, 16-bit,
-    16 kHz WAV by the `wave` module, so the bytes are the same on every platform. The reference is each
-    utterance's line in its chapter's .trans.txt, without the id, joined by single spaces, with one final newline.
+    A member piece is read as 16-bit samples, which decodes FLAC exactly, and must be 16 kHz mono. A slice is
+    read from its single-file WAV source (`slice_wav`). The pieces are joined by `concat`, with the fixture's
+    gap and cut, and written as one-channel, 16-bit, 16 kHz WAV by the `wave` module, so the bytes are the same
+    on every platform. The reference is each member utterance's line in its chapter's .trans.txt, without the
+    id, joined by single spaces, with one final newline. A slice's references are its dataset's, placed with
+    `place_references`.
     """
-    gap = np.zeros(round(fixture.gap * SAMPLE_RATE), dtype=np.int16)
     samples, texts = [], []
-    for i, piece in enumerate(fixture.concat):
-        path = data_dir() / "sources" / manifests.sources[piece.source].id / piece.member
+    for piece in fixture.concat:
+        source = manifests.sources[piece.source]
+        if piece.member is None:
+            samples.append(slice_wav(source_file(source), piece.start, piece.end))
+            continue
+        path = data_dir() / "sources" / source.id / piece.member
         data, rate = soundfile.read(path, dtype="int16")
         if rate != SAMPLE_RATE or data.ndim != 1:
             channels = 1 if data.ndim == 1 else data.shape[1]
             raise ValueError(f"{path}: {rate} Hz, {channels} channels; the recipe takes 16 kHz mono")
-        if i:
-            samples.append(gap)
         samples.append(data)
         texts.append(_transcript(path))
+    joined, _ = concat(samples, fixture.gap, fixture.cut)
+    return _wav_bytes(joined.astype("<i2").tobytes()), " ".join(texts) + "\n"
 
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SAMPLE_RATE)
-        w.writeframes(np.concatenate(samples).astype("<i2").tobytes())
-    return buffer.getvalue(), " ".join(texts) + "\n"
+
+def concat(pieces: list[np.ndarray], gap: float, cut: float | None = None) -> tuple[np.ndarray, list[float]]:
+    """The pieces' samples joined in order, with round(gap × 16000) zero samples between them, and cut to the
+    first round(cut × 16000) samples when `cut` is set; and each piece's offset in the result, in seconds.
+    A piece's offset is where it would start even when the cut drops it."""
+    silence = np.zeros(round(gap * SAMPLE_RATE), dtype=np.int16)
+    joined, offsets, at = [], [], 0
+    for i, piece in enumerate(pieces):
+        if i:
+            joined.append(silence)
+            at += len(silence)
+        offsets.append(at / SAMPLE_RATE)
+        joined.append(piece)
+        at += len(piece)
+    samples = np.concatenate(joined)
+    if cut is not None:
+        samples = samples[:round(cut * SAMPLE_RATE)]
+    return samples, offsets
+
+
+def slice_wav(path: Path, start: float, end: float) -> np.ndarray:
+    """Frames round(start × 16000) to round(end × 16000) of a 16 kHz, mono, 16-bit WAV, as int16 samples."""
+    first, last = round(start * SAMPLE_RATE), round(end * SAMPLE_RATE)
+    with wave.open(str(path), "rb") as r:
+        if (r.getframerate(), r.getnchannels(), r.getsampwidth()) != (SAMPLE_RATE, 1, 2):
+            raise ValueError(f"{path}: {r.getframerate()} Hz, {r.getnchannels()} channels, "
+                             f"{8 * r.getsampwidth()}-bit; the recipe takes 16 kHz mono 16-bit")
+        if r.getnframes() < last:
+            raise ValueError(f"{path}: {r.getnframes() / SAMPLE_RATE} s, shorter than the slice's end, {end} s")
+        r.setpos(first)
+        return np.frombuffer(r.readframes(last - first), dtype="<i2").astype(np.int16)
+
+
+def place_references(words, turns, start: float, end: float, offset: float):
+    """A slice's references, for the slice [start, end) of its source placed at `offset` in a concatenation.
+
+    Words are kept when their midpoint is inside the slice, and turns when they overlap it, clipped to it. Both
+    are shifted by offset − start. A cut then crops the joined references with `crop_references`.
+    """
+    shift = offset - start
+    kept_words = [(s + shift, e + shift, text) for s, e, text in words if start <= (s + e) / 2 < end]
+    kept_turns = [Turn(max(t.start, start) + shift, min(t.end, end) + shift, t.speaker)
+                  for t in turns if t.start < end and t.end > start]
+    return kept_words, kept_turns
 
 
 def _transcript(flac):
@@ -590,17 +683,68 @@ def _crop(audio, dataset):
         if r.getnframes() < frames:
             raise ValueError(f"{audio}: {r.getnframes() / SAMPLE_RATE} s, shorter than the crop's {dataset.crop} s")
         data = r.readframes(frames)
+    content = _wav_bytes(data)
+    if hashlib.sha256(content).hexdigest() != dataset.derived_sha256:
+        raise InputError(str(path), "the cropped WAV's SHA-256 doesn't match sets.toml")
+    _write_member(io.BytesIO(content), path, dataset.derived_sha256)
+    return path
+
+
+def _wav_bytes(frames):
+    """One-channel, 16-bit, 16 kHz WAV of little-endian frames, as the wave module writes it."""
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(SAMPLE_RATE)
-        w.writeframes(data)
-    content = buffer.getvalue()
-    if hashlib.sha256(content).hexdigest() != dataset.derived_sha256:
-        raise InputError(str(path), "the cropped WAV's SHA-256 doesn't match sets.toml")
-    _write_member(io.BytesIO(content), path, dataset.derived_sha256)
-    return path
+        w.writeframes(frames)
+    return buffer.getvalue()
+
+
+# --- Pinning a source ------------------------------------------------------------------------------------------
+
+
+def pin(url: str, members: tuple[str, ...] = ()) -> list[str]:
+    """The facts a manifest entry needs about a file, from one download to a temporary directory.
+
+    The first line is `<url> <size> <sha256>`. For an archive (.zip, .tar.gz, .tgz or .tar), one more line
+    follows for each regular member matching a `members` glob (fnmatch, where `*` also matches `/`), in the
+    archive's order: `<member> <sha256>`. A .flac or .wav, the file or a member, adds `<frames> <rate>
+    <channels>` to its line. Only URLs under URL_PREFIXES are fetched. Nothing is cached.
+    """
+    if not url.startswith(URL_PREFIXES):
+        raise UsageError(url, "isn't under a pinned LibriSpeech or AMI prefix")
+    name = PurePosixPath(urllib.parse.urlsplit(url).path).name
+    archive = name.endswith(ARCHIVE_SUFFIXES)
+    if members and not archive:
+        raise UsageError(url, f"--member needs an archive ({', '.join(ARCHIVE_SUFFIXES)})")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / (name or "download")
+        size, sha256 = _save(url, path)
+        lines = [f"{url} {size} {sha256}{_audio_facts(name, path)}"]
+        if not members:
+            return lines
+        try:
+            for member, stream in _entries(path):
+                member = member.removeprefix("./")
+                if stream is None or not any(fnmatch.fnmatchcase(member, glob) for glob in members):
+                    continue
+                data = stream.read()
+                lines.append(f"{member} {hashlib.sha256(data).hexdigest()}{_audio_facts(member, io.BytesIO(data))}")
+        except (tarfile.TarError, zipfile.BadZipFile) as e:
+            raise InputError(url, f"can't read the archive: {e}") from e
+    return lines
+
+
+def _audio_facts(name, file):
+    """' <frames> <rate> <channels>' for a .flac or .wav, from its header; '' for anything else."""
+    if not name.lower().endswith(AUDIO_SUFFIXES):
+        return ""
+    try:
+        info = soundfile.info(file)
+    except RuntimeError as e:  # soundfile's errors are RuntimeErrors
+        raise InputError(name, f"can't read the audio's header: {e}") from e
+    return f" {info.frames} {info.samplerate} {info.channels}"
 
 
 # --- The entry point -------------------------------------------------------------------------------------------
@@ -615,10 +759,18 @@ def main(argv=None) -> int:
     b = commands.add_parser("build-fixture", help="Fetch a fixture's sources, build it and check its hashes.")
     b.add_argument("name", help="The fixture's name in sets.toml.")
     b.add_argument("--write", action="store_true", help="Write the fixture and its reference to their paths first.")
+    p = commands.add_parser("pin", help="Download a file once and print its size and SHA-256, and its listed "
+                                        "members' hashes, for writing the manifests. Nothing is cached.")
+    p.add_argument("url", help="Under one of the pinned LibriSpeech or AMI prefixes.")
+    p.add_argument("--member", action="append", default=[], metavar="GLOB",
+                   help="Archive members to hash, by glob; may be repeated.")
     args = parser.parse_args(argv)
     try:
         if args.command == "fetch":
             return _fetch_command(args.set)
+        if args.command == "pin":
+            print("\n".join(pin(args.url, tuple(args.member))))
+            return 0
         return _build_fixture_command(args.name, args.write)
     except LmtError as e:
         print(f"lmt: error: {e}", file=sys.stderr)
