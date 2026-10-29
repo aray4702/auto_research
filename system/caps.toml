@@ -11,7 +11,7 @@ warn_at_points = 15
 # 0.0667–0.0705 for ±1 point), and 0.074–0.078 from step 5's reading. The average, 0.026, undercounts. #202.
 points_per_usd = 0.08
 # Owner headroom, read from the account-wide utilization every run reports (0–1).
-hold_new_runs_at_five_hour = 0.50
+hold_new_runs_at_five_hour = 0.80
 pause_at_seven_day = 0.90
 
 [concurrency]
@@ -26,10 +26,10 @@ max_review_rounds = 3
 claim_expiry_after_timeout_minutes = 15
 
 # The Owner's override (2026-10-27, "lift the limit for today", #101; through the deadline day, "ignore
-# today's daily limits", #130): until this time the per-role max_runs_per_day caps don't apply. Every other cap here still holds. It ends on its own; the builder then
+# today's daily limits", #130; 2026-10-29 09:40, "lift daily caps, hold 80%"): until this time the per-role max_runs_per_day caps don't apply. Every other cap here still holds. It ends on its own; the builder then
 # removes this table by PR.
 [override]
-no_daily_run_caps_until = "2026-10-29T00:00:00-07:00"
+no_daily_run_caps_until = "2026-10-30T00:00:00-07:00"
 
 # Per-run hard caps (claude -p --max-turns / --max-budget-usd) and Dispatcher-enforced limits.
 [roles.architect]
