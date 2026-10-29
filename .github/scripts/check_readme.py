@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """The CI checks of S1-1 to S1-5 (spec/acceptance.md, S1's done-check) on README.md.
 
-Usage: python3 -I .github/scripts/check_readme.py [--root DIR]
+Usage: python3 -I .github/scripts/check_readme.py [--root DIR] [--no-install]
 
 DIR is a checkout of the commit under test (default: the current directory). Each `sh`
 block runs as one `sh -e` script: the Build block in a new empty directory, with the
-clone URL redirected to DIR; the Checks block from DIR. Standard library only.
+clone URL redirected to DIR; the Checks block from DIR. --no-install skips S1-3 and S1-4,
+the two checks that run a block, as tier 0 does. Standard library only.
 """
 
 import argparse
@@ -178,11 +179,14 @@ CHECKS = [
     ("S1-4 checks", check_checks),
     ("S1-5 relative links", check_links),
 ]
+# The checks that run a block, so need the install; --no-install skips them.
+INSTALL_CHECKS = (check_build, check_checks)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", default=".")
+    parser.add_argument("--no-install", action="store_true", help="skip S1-3 and S1-4")
     args = parser.parse_args(argv)
     readme = Path(args.root) / "README.md"
     if not readme.is_file():
@@ -192,6 +196,9 @@ def main(argv=None):
     text = readme.read_text()
     lines, failed = [], 0
     for name, check in CHECKS:
+        if args.no_install and check in INSTALL_CHECKS:
+            lines.append(f"SKIP {name} (--no-install)")
+            continue
         problems = check(args.root, text)
         failed += bool(problems)
         lines.append(f"{'FAIL' if problems else 'PASS'} {name}")
