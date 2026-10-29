@@ -2,6 +2,7 @@
 """arsys: the Owner's CLI and dashboard for this repository's development system (blueprint §7).
 
   arsys status                 everything waiting on you, PRs, work order, usage, health, merges
+  arsys progress               features and requirements: status, start, due and cost (also the dashboard's Progress tab)
   arsys decisions              your pending questions in full
   arsys answer N TEXT          answer the question on #N, as you (unmarked): the asker is started
   arsys approve PR             open the PR's review page, for approving from your second account
@@ -112,16 +113,19 @@ def propose_requirements_change(config, edit, title, branch, body):
 
 
 def serve(config, port):
-    cache = {"at": None, "page": ""}  # None, not 0.0: monotonic time starts near zero on a freshly booted machine
+    # Per tab. None, not 0.0: monotonic time starts near zero on a freshly booted machine.
+    pages = {"/": lambda: views.html_page(data.collect(config)), "/progress": lambda: views.progress_page(data.progress(config))}
+    cache = {path: {"at": None, "page": ""} for path in pages}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == "/favicon.svg":
                 body, kind = views.ICON_SVG.encode(), "image/svg+xml"
-            elif self.path in ("/", "/index.html"):
-                if cache["at"] is None or time.monotonic() - cache["at"] > 30:  # reading never slows the agents: at most one refresh per 30 s
-                    cache["page"], cache["at"] = views.html_page(data.collect(config)), time.monotonic()
-                body, kind = cache["page"].encode(), "text/html; charset=utf-8"
+            elif self.path in ("/index.html", *pages):
+                c = cache["/" if self.path == "/index.html" else self.path]
+                if c["at"] is None or time.monotonic() - c["at"] > 30:  # reading never slows the agents: at most one refresh per 30 s
+                    c["page"], c["at"] = pages["/" if self.path == "/index.html" else self.path](), time.monotonic()
+                body, kind = c["page"].encode(), "text/html; charset=utf-8"
             else:
                 self.send_error(404)
                 return
@@ -154,6 +158,7 @@ def parser():
     p.add_argument("-y", "--yes", action="store_true", help="don't ask for confirmation")
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
+    sub.add_parser("progress")
     sub.add_parser("decisions")
     c = sub.add_parser("answer")
     c.add_argument("n", type=int)
@@ -193,6 +198,8 @@ def main(argv=None):
         print("\n".join(lines))
     elif args.command == "status":
         print(views.text(data.collect(config)))
+    elif args.command == "progress":
+        print(views.progress_text(data.progress(config)))
     elif args.command == "decisions":
         snap = data.github_state.snapshot(gh, identity)
         found = data.decisions(gh, snap, identity)
