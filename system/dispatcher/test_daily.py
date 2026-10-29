@@ -39,6 +39,10 @@ class DenialsTest(unittest.TestCase):
         sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {
             "command": "cat <<'EOF' | python3 -I system/tools/post.py comment 138 --body-file -\nText | with; pipes\nEOF"}})
         self.assertIn(sig, explained, "the rules' cat pipe, #138")
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "sed -n '1,80p' system/rules.md"}})
+        self.assertIn(sig, explained, "sed, which can write files, #184")
+        allowed = runner.load_all()["runner"]["common"]["allow"]
+        self.assertFalse([a for a in allowed if a.startswith("Bash(sed")], "the explanation holds only while sed is denied")
 
     def test_file_tools_are_explained_only_while_every_role_has_them_without_limit(self):
         config = runner.load_all()["runner"]
