@@ -63,10 +63,19 @@ def daily_due(schedule, runs, now, zone):
     return None if started else task
 
 
-def candidates(snap, active_items, identity, skip_review=(), answered=None, daily=None):
+def answered_since(pr, review, finished):
+    """Whether the PR's author has had a run on it, started after this review and now ended: it answered the review,
+    with a change or by comment. finished: {(item, role): the latest start of an ended run}."""
+    at = finished.get((pr["number"], pr["author_role"]))
+    return bool(at and review.get("at") and at > datetime.fromisoformat(review["at"].replace("Z", "+00:00")))
+
+
+def candidates(snap, active_items, identity, skip_review=(), answered=None, daily=None, finished=None):
     """(role, item, task, why) in dispatch order. Nothing already claimed or running is offered. daily: the
-    builder's overdue daily task (daily_due), offered after PR work: it is scheduled, and already late."""
+    builder's overdue daily task (daily_due), offered after PR work: it is scheduled, and already late. finished:
+    for `answered_since`."""
     bot = identity["reviewer_app"]["bot_login"]
+    finished = finished or {}
     free = lambda n, labels: n not in active_items and CLAIMED not in labels
     issues = [i for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])]
     by_number = {i["number"]: i for i in issues}
@@ -82,7 +91,10 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None, dail
         if pr["gate"] == "FAILURE":
             why.append("its gate is red")
         review = latest_review(pr, bot)
-        if review and review["state"] == "CHANGES_REQUESTED" and review["commit"] == pr["head"]:
+        # Once the author has answered, by a change or a comment, the PR goes back to the Reviewer (#257): an answer by
+        # comment leaves the head where it was, and restarting the author every poll only says "no change".
+        if (review and review["state"] == "CHANGES_REQUESTED" and review["commit"] == pr["head"]
+                and not answered_since(pr, review, finished)):
             why.append("the Reviewer asked for changes")
         if pr["merge_state"] == "DIRTY":
             why.append("it conflicts with main")
@@ -100,6 +112,8 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None, dail
         review = latest_review(pr, bot)
         # Its approval still covers the PR after a conflict-free refresh: no new review (#127).
         reviewed_head = review is not None and (review["commit"] == pr["head"] or current(pr, bot))
+        if reviewed_head and review["state"] == "CHANGES_REQUESTED" and answered_since(pr, review, finished):
+            reviewed_head = False  # answered: the Reviewer reads the answer (#257)
         # A PR held for a decision waits for it: reviewing it again only starves the decision, which
         # comes later in this order and on the same item (#192). It's reviewed once the label is gone.
         waiting = any(x.startswith("needs-decision:") for x in pr["labels"])
@@ -155,7 +169,13 @@ def choose(snap, runs, caps, identity, now, skip_review=(), answered=None, daily
     active_items = {r.get("item") for r in usage.active(runs) if r.get("item")}
     daily = daily_due(daily_schedule, runs, now, identity["time_zone"])
     starts, skipped, simulated = [], [], list(runs)
-    for role, item, task, why in candidates(snap, active_items, identity, skip_review, answered, daily):
+    ended = {r["run_id"] for r in runs if r["event"] == "end"}
+    finished = {}
+    for r in runs:
+        if r["event"] == "start" and r["run_id"] in ended and r.get("item"):
+            at = datetime.fromisoformat(r["at"])
+            finished[(r["item"], r["role"])] = max(finished.get((r["item"], r["role"]), at), at)
+    for role, item, task, why in candidates(snap, active_items, identity, skip_review, answered, daily, finished):
         if item and any(s[1] == item for s in starts):
             continue
         ok, reasons, _ = usage.may_start(caps, simulated, role, now, identity["time_zone"])
