@@ -713,3 +713,4 @@
 {"at": "2026-10-29T01:44:19+00:00", "event": "start", "item": 223, "pid": 74666, "role": "builder", "run_id": "builder-20261029T014413Z", "task": "Item #223 needs your decision (needs-decision:builder)."}
 {"at": "2026-10-29T01:46:05+00:00", "cost_usd": 0.410121, "denials": 0, "denied": [], "event": "end", "five_hour": 0.08, "item": 223, "role": "builder", "run_id": "builder-20261029T014413Z", "seven_day": 0.44, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 25}
 {"at": "2026-10-29T01:46:33+00:00", "event": "start", "item": 223, "pid": 75182, "role": "reviewer", "run_id": "reviewer-20261029T014626Z", "task": "Review PR #223."}
+{"at": "2026-10-29T01:46:34+00:00", "event": "start", "item": 199, "pid": 75222, "role": "builder", "run_id": "builder-20261029T014626Z", "task": "Item #199 needs your decision (needs-decision:builder)."}
