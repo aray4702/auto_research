@@ -1,12 +1,17 @@
 """The `criterion` marker's plugin: checks each tag against the spec, and writes the job's record
-with --criteria-out PATH (design/internal/criteria.md §1, §3)."""
+with --criteria-out PATH (design/internal/criteria.md §1, §3). And the product run, which the criteria's
+tests share (design/internal/g1-slice.md, S6)."""
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+CLIP = ROOT / "tests" / "fixtures" / "clip.wav"
 SPEC = ROOT / "spec" / "acceptance.md"
 # Exit statuses after which the session ran to its end: 0, 1 (tests failed) and 5 (no tests collected).
 FINISHED = (pytest.ExitCode.OK, pytest.ExitCode.TESTS_FAILED, pytest.ExitCode.NO_TESTS_COLLECTED)
@@ -102,3 +107,26 @@ def pytest_configure(config):
         raise pytest.UsageError(f"--criteria-out {path}: the name must be criteria-<job>.json or "
                                 "criteria-<job>-<n>.json")
     config.pluginmanager.register(CriteriaRecord(config), "criteria-record")
+
+
+class ProductRun(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+    out_dir: Path  # the run's working directory, where its outputs land
+
+
+def run_lmt(argv, *, cwd=None, env=None) -> subprocess.CompletedProcess:
+    """`python -m lmt <argv>` in a process of its own, as a user runs it, with text output captured."""
+    return subprocess.run([sys.executable, "-m", "lmt", *argv], cwd=cwd, env=env, capture_output=True,
+                          text=True, check=False)
+
+
+@pytest.fixture(scope="session")
+def clip_run(tmp_path_factory) -> ProductRun:
+    """The product run (spec/acceptance.md G1 "Terms") on the reference clip: `lmt transcribe <clip>` with
+    no option at all. It runs in a fresh directory, which -o defaults to, and inherits LMT_CACHE_DIR, where
+    the job has downloaded and verified the default models. Once per session."""
+    out_dir = tmp_path_factory.mktemp("clip_run")
+    r = run_lmt(["transcribe", str(CLIP)], cwd=out_dir)
+    return ProductRun(r.returncode, r.stdout, r.stderr, out_dir)
