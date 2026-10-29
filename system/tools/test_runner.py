@@ -30,7 +30,9 @@ class ConsistencyTest(unittest.TestCase):
             "architect": "high", "coordinator": "medium", "developer": "high",
             "reviewer": "high", "tester": "medium", "builder": "high",
         })
-        self.assertEqual({r["model"] for r in CONFIG["runner"]["roles"].values()}, {"claude-opus-5-5"})
+        models = {role: r["model"] for role, r in CONFIG["runner"]["roles"].items()}
+        self.assertEqual(models.pop("coordinator"), "claude-sonnet-5-5", "a trial (#251)")
+        self.assertEqual(set(models.values()), {"claude-opus-5-5"})
 
     def test_automation_is_on_since_step_7(self):
         self.assertTrue(all(s["enabled"] for s in CONFIG["runner"]["schedules"].values()))
