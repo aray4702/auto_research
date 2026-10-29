@@ -15,6 +15,10 @@ from unittest import mock
 from system.dispatcher import killswitch, run, state, usage
 
 CAPS = tomllib.loads((Path(__file__).resolve().parents[1] / "caps.toml").read_text())
+
+# These tests check the caps' logic at the sizing's concurrency (2 runs, 1 per role), not the Owner's
+# temporary setting in caps.toml for the G1-1 push (#84).
+CAPS["concurrency"] = {"max_runs": 2, "max_runs_per_role": 1}
 NOW = datetime(2026, 10, 27, 3, 0, tzinfo=timezone.utc)  # 2026-10-26 20:00 PDT
 
 
