@@ -58,3 +58,11 @@ words = "ami-annotations-1.6.2"
 rttm = "ami-rttm-ES2004a"
 crop = 300.0                     # seconds from the start
 derived_sha256 = "1bca9b7c6b9faf216939a69200cfc14059f561a64168424adb5a331ad24b8527"
+
+# LS full: every test-clean utterance. Without `utterances`, it is every .flac member of its source, in sorted id
+# order: 2,620 utterances (design/internal/g1-stage1.md §5b, decision 3).
+[[dataset]]
+name = "LS full"
+set = "full"
+kind = "librispeech"
+source = "librispeech-test-clean-full"
