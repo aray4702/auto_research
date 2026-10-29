@@ -8,8 +8,11 @@ from pathlib import Path
 
 import pytest
 import srt
+import test_export_formats
 import webvtt
 from subtitle_checks import check_srt, check_vtt, ffmpeg_reencode, words
+
+from lmt import export
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / "tests" / "fixtures" / "export"
@@ -105,12 +108,18 @@ def test_vtt_parser_is_strict(fake_ffmpeg, tmp_path):
         check_vtt(empty)
 
 
-def test_words_agree():
-    doc = json.loads(golden("json").read_text(encoding="utf-8"))
+def test_words_agree(tmp_path):
+    # The committed transcript.json is test_export.py's two-segment small(); the other three goldens are
+    # test_export_formats.py's, so the JSON is rendered from that one.
+    rendered = tmp_path / "transcript.json"
+    rendered.write_text(export.render(test_export_formats.small(), "json"), encoding="utf-8")
+    doc = json.loads(rendered.read_text(encoding="utf-8"))
     labels = [s["label"] for s in doc["speakers"]]
+    assert "José & Ana" in labels
     expected = [w for s in doc["segments"] for w in s["text"].split()]
+    paths = {"json": rendered, **{fmt: golden(fmt) for fmt in ("txt", "srt", "vtt")}}
     for fmt in FORMATS:
-        assert words(golden(fmt), fmt, labels) == expected, fmt
+        assert words(paths[fmt], fmt, labels) == expected, fmt
     vtt = words(golden("vtt"), "vtt", labels)
     i = vtt.index("Yes,")
     assert vtt[i:i + 4] == ["Yes,", "the", "Q&A", "<draft>"]
