@@ -209,13 +209,13 @@ def test_the_clip_diarizes_within_its_duration_without_network(monkeypatch, caps
     diarizer = diarize.load(dirs)
     turns = diarizer.diarize(samples)
 
-    # The guard on clipping (builder, #285): pyannote's frame grid may overshoot the audio by up to one frame
-    # step, never more. A larger overshoot is a different fault.
-    step = diarizer._pipeline._segmentation.model.receptive_field.step
+    # The guard on clipping (builder, #285): pyannote's last segmentation window is zero-padded past the audio,
+    # so a turn may overshoot by less than the window's step, never more. A larger overshoot is a different fault.
+    step = diarizer._pipeline._segmentation.step
     with capsys.disabled():  # into CI's log, whether the test passes or fails
         print(f"\nRaw turns: first {diarizer.raw[0]}, last {diarizer.raw[-1]}; duration {duration:.6f} s; "
-              f"clipped at most {diarizer.clipped:.6f} s; frame step {step:.6f} s")
-    assert diarizer.clipped <= step
+              f"clipped at most {diarizer.clipped:.6f} s; window step {step:.6f} s")
+    assert diarizer.clipped < step
     assert turns
     assert all(0 <= t.start < t.end <= duration for t in turns)
     assert turns == sorted(turns, key=lambda t: (t.start, t.end, t.speaker))
