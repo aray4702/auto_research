@@ -14,11 +14,17 @@ THREADS = min(8, os.cpu_count() or 1)  # fixed per machine (Q7)
 
 
 def quiet_onnxruntime() -> None:
-    """onnxruntime's default logger down to errors (design/internal/g1-stage2.md, P11)."""
+    """onnxruntime's default logger down to errors and fatal, so its warnings (on Linux, GetPciBusId's) stay
+    off stderr and its errors still print (design/internal/g1-stage2.md, P11). It is faster-whisper's, for the
+    Silero VAD, whose session `transcribe` creates later; a second call sets the same severity."""
+    import onnxruntime
+
+    onnxruntime.set_default_logger_severity(3)
 
 
 def load(model_dir: Path) -> "Engine":
     """The model in `model_dir`. Call after `models.ensure`, which sets HF_HUB_OFFLINE."""
+    quiet_onnxruntime()
     from faster_whisper import WhisperModel
 
     model = WhisperModel(str(model_dir), device="cpu", compute_type="int8", cpu_threads=THREADS,
