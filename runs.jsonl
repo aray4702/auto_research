@@ -1111,3 +1111,4 @@
 {"at": "2026-10-29T17:19:21+00:00", "event": "start", "item": 336, "pid": 6470, "role": "builder", "run_id": "builder-20261029T171914Z", "task": "Item #336 needs your decision (needs-decision:builder)."}
 {"at": "2026-10-29T17:21:12+00:00", "cost_usd": 0.243536, "denials": 0, "denied": [], "event": "end", "five_hour": 0.12, "item": 334, "role": "builder", "run_id": "builder-20261029T171657Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 1}
 {"at": "2026-10-29T17:21:36+00:00", "cost_usd": 0.572001, "denials": 1, "denied": ["Bash: python3 -m unittest > |"], "event": "end", "five_hour": 0.12, "item": 336, "role": "builder", "run_id": "builder-20261029T171914Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 33}
+{"at": "2026-10-29T17:21:42+00:00", "event": "start", "item": 334, "pid": 8119, "role": "reviewer", "run_id": "reviewer-20261029T172135Z", "task": "Review PR #334."}
