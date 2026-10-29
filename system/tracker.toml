@@ -34,7 +34,7 @@ labels = [
 label = "record:work-order"
 title = "Work order"
 body = """
-The single order of scheduled work (blueprint §3). **Writer: the Coordinator.** Each change adds a dated note at the top. Severe problems and PRs that need work go ahead of this order.
+The single order of scheduled work (blueprint §3). **Writer: the Coordinator.** Each change adds a dated note at the top. Severe problems and PRs that need work go ahead of this order, and work for a goal goes ahead of the system's own upkeep.
 
 | Order | Item | Parallel-safe | Note |
 | --- | --- | --- | --- |
