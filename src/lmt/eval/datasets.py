@@ -52,8 +52,8 @@ _UTTERANCE = re.compile(r"^\d+-\d+-\d+$")
 # from the manifest, so the tool can run only these.
 _AUDIO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-map", "0:a:0", "-map_metadata", "-1",
              "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1")
-_VIDEO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1",
-             "-map", "0:a:0", "-map", "1:v:0", "-shortest", "-map_metadata", "-1", "-fflags", "+bitexact",
+_VIDEO_IN = ("-nostdin", "-v", "error", "-y", "-i", "<wav>", "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1:d=57",
+             "-map", "0:a:0", "-map", "1:v:0", "-map_metadata", "-1", "-fflags", "+bitexact",
              "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1")
 _AAC = ("-c:a", "aac", "-profile:a", "aac_low", "-b:a", "128k", "-ar", "48000", "-ac", "1")
 _STILL = ("-c:v", "mpeg4", "-pix_fmt", "yuv420p")
