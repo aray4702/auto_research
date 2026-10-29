@@ -253,7 +253,7 @@ class TestCommittedTwoSpeakers:
     SETS_TEXT = (datasets.MANIFEST_DIR / "sets.toml").read_text(encoding="utf-8")
 
     @pytest.mark.parametrize("old, new, problem", [
-        (re.compile(r'^rttm = .*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
+        (re.compile(r'^rttm = ".*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
         (re.compile(r'^rttm_sha256 = .*\n', re.MULTILINE), "", "rttm and rttm_sha256 must be given together"),
         (re.compile(r'^(rttm_sha256 = ")([0-9a-f]{64})', re.MULTILINE), lambda m: m[1] + m[2].upper(),
          "isn't a SHA-256 in lower-case hex"),
