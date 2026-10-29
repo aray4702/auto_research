@@ -11,6 +11,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from system.dispatcher import merge_rules
 from system.tools import post
 
 IDENTITY = post.load_identity()
@@ -316,6 +317,27 @@ class JwtTest(unittest.TestCase):
             post.cmd_sign_off(FakeGitHub(), CALLER, 9, a, h, "x")
         with self.assertRaises(SystemExit):
             post.cmd_sign_off(FakeGitHub(), ("coordinator", "r"), 9, "abc1234", h, "x")
+
+
+    def test_a_builder_approval_names_the_head_reads_back_and_clears_the_decision_labels(self):
+        h = "b" * 40
+        commits = {("GET", "repos/o/r/pulls/9/commits"): [{"sha": "a" * 40}, {"sha": h}]}
+        gh = FakeGitHub({("GET", "repos/o/r/issues/9"): issue(["needs-decision:builder", "type:system"]), **commits})
+        post.cmd_builder_approve(gh, ("builder", "run-8"), 9, h, "Checked the permissions and the secrets.")
+        body = next(call[2]["body"] for call in gh.calls if call[0] == "POST")
+        self.assertTrue(body.startswith("<!-- role:builder run:run-8 -->"))
+        m = post.MARKER.match(body)
+        self.assertEqual(merge_rules.SR3_APPROVAL.match(body[m.end():])["head"], h, "merge_rules reads what post.py writes")
+        self.assertEqual(gh.calls[-1][:2], ("DELETE", "repos/o/r/issues/9/labels/needs-decision%3Abuilder"))
+        for caller in (CALLER, ("coordinator", "r")):
+            with self.assertRaises(SystemExit):
+                post.cmd_builder_approve(FakeGitHub(), caller, 9, h, "x")
+        with self.assertRaises(SystemExit):
+            post.cmd_builder_approve(FakeGitHub(commits), ("builder", "r"), 9, "abc1234", "x")
+        gh = FakeGitHub(commits)
+        with self.assertRaises(SystemExit, msg="a commit that isn't the PR's: the Dispatcher's compare would fail"):
+            post.cmd_builder_approve(gh, ("builder", "r"), 9, "c" * 40, "x")
+        self.assertFalse([call for call in gh.calls if call[0] != "GET"], "nothing is posted")
 
 
 class ParserTest(unittest.TestCase):
