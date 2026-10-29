@@ -97,7 +97,7 @@ class DecideTest(unittest.TestCase):
         self.git("commit", "-q", "-m", "change")
         return self.git("rev-parse", "HEAD")
 
-    def decide(self, event="pull_request", base=None, head="HEAD"):
+    def decide(self, event="push", base=None, head="HEAD"):
         return tiers.decide(event, self.base if base is None else base, head, str(self.root))
 
     def test_the_change_sets_the_tier(self):
@@ -136,6 +136,17 @@ class DecideTest(unittest.TestCase):
         tier, _, reason = self.decide(base="1" * 40)
         self.assertEqual(tier, 3)
         self.assertIn("git can't compute", reason)
+
+    def test_a_pull_request_runs_tier_1_at_most(self):
+        self.commit({"src/lmt/cli.py": "y\n"})
+        tier, paths, reason = self.decide(event="pull_request")
+        self.assertEqual((tier, paths), (1, ["src/lmt/cli.py"]))
+        self.assertIn("tier 3 by its paths", reason)
+        self.assertEqual(self.decide()[0], 3, "a push to main still runs every tier its paths need")
+
+    def test_a_pull_request_below_tier_1_keeps_its_tier(self):
+        self.commit({"docs.md": "y\n"})
+        self.assertEqual(self.decide(event="pull_request")[0], 0)
 
     def test_dispatch_and_schedule_run_every_tier(self):
         self.commit({"docs.md": "y\n"})
