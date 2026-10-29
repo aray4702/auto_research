@@ -1016,3 +1016,4 @@
 {"at": "2026-10-29T08:17:54+00:00", "event": "start", "item": 296, "pid": 4274, "role": "developer", "run_id": "developer-20261029T081748Z", "task": "PR #296 needs work: it conflicts with main."}
 {"at": "2026-10-29T08:17:55+00:00", "event": "start", "item": 304, "pid": 4307, "role": "reviewer", "run_id": "reviewer-20261029T081748Z", "task": "Review PR #304."}
 {"at": "2026-10-29T08:17:56+00:00", "event": "end", "item": 289, "role": "reviewer", "run_id": "reviewer-20261029T081748Z", "status": "failed: launcher: CalledProcessError"}
+{"at": "2026-10-29T08:20:12+00:00", "event": "start", "item": null, "pid": 5385, "role": "coordinator", "run_id": "coordinator-20261029T082006Z", "task": "Triage these issues: #302, #300. Items closed since your last run: #110. Record their goals' progress, close what is done, and chart and schedule what comes next."}
