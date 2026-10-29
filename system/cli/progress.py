@@ -81,9 +81,9 @@ def costs(issues, prs, runs):
 
 
 def table(requirements, spec, issues, prs, runs):
-    """The Progress tab. issues: {number: {title, body, state, labels (set)}}, closed ones included; prs: [{number,
-    body}]; runs: the run records. Each row: id, name, criteria, built, status, started (datetime or None), goals,
-    cost."""
+    """The Progress tab. issues: {number: {title, body, state, labels (set), closed_at (ISO or None)}}, closed ones
+    included; prs: [{number, body}]; runs: the run records. Each row: id, name, criteria, built, status, started and
+    ended (datetime or None), due, cost. ended: when the last of its criteria was built, once all are (#246)."""
     crits = criteria(spec)
     building = defaultdict(set)  # criterion -> the feature items naming it
     for n, i in issues.items():
@@ -98,6 +98,8 @@ def table(requirements, spec, issues, prs, runs):
         items = set().union(*(building[c] for c in mine)) if mine else set()
         built = [c for c in mine if building[c] and all(issues[n]["state"] == "CLOSED" for n in building[c])]
         started = min((first[n] for n in items if n in first), default=None)
+        closed = [datetime.fromisoformat(issues[n]["closed_at"].replace("Z", "+00:00")) for n in items if issues[n].get("closed_at")]
+        ended = max(closed) if mine and len(built) == len(mine) and closed else None
         if not mine:
             status = "no criterion in the spec"
         elif len(built) == len(mine):
@@ -107,7 +109,7 @@ def table(requirements, spec, issues, prs, runs):
         else:
             status = "not started"
         goals = sorted({c.split("-")[0] for c in mine})
-        rows.append({"id": ident, "name": name, "criteria": mine, "built": built, "status": status, "started": started,
+        rows.append({"id": ident, "name": name, "criteria": mine, "built": built, "status": status, "started": started, "ended": ended,
                      "due": "; ".join(f"{g} {dates[g]}" for g in goals if g in dates), "cost": sum(item_cost[n] for n in items)})
     order = ["feature items", "definition and design", "system", "Coordinator passes and daily runs", "records", "other"]
     split = [(k, by_kind[k]) for k in order if by_kind.get(k)]

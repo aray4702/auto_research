@@ -2,7 +2,8 @@
 """arsys: the Owner's CLI and dashboard for this repository's development system (blueprint §7).
 
   arsys status                 everything waiting on you, PRs, work order, usage, health, merges
-  arsys progress               features and requirements: status, start, due and cost (also the dashboard's Progress tab)
+  arsys progress               features and requirements: status, start, end, due and cost (the dashboard's first tab)
+  arsys roles                  what each role is working on, or since when it's idle (the dashboard's Roles tab)
   arsys decisions              your pending questions in full
   arsys answer N TEXT          answer the question on #N, as you (unmarked): the asker is started
   arsys approve PR             open the PR's review page, for approving from your second account
@@ -114,7 +115,8 @@ def propose_requirements_change(config, edit, title, branch, body):
 
 def serve(config, port):
     # Per tab. None, not 0.0: monotonic time starts near zero on a freshly booted machine.
-    pages = {"/": lambda: views.html_page(data.collect(config)), "/progress": lambda: views.progress_page(data.progress(config))}
+    pages = {"/": lambda: views.progress_page(data.progress(config)), "/roles": lambda: views.roles_page(data.roles(config)),
+             "/overview": lambda: views.html_page(data.collect(config))}
     cache = {path: {"at": None, "page": ""} for path in pages}
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -159,6 +161,7 @@ def parser():
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
     sub.add_parser("progress")
+    sub.add_parser("roles")
     sub.add_parser("decisions")
     c = sub.add_parser("answer")
     c.add_argument("n", type=int)
@@ -200,6 +203,8 @@ def main(argv=None):
         print(views.text(data.collect(config)))
     elif args.command == "progress":
         print(views.progress_text(data.progress(config)))
+    elif args.command == "roles":
+        print(views.roles_text(data.roles(config)))
     elif args.command == "decisions":
         snap = data.github_state.snapshot(gh, identity)
         found = data.decisions(gh, snap, identity)
