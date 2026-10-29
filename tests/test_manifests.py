@@ -61,8 +61,11 @@ class TestManifests:
         ids = {s["id"] for s in SOURCES["source"]}
         for dataset in SETS["dataset"]:
             for key in ("source", "audio", "words", "rttm"):
-                if key in dataset:
-                    assert dataset[key] in ids, (dataset["name"], key)
+                values = dataset.get(key, [])
+                for value in [values] if isinstance(values, str) else values:
+                    assert value in ids, (dataset["name"], key)
+            for piece in dataset.get("concat", []):
+                assert piece["source"] in ids, (dataset["name"], piece)
 
 
 class TestCISubset:
@@ -110,6 +113,55 @@ class TestLSFull:
         assert len(set(utterances)) == len(utterances) == 2620
         assert len({u.split("-")[0] for u in utterances}) == 40
         assert list(utterances) == sorted(utterances)
+
+
+AMI_FULL = [f"{series}{part}" for series in ("EN2002", "ES2004", "IS1009", "TS3003") for part in "abcd"]
+
+
+class TestAMIFull:
+    """AMI full and the one-hour recording (design/internal/g1-stage1.md §5b, decisions 4 and 5)."""
+
+    @pytest.fixture
+    def entries(self):
+        return {d["name"]: d for d in SETS["dataset"]}
+
+    def test_it_is_the_specs_16_meetings_in_order_with_their_sources(self, entries):
+        ami = entries["AMI full"]
+        assert (ami["set"], ami["kind"], ami["words"]) == ("full", "ami", "ami-annotations-1.6.2")
+        assert ami["meetings"] == AMI_FULL
+        assert ami["audio"] == [f"ami-{m}" for m in AMI_FULL]
+        assert ami["rttm"] == [f"ami-rttm-{m}" for m in AMI_FULL]
+        assert "crop" not in ami
+        sources = {s["id"]: s for s in SOURCES["source"]}
+        for meeting in AMI_FULL:
+            assert sources[f"ami-{meeting}"]["urls"] == [
+                f"https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{meeting}/audio/{meeting}.Mix-Headset.wav"]
+            assert sources[f"ami-rttm-{meeting}"]["urls"] == [
+                f"{URL_PREFIXES[-1]}only_words/rttms/test/{meeting}.rttm"]
+
+    def test_the_annotations_have_each_meetings_four_words_files(self):
+        (annotations,) = [s for s in SOURCES["source"] if s["id"] == "ami-annotations-1.6.2"]
+        assert sorted(m["path"] for m in annotations["member"]) == sorted(
+            f"words/{meeting}.{speaker}.words.xml" for meeting in AMI_FULL for speaker in "ABCD")
+
+    def test_ami_ci_uses_the_list_form(self, entries):
+        assert (entries["AMI-ci"]["audio"], entries["AMI-ci"]["rttm"]) == (["ami-ES2004a"], ["ami-rttm-ES2004a"])
+
+    def test_the_one_hour_recording_is_ami_full_joined_and_cut_at_3600_s(self, entries):
+        hour = entries["one-hour"]
+        assert (hour["set"], hour["kind"], hour["of"], hour["gap"], hour["cut"]) == (
+            "full", "concat", "AMI full", 0.0, 3600.0)
+        assert HEX64.match(hour["derived_sha256"])
+        assert [p["source"] for p in hour["concat"]] == [f"ami-{m}" for m in AMI_FULL]
+        assert all(p["start"] == 0 for p in hour["concat"])
+        # Each slice is its whole meeting: the WAV is two bytes a frame after a header (44 bytes, or 1,427 for
+        # IS1009's), so its size gives the frames to within the header.
+        sizes = {s["id"]: s["size"] for s in SOURCES["source"]}
+        for piece in hour["concat"]:
+            assert 0 < sizes[piece["source"]] - 2 * round(piece["end"] * 16000) < 2048, piece
+        manifests = datasets.load_manifests()
+        read = datasets._read_pieces(manifests.datasets["one-hour"])
+        assert [p.source for p, _ in read] == ["ami-EN2002a", "ami-EN2002b"]
 
 
 class TestCommittedClip:
