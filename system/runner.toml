@@ -65,7 +65,7 @@ allow = ["Bash(mkdir -p:*)", "Edit", "Write"]
 product_tools = true  # it designs the toolchain, so it checks it (#90)
 
 [roles.coordinator]
-model = "claude-opus-5-5"
+model = "claude-sonnet-5-5"  # a 24-hour trial from its merge: keep or revert by #251's criteria
 effort = "medium"
 tools = ["Read", "Glob", "Grep", "Bash"]
 allow = []
