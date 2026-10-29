@@ -263,8 +263,10 @@ def may_start(caps, runs, role, now, time_zone="America/Los_Angeles"):
     running = active(runs)
     if len(running) >= caps["concurrency"]["max_runs"]:
         reasons.append(f"{len(running)} runs are active; the cap is {caps['concurrency']['max_runs']}")
-    if sum(r["role"] == role for r in running) >= caps["concurrency"]["max_runs_per_role"]:
-        reasons.append(f"a {role} run is already active")
+    # A role named in [concurrency.per_role] has its own limit (the Owner, 2026-10-29: "3 developers").
+    per_role = (caps["concurrency"].get("per_role") or {}).get(role, caps["concurrency"]["max_runs_per_role"])
+    if sum(r["role"] == role for r in running) >= per_role:
+        reasons.append(f"a {role} run is already active" if per_role == 1 else f"{per_role} {role} runs are already active")
     tz = ZoneInfo(time_zone)
     today = now.astimezone(tz).date()
     started_today = sum(

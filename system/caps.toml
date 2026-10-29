@@ -16,8 +16,12 @@ pause_at_seven_day = 0.90
 
 [concurrency]
 # The Owner, 2026-10-28 22:19 PT, for the G1-1 push: "You can use two developers." (#84)
-max_runs = 3
+# The Owner, 2026-10-29 afternoon: "3 developers". One more run in all, so the Reviewer keeps a slot.
+max_runs = 4
 max_runs_per_role = 2
+
+[concurrency.per_role]
+developer = 3
 
 [wip]
 max_open_agent_prs = 3
