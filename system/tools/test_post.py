@@ -11,6 +11,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from system.dispatcher import merge_rules
 from system.tools import post
 
 IDENTITY = post.load_identity()
@@ -316,6 +317,22 @@ class JwtTest(unittest.TestCase):
             post.cmd_sign_off(FakeGitHub(), CALLER, 9, a, h, "x")
         with self.assertRaises(SystemExit):
             post.cmd_sign_off(FakeGitHub(), ("coordinator", "r"), 9, "abc1234", h, "x")
+
+
+    def test_a_builder_approval_names_the_head_reads_back_and_clears_the_decision_labels(self):
+        h = "b" * 40
+        gh = FakeGitHub({("GET", "repos/o/r/issues/9"): issue(["needs-decision:builder", "type:system"])})
+        post.cmd_builder_approve(gh, ("builder", "run-8"), 9, h, "Checked the permissions and the secrets.")
+        body = gh.calls[0][2]["body"]
+        self.assertTrue(body.startswith("<!-- role:builder run:run-8 -->"))
+        m = post.MARKER.match(body)
+        self.assertEqual(merge_rules.SR3_APPROVAL.match(body[m.end():])["head"], h, "merge_rules reads what post.py writes")
+        self.assertEqual(gh.calls[-1][:2], ("DELETE", "repos/o/r/issues/9/labels/needs-decision%3Abuilder"))
+        for caller in (CALLER, ("coordinator", "r")):
+            with self.assertRaises(SystemExit):
+                post.cmd_builder_approve(FakeGitHub(), caller, 9, h, "x")
+        with self.assertRaises(SystemExit):
+            post.cmd_builder_approve(FakeGitHub(), ("builder", "r"), 9, "abc1234", "x")
 
 
 class ParserTest(unittest.TestCase):
