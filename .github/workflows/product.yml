@@ -161,7 +161,8 @@ jobs:
           if-no-files-found: error
 
   # The CI subset, cached by the manifests' hash, fetched and verified on every run (design/internal/g1-stage1.md
-  # §5a). Stage 2 adds `lmt eval --set ci`, its bounds and the double run.
+  # §5a), and `lmt eval --set ci` run twice on it: G1-5's comparison and G1-8c's bounds
+  # (design/internal/g1-stage2.md, P2b).
   eval-ci:
     needs: changes
     if: fromJSON(needs.changes.outputs.tier) >= 3
@@ -180,11 +181,38 @@ jobs:
         with:
           path: ~/.cache/lmt/data
           key: data-${{ hashFiles('src/lmt/eval/manifests/*.toml') }}
-      - run: uv run --frozen python -m lmt.eval.datasets fetch ci
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: models
+        with:
+          path: ~/.cache/lmt/models
+          key: models-${{ hashFiles('src/lmt/models.toml') }}
+      - name: Download the default models
+        if: steps.models.outputs.cache-hit != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}   # this step only (#96)
+        run: uv run --frozen lmt models download
+      - run: uv run --frozen lmt models verify
+      # G1-5: the first run fetches the subset on a cache miss; each writes results/ci.json.
+      - name: The harness on the CI subset, first run
+        run: uv run --frozen lmt eval --set ci
+      - run: cp results/ci.json "$RUNNER_TEMP/ci-1.json"
+      # report's `dirty` excludes results/, so the first file doesn't dirty the second run's tree.
+      - name: The harness on the CI subset, second run
+        run: uv run --frozen lmt eval --set ci
       # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
+      # tests/test_eval_ci.py reads both runs' files (G1-5, G1-8c, G1-12).
       - env:
           LMT_TIER: ${{ needs.changes.outputs.tier }}
+          LMT_EVAL_CI_FIRST: ${{ runner.temp }}/ci-1.json
         run: uv run --frozen pytest -m data --criteria-out=criteria-eval-ci.json
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eval-ci-results
+          path: |
+            ${{ runner.temp }}/ci-1.json
+            results/ci.json
+          retention-days: 90
       # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
