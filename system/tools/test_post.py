@@ -248,6 +248,44 @@ class GateTest(unittest.TestCase):
                          ("GET", "repos/o/r/commits/abc1234/check-runs"): {"check_runs": []}})
         self.assertEqual(post.cmd_gate(gh, IDENTITY, "abc"), "gate on abc (abc1234): not reported yet")
 
+    def test_gate_log_shows_each_failed_job_up_to_its_first_error(self):
+        url = "https://github.com/o/r/actions/runs/77/job/5"
+        gh = FakeGitHub({
+            ("GET", "repos/o/r/commits/pr"): {"sha": "c1027e6aaa"},
+            ("GET", "repos/o/r/commits/c1027e6aaa/check-runs"): {"check_runs": [
+                {"app": {"id": IDENTITY["gate_app_id"]}, "conclusion": "failure", "status": "completed",
+                 "html_url": url, "details_url": url}]},
+            ("GET", "repos/o/r/actions/runs/77/jobs"): {"jobs": [
+                {"id": 1, "name": "generic", "conclusion": "success", "steps": []},
+                {"id": 2, "name": "product / test-models", "conclusion": "failure", "steps": [
+                    {"name": "Set up", "conclusion": "success"}, {"name": "pytest", "conclusion": "failure"}]},
+            ]},
+        })
+        log = ("﻿2026-10-29T20:09:06.7579913Z Current runner version\n"
+               "2026-10-29T20:18:39.3317430Z E       AssertionError: \x1b[0;93mwarning\x1b[m\n"
+               "2026-10-29T20:18:39.3343434Z === 2 failed, 15 passed ===\n"
+               "2026-10-29T20:18:40.4726514Z ##[error]Process completed with exit code 1.\n"
+               "2026-10-29T20:18:40.4809515Z Post job cleanup.\n")
+        gh.text = lambda path: log if path == "repos/o/r/actions/jobs/2/logs" else self.fail(path)
+        out = post.cmd_gate(gh, IDENTITY, "pr", lines=3)
+        self.assertTrue(out.startswith(post.BANNER))
+        self.assertIn(f"gate on pr (c1027e6): failure (run {url})", out)
+        self.assertIn("--- job product / test-models: failure (failed steps: pytest) ---\n"
+                      "E       AssertionError: warning\n=== 2 failed, 15 passed ===\n"
+                      "##[error]Process completed with exit code 1.", out)
+        self.assertNotIn("runner version", out)
+        self.assertNotIn("cleanup", out)
+        self.assertNotIn("generic", out)
+
+    def test_gate_log_leaves_a_passing_gate_one_line(self):
+        gh = FakeGitHub({("GET", "repos/o/r/commits/main"): {"sha": "55430afeee"},
+                         ("GET", "repos/o/r/commits/55430afeee/check-runs"): {"check_runs": [
+                             {"app": {"id": IDENTITY["gate_app_id"]}, "conclusion": "success", "html_url": "u"}]}})
+        self.assertEqual(post.cmd_gate(gh, IDENTITY, lines=80), "gate on main (55430af): success (run u)")
+        self.assertEqual(post.parser().parse_args(["gate", "x", "--log"]).log, 80)
+        self.assertEqual(post.parser().parse_args(["gate", "x", "--log", "20"]).log, 20)
+        self.assertIsNone(post.parser().parse_args(["gate", "x"]).log)
+
 
 class ListTest(unittest.TestCase):
     def test_list_filters_by_kind_and_label_and_names_the_opener(self):

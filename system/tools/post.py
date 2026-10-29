@@ -6,7 +6,9 @@ comes from AGENT_ROLE and the run ID from AGENT_RUN_ID, both set by whoever star
 
   post.py read <n>
   post.py list [--state open|closed|all] [--kind issue|pr|all] [--label L]...
-  post.py gate [REF]          the gate's result on a commit, branch or tag (default: main)
+  post.py gate [REF] [--log [LINES]]
+                              the gate's result on a commit, branch or tag (default: main); with --log, a gate
+                              that didn't pass also shows its failed jobs' logs, up to each one's first error
   post.py comment <n> BODY
   post.py issue-create --title T [--label L]... [--milestone M] BODY
   post.py milestone-create --title M BODY    a goal stage; BODY is its description
@@ -118,6 +120,13 @@ class GitHub:
         out = json.loads(r.stdout) if r.stdout.strip() else None
         return [x for page in out for x in page] if paginate else out
 
+    def text(self, path):
+        """A GET whose answer is plain text, such as a job's log."""
+        r = self.runner(["gh", "api", path], capture_output=True, text=True)
+        if r.returncode:
+            raise SystemExit(f"gh api GET {path} failed: {r.stderr.strip()[:500]}")
+        return r.stdout
+
     def graphql(self, query, **variables):
         args = ["gh", "api", "graphql", "--input", "-"]
         r = self.runner(args, input=json.dumps({"query": query, "variables": variables}), capture_output=True, text=True)
@@ -165,15 +174,43 @@ def cmd_read(gh, identity, n):
     return "\n".join(lines)
 
 
-def cmd_gate(gh, identity, ref="main"):
-    """The required `gate` check's result on a commit, from the CI app branch protection accepts."""
+def cmd_gate(gh, identity, ref="main", lines=None):
+    """The required `gate` check's result on a commit, from the CI app branch protection accepts. With `lines`, a
+    gate that didn't pass also shows its failed jobs' logs."""
     sha = gh.api("GET", f"repos/{gh.repo}/commits/{urllib.parse.quote(ref, safe='')}")["sha"]
     runs = gh.api("GET", f"repos/{gh.repo}/commits/{sha}/check-runs?check_name=gate")
     gates = [r for r in (runs or {}).get("check_runs", []) if (r.get("app") or {}).get("id") == identity["gate_app_id"]]
     if not gates:
         return f"gate on {ref} ({sha[:7]}): not reported yet"
     g = gates[0]
-    return f"gate on {ref} ({sha[:7]}): {g['conclusion'] or g['status']} (run {g.get('html_url', '?')})"
+    line = f"gate on {ref} ({sha[:7]}): {g['conclusion'] or g['status']} (run {g.get('html_url', '?')})"
+    if lines is None or g["conclusion"] in (None, "success"):
+        return line
+    return "\n".join([BANNER, "", line] + failed_jobs(gh, g, lines))
+
+
+ACTIONS_RUN = re.compile(r"/actions/runs/(\d+)")
+LOG_LINE = re.compile(r"^﻿?\d{4}-\d\d-\d\dT[\d:.]+Z ")
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def failed_jobs(gh, gate, lines):
+    """Each failed job of the gate's workflow run: its failed steps and the last `lines` lines of its log up to the
+    first error, so any role can see why a gate is red (#345)."""
+    m = ACTIONS_RUN.search(gate.get("details_url") or gate.get("html_url") or "")
+    if not m:
+        return ["(no workflow run linked to the gate)"]
+    jobs = gh.api("GET", f"repos/{gh.repo}/actions/runs/{m[1]}/jobs?filter=latest&per_page=100")["jobs"]
+    out = []
+    for job in jobs:
+        if job.get("conclusion") != "failure":
+            continue
+        steps = [s["name"] for s in job.get("steps") or [] if s.get("conclusion") == "failure"]
+        out += ["", f"--- job {job['name']}: failure (failed steps: {', '.join(steps) or 'none named'}) ---"]
+        log = [ANSI.sub("", LOG_LINE.sub("", x)) for x in gh.text(f"repos/{gh.repo}/actions/jobs/{job['id']}/logs").splitlines()]
+        end = next((i + 1 for i, x in enumerate(log) if x.startswith("##[error]")), len(log))
+        out += [x if len(x) <= 400 else x[:400] + " …" for x in log[max(0, end - lines):end]]
+    return out or ["(no failed job found)"]
 
 
 def cmd_list(gh, identity, state="open", kind="all", labels=()):
@@ -472,7 +509,10 @@ def parser():
         return c
 
     command("read")
-    command("gate", number=False).add_argument("ref", nargs="?", default="main")
+    c = command("gate", number=False)
+    c.add_argument("ref", nargs="?", default="main")
+    c.add_argument("--log", type=int, nargs="?", const=80, metavar="LINES",
+                   help="if the gate didn't pass, show each failed job's log up to its first error (default 80 lines)")
     c = command("list", number=False)
     c.add_argument("--state", choices=["open", "closed", "all"], default="open")
     c.add_argument("--kind", choices=["issue", "pr", "all"], default="all")
@@ -519,7 +559,7 @@ def main(argv=None):
         print(cmd_read(gh, identity, args.n))
         return 0
     if args.command == "gate":
-        print(cmd_gate(gh, identity, args.ref))
+        print(cmd_gate(gh, identity, args.ref, args.log))
         return 0
     if args.command == "list":
         print(cmd_list(gh, identity, args.state, args.kind, args.label))
