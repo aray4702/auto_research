@@ -85,12 +85,16 @@ def sr3_covers(pr):
     return pr["protected"] and not any(f in SR3_EXCLUDED for f in pr["files"])
 
 
-def builder_approved(pr, comments, runs, identity, marker, committed_at):
+def builder_approved(pr, comments, runs, identity, marker):
     """The commit the latest SR3 approval on this PR names, or None. Only an approval posted through post.py by a
-    builder run the Dispatcher recorded on this PR counts, and only from a run that started after that commit was
-    made: never the run that wrote it (the Owner's "other builder"). committed_at(sha) gives a commit's time."""
-    if not sr3_covers(pr):
+    builder run the Dispatcher recorded on this PR counts, and only from a run that started after the Reviewer App's
+    latest approval: never the run that wrote it (the Owner's "other builder"). A commit's date is whatever its writer
+    set, so the time is GitHub's: a run that wrote a commit started before it was pushed, so before the Reviewer
+    approved it, and a later push of the PR's own needs the Reviewer again."""
+    review = latest_review(pr, identity["reviewer_app"]["bot_login"])
+    if not sr3_covers(pr) or not review or review["state"] != "APPROVED" or not review.get("at"):
         return None
+    reviewed = datetime.fromisoformat(review["at"].replace("Z", "+00:00"))
     started = {r["run_id"]: datetime.fromisoformat(r["at"]) for r in runs
                if r["event"] == "start" and r["role"] == "builder" and r.get("item") == pr["number"] and r.get("at")}
     covered = None
@@ -100,7 +104,7 @@ def builder_approved(pr, comments, runs, identity, marker, committed_at):
         # Only straight after the marker, where `post.py builder-approve` writes it: a quoted line doesn't count.
         s = m and SR3_APPROVAL.match(body[m.end():].lstrip("\n"))
         if (c["user"]["login"] == identity["owner_login"] and m and s and m["role"] == "builder"
-                and m["run"] in started and started[m["run"]] > committed_at(s["head"])):
+                and m["run"] in started and started[m["run"]] > reviewed):
             covered = s["head"]
     return covered
 
@@ -227,8 +231,6 @@ def annotate(gh, snap, runs, identity, marker):
     """Fill in what the checks above read from GitHub, on each PR: `fresh` (an approval followed only by merges from
     main still counts, #118), `same_lines` and `sign_off` (SR2, #150), and `builder_approval` (SR3, #221)."""
     bot, second = identity["reviewer_app"]["bot_login"], identity["second_login"]
-    committed_at = lambda sha: datetime.fromisoformat(
-        gh.api("GET", f"repos/{gh.repo}/commits/{sha}")["commit"]["committer"]["date"].replace("Z", "+00:00"))
     for pr in snap["prs"]:
         pr["fresh"] = {}
         for login in (bot, second):
@@ -247,6 +249,6 @@ def annotate(gh, snap, runs, identity, marker):
         # SR3: only for a PR waiting on the Owner's approval, since the Reviewer's approval is current.
         if sr3_covers(pr) and pr["gate"] == "SUCCESS" and current(pr, bot) and not owner_approves(pr, second):
             comments = gh.api("GET", f"repos/{gh.repo}/issues/{pr['number']}/comments?per_page=100", paginate=True)
-            pr["builder_approval"] = builder_approved(pr, comments, runs, identity, marker, committed_at)
+            pr["builder_approval"] = builder_approved(pr, comments, runs, identity, marker)
             if pr["builder_approval"] and pr["builder_approval"] != pr["head"]:
                 pr["fresh"]["sr3"] = same_changes(gh, pr["builder_approval"], pr["head"])

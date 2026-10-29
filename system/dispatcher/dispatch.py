@@ -71,7 +71,7 @@ def approval_question(pr):
             f"body. SR1 then merges it in its turn.\n"
             f"- **It's an Owner matter, or you can't tell:** `post.py escalate {n} --level owner`, with one question "
             f"and a recommendation. The Owner then approves it on GitHub, or not.\n\n"
-            f"Only an approval from a builder run on this PR that started after `{head[:7]}` was made counts: never "
+            f"Only an approval from a builder run on this PR that started after the Reviewer approved it counts: never "
             f"from the run that wrote it. Don't push to this PR: a new commit needs the Reviewer again.")
 
 
