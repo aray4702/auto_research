@@ -1,7 +1,12 @@
 """The transcript types, and the JSON's document (design/public-api.md, "Transcript JSON, version 1.1")."""
 
 import copy
+import json
 from dataclasses import dataclass
+from pathlib import Path
+
+from lmt import schema
+from lmt.errors import InputError
 
 SCHEMA_VERSION = "1.1"
 
@@ -79,3 +84,26 @@ def from_dict(doc: dict) -> Transcript:
             for s in doc["segments"]
         ),
     )
+
+
+def load(path) -> Transcript:
+    """The transcript a JSON file holds, validated against the schema (design/internal/g1-stage2.md, P9).
+    Every failure is InputError(str(path), …)."""
+    try:
+        data = Path(path).read_bytes()
+    except OSError as e:
+        raise InputError(str(path), f"can't read: {e.strerror}") from None
+    try:
+        doc = json.loads(data.decode("utf-8"))
+    except ValueError as e:  # UnicodeDecodeError and json.JSONDecodeError
+        raise InputError(str(path), f"not JSON: {e}") from None
+    if not isinstance(doc, dict):
+        raise InputError(str(path), "not a transcript")
+    v = doc.get("schema_version")
+    if isinstance(v, str) and v.split(".", 1)[0] != "1":
+        raise InputError(str(path), f"schema version {v} isn't supported; this lmt reads 1.x")
+    try:
+        schema.validate(doc)
+    except InputError as e:
+        raise InputError(str(path), e.problem) from None
+    return from_dict(doc)
