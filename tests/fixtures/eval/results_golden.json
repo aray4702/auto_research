@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "set": "ci",
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "dirty": false,
+  "date": "2026-10-28T22:30:00-07:00",
+  "machine": {
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "memory_bytes": 17179869184,
+    "os": "macOS 27.0"
+  },
+  "lmt_version": "0.1.0",
+  "models": {
+    "asr": {
+      "name": "distil-large-v3",
+      "repository": "Systran/faster-distil-whisper-large-v3",
+      "revision": "c9f6a3b2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6"
+    },
+    "diarization": {
+      "name": "speaker-diarization-3.1",
+      "repository": "pyannote/speaker-diarization-3.1",
+      "revision": "84fd25912480287da0247647c3d2b4853cb3ee5d"
+    }
+  },
+  "figures": [
+    {
+      "dataset": "LS-ci",
+      "system": "product",
+      "wer": 0.263158,
+      "der": null,
+      "audio_seconds": 8.0,
+      "wall_seconds": 3.2,
+      "rtf": 0.4,
+      "peak_rss_bytes": 2000
+    },
+    {
+      "dataset": "LS-ci",
+      "system": "whisper-alone",
+      "wer": 0.263158,
+      "der": null,
+      "audio_seconds": 8.0,
+      "wall_seconds": null,
+      "rtf": null,
+      "peak_rss_bytes": null
+    },
+    {
+      "dataset": "AMI-ci",
+      "system": "product",
+      "wer": null,
+      "der": 0.117647,
+      "audio_seconds": 16.0,
+      "wall_seconds": 6.0,
+      "rtf": 0.375,
+      "peak_rss_bytes": 3000
+    },
+    {
+      "dataset": "AMI-ci",
+      "system": "pyannote-alone",
+      "wer": null,
+      "der": 0.117647,
+      "audio_seconds": 16.0,
+      "wall_seconds": null,
+      "rtf": null,
+      "peak_rss_bytes": null
+    }
+  ],
+  "determinism": null
+}

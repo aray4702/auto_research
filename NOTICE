@@ -2,6 +2,7 @@ Local Meeting Transcriber
 Copyright (c) 2026 aray4702
 
 The product's own code is licensed under the MIT License; see LICENSE.
+src/lmt/eval/normalizer/ is Whisper's English text normalizer, Copyright (c) 2022 OpenAI, MIT License; see its LICENSE.
 
 The product doesn't ship model weights. `lmt models download` downloads these models from
 Hugging Face, each at a pinned revision, under its own licence:
