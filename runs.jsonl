@@ -1145,3 +1145,4 @@
 {"at": "2026-10-29T18:01:54+00:00", "event": "start", "item": 338, "pid": 38134, "role": "reviewer", "run_id": "reviewer-20261029T180146Z", "task": "Review PR #338."}
 {"at": "2026-10-29T18:02:41+00:00", "cost_usd": 0.166513, "denials": 0, "denied": [], "event": "end", "five_hour": 0.2, "item": 338, "role": "reviewer", "run_id": "reviewer-20261029T180146Z", "seven_day": 0.03, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 12}
 {"at": "2026-10-29T18:03:50+00:00", "cost_usd": 3.031089, "denials": 2, "denied": ["Bash: echo ; > [outside]", "Bash: uv run"], "event": "end", "five_hour": 0.2, "item": 351, "role": "developer", "run_id": "developer-20261029T174340Z", "seven_day": 0.03, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 81}
+{"at": "2026-10-29T18:03:46+00:00", "event": "end", "item": 351, "role": "developer", "run_id": "developer-20261029T174340Z", "status": "cut-off"}
