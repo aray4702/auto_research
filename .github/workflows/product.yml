@@ -49,7 +49,9 @@ jobs:
         run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
       - name: README checks that need no install (S1-1, S1-2's heading, S1-5)
         if: fromJSON(needs.changes.outputs.tier) < 1
-        run: python3 -I .github/scripts/check_readme.py --root . --no-install
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_readme.py --root . --no-install --criteria-out criteria-readme.json
       # S1-3's Build block runs uv, at toolchain.toml's version (tests/test_toolchain.py).
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         if: fromJSON(needs.changes.outputs.tier) >= 1
@@ -58,13 +60,23 @@ jobs:
           enable-cache: true
       - name: README checks (S1-1 to S1-5)
         if: fromJSON(needs.changes.outputs.tier) >= 1
-        run: python3 -I .github/scripts/check_readme.py --root .
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_readme.py --root . --criteria-out criteria-readme.json
       # G1-14: the results table equals what results/full.json renders (design/internal/g1-stage1.md §6).
       - if: fromJSON(needs.changes.outputs.tier) >= 1
         run: uv sync --locked
       - name: The results table's drift check (G1-14)
         if: fromJSON(needs.changes.outputs.tier) >= 1
         run: uv run --frozen lmt eval --check-readme
+      # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-readme
+          path: criteria-readme.json
+          retention-days: 90
+          if-no-files-found: error
 
   # The product's tests that need no model or data, and ruff (design/internal/g1-stage1.md §1a).
   test:
@@ -82,7 +94,18 @@ jobs:
           enable-cache: true
       - run: uv sync --locked --all-extras
       - run: uv run --frozen ruff check
-      - run: uv run --frozen pytest
+      # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
+      - env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: uv run --frozen pytest --criteria-out=criteria-test.json
+      # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-test
+          path: criteria-test.json
+          retention-days: 90
+          if-no-files-found: error
 
   # The tests that run the models (design/internal/g1-stage1.md §3). Item #108 adds its steps.
   test-models:

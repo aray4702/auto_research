@@ -1,14 +1,16 @@
 """The CI checks of S1-1 to S1-5 (spec/acceptance.md, S1's done-check) on README.md.
 
-Usage: python3 -I .github/scripts/check_readme.py [--root DIR] [--no-install]
+Usage: python3 -I .github/scripts/check_readme.py [--root DIR] [--no-install] [--criteria-out PATH]
 
 DIR is a checkout of the commit under test (default: the current directory). Each `sh`
 block runs as one `sh -e` script: the Build block in a new empty directory, with the
 clone URL redirected to DIR; the Checks block from DIR. --no-install skips S1-3 and S1-4,
-the two checks that run a block, as tier 0 does. Standard library only.
+the two checks that run a block, as tier 0 does. --criteria-out writes the job's record
+(design/internal/criteria.md §3), after the last check. Standard library only.
 """
 
 import argparse
+import importlib.util
 import os
 import re
 import subprocess
@@ -182,33 +184,46 @@ CHECKS = [
 ]
 # The checks that run a block, so need the install; --no-install skips them.
 INSTALL_CHECKS = (check_build, check_checks)
+NO_INSTALL_REASON = "tier 0 runs no install"
+
+
+def criteria_module():
+    """criteria.py, loaded by path (`-I` keeps this directory off sys.path): its record writer."""
+    spec = importlib.util.spec_from_file_location("lmt_ci_criteria", Path(__file__).with_name("criteria.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", default=".")
     parser.add_argument("--no-install", action="store_true", help="skip S1-3 and S1-4")
+    parser.add_argument("--criteria-out", metavar="PATH",
+                        help="write each check's outcome to PATH, criteria-readme.json (design/internal/criteria.md §3)")
     args = parser.parse_args(argv)
     readme = Path(args.root) / "README.md"
-    if not readme.is_file():
-        print("FAIL S1-1 title\n  - README.md is missing at the repository root")
-        return 1
+    text = readme.read_text() if readme.is_file() else None
 
-    text = readme.read_text()
-    lines, failed = [], 0
+    lines, records, failed = [], [], 0
     for name, check in CHECKS:
+        record = {"check": f"check_readme.py::{name}", "criteria": [name.split()[0]]}
         if args.no_install and check in INSTALL_CHECKS:
             lines.append(f"SKIP {name} (--no-install)")
+            records.append(record | {"outcome": "not-run", "reason": NO_INSTALL_REASON})
             continue
-        problems = check(args.root, text)
+        problems = ["README.md is missing at the repository root"] if text is None else check(args.root, text)
         failed += bool(problems)
         lines.append(f"{'FAIL' if problems else 'PASS'} {name}")
         lines += [f"  - {p}" for p in problems]
+        records.append(record | {"outcome": "failed" if problems else "passed"})
     report = "\n".join(lines)
     print(report)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
             f.write("### README checks\n\n```\n" + report + "\n```\n")
+    if args.criteria_out:
+        criteria_module().write_record(args.criteria_out, records, complete=True)
     return 1 if failed else 0
 
 
