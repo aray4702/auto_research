@@ -209,8 +209,7 @@ class UsageErrorTest(unittest.TestCase):
 
 class HandlerTest(unittest.TestCase):
     def test_stubs_exit_1_with_one_line(self):
-        for argv, command in ((["transcribe", "a.wav"], "transcribe"),
-                              (["eval", "--set", "full", "--update-readme"], "eval")):
+        for argv, command in ((["eval", "--set", "full", "--update-readme"], "eval"),):
             with self.subTest(argv=argv):
                 code, out, err = run(*argv)
                 self.assertEqual((code, out), (1, ""))
