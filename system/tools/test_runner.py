@@ -49,6 +49,16 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("Bash(mkdir -p:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
         self.assertNotIn("Bash(mkdir -p:*)", settings["permissions"]["allow"])
 
+    def test_every_role_may_check_a_merge_without_making_one(self):
+        # A :* rule matches whole words, so git merge doesn't cover git merge-tree (#180).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git merge-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
+    def test_every_role_may_compare_a_prs_revisions(self):
+        # Reviewers and the Coordinator (SR2) ask whether a PR's own commits changed or only main (#181).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git range-diff:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
     def test_product_tools_reach_only_the_roles_that_take_them(self):
         config = with_toolchain(["Bash(make test:*)"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "developer")["permissions"]["allow"])
@@ -73,6 +83,11 @@ class SettingsTest(unittest.TestCase):
             if not writer:  # `ruff check --fix` rewrites code and `pytest --basetemp` deletes a directory (#92)
                 open_ended = [r for r in allow if r.startswith(("Bash(uv run --frozen pytest", "Bash(uv run --frozen ruff")) and r.endswith(":*)")]
                 self.assertEqual(open_ended, [], role)
+
+    def test_every_role_may_list_a_commits_files(self):
+        # A :* rule matches whole words, so git ls-files doesn't cover git ls-tree (#179).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git ls-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
 
     def test_every_word_prefix_rule_can_match_a_command(self):
         # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).
