@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #345 | P4's finding on PR #364: onnxruntime's warning on Linux breaks G1-11's one stderr line. New item P11 turns onnxruntime's log down to errors in `asr.py`, and P4 waits for it. P4's input and expected result don't change |
 | 2026-10-29 | architect, #289 | Reviewer's 01:32 findings on #304: P2 splits into P2a (the runner, on fakes) and P2b (the `eval-ci` job, and the command in the README), and P8 needs only P2a; the three RTFs' timing bases are stated, in P2a and in the README table's note (P8), with `public-api.md`'s wording asked of the Owner in #328; a two-speaker turn's 13.5 s counts the gaps between its own utterances, in whole samples; P7's guard test covers G3's `LMT_NETGUARD_ALLOW=127.0.0.1` cases, and `g3-stage1.md` points to it |
 | 2026-10-29 | architect, #289 | Reviewer's findings on #304: P9 builds #286 as `g1-slice.md` decides it (#303), by reference; G1-8c's rounding argument restated for WER, and DER equal to its bound after rounding goes to the Architect; P4's time limit is its own `run_bounded`; G1-4's default formats are tagged through P3; FFmpeg's log is already off |
 | 2026-10-29 | architect, #289 | First version: ten Developer items on top of the slice, G1-2's design and #110, with the two-speaker clip's rule for #123 |
@@ -18,13 +19,14 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | **P2a** | `lmt eval --set ci`: the runner, the worker and the option, on fakes (G1-6's `--set ci` and `--out`) | #110 (PR #298, merged) | `src/lmt/eval/runner.py` (new), `src/lmt/eval/worker.py` (new), `src/lmt/eval/cli.py`, `tests/test_eval_runner.py` (new), `tests/fixtures/eval/fake_worker.py` (new) | 3 |
 | **P2b** | The `eval-ci` job's double run and bounds (G1-5, G1-8c, G1-12's CI half), and the command in the README | P2a | `tests/test_eval_ci.py` (new), `.github/workflows/product.yml` (`eval-ci` only), `README.md` (`## Checks`), `.github/scripts/check_readme.py` (`PRODUCT_COMMANDS`) | 3 |
 | **P3** | One test per CLI option and per bad input (G1-6); no language option (G1-7) | P1 | `tests/test_g1_6.py` (new), `tests/test_cli.py`, `tests/test_models.py` (tags) | 2 |
-| **P4** | Bad input never crashes it (G1-11) | P1, E1 (#296/#299) | `tests/bad_inputs.py` (new), `tests/test_g1_11.py` (new), `tests/test_decode_fuzz.py` (new) | 2 |
+| **P4** | Bad input never crashes it (G1-11) | P1, E1 (#296/#299), P11 | `tests/bad_inputs.py` (new), `tests/test_g1_11.py` (new), `tests/test_decode_fuzz.py` (new) | 2 |
 | **P5** | The two-speaker product run and G1-3's test | #123's two-speaker clip | `tests/conftest.py`, `tests/test_g1_3.py` (new) | 2 |
 | **P6** | The exports' checks (G1-4) | P5 | `tests/subtitle_checks.py` (new), `tests/test_g1_4.py` (new), `.github/workflows/product.yml` (`test-models` only) | 3 |
 | **P7** | The network and files (G1-13) | P5 | `tests/isolation.py` (new), `tests/netguard/sitecustomize.py` (new), `tests/test_netguard.py` (new), `tests/test_g1_13.py` (new) | 2 |
 | **P8** | `lmt eval --set full` and `--update-readme`, on fakes (G1-6's last two options), and the README table's RTF note | P2a | `src/lmt/eval/runner.py`, `src/lmt/eval/cli.py`, `src/lmt/eval/readme.py`, `tests/test_eval_full.py` (new), `tests/test_readme_table.py` | 3 |
 | **P9** | `lmt.transcript.load`, `jsonschema` at run time, and the code for #286 as `g1-slice.md` decides it | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
 | **P10** | The registry: `complete = true` for each criterion whose checks have passed on `main` | the items it marks | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 |
+| **P11** | onnxruntime's log down to errors, so a run's stderr is the product's own (P4's finding on #364) | — | `src/lmt/asr.py`, `tests/test_asr.py` | 3 |
 
 **Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. The one pair that may run at the same time and share a file is P2b and P6, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
 
@@ -32,7 +34,7 @@ This is what a Developer needs to build each item below in one run. It finishes 
 
 1. **P1 ∥ P2a.** Both are small and need nothing unmerged.
 2. **P2b ∥ P3.** P2b is the first measurement of G1-8c, the criterion most likely to need a product fix or an Owner question, so it goes as soon as P2a merges. If it is held for the Architect, only the `eval-ci` job's check waits: P2a's runner and `--set ci` are already on `main`, and P8 doesn't need P2b. G1-7 needs only P3.
-3. **P4 ∥ P8** (P4 once E1 has merged). G1-11 needs P4; P8 completes G1-6.
+3. **P4 ∥ P8** (P4 once E1 has merged). G1-11 needs P4; P8 completes G1-6. P4's PR (#364) merges after **P11**, rebased onto it.
 4. **#123's two-speaker clip**, then **P5**, then **P6 ∥ P7**. These carry G1-3, G1-4 and G1-13. **Recommendation to the Coordinator:** #123 lands the two-speaker clip first, as an item of its own (rules, "If the item is bigger than one run"), with LS full, AMI full and the one-hour recording after it, since only stage 3 needs those.
 5. **P10**, once the others have passed on `main`. If the deadline nears first, it marks what has passed, and a second P10 run marks the rest.
 6. **P9** whenever a run is free: no G1 criterion waits on it, but G3's stage 1 does.
@@ -183,7 +185,7 @@ def run_bounded(argv, *, cwd, timeout=120) -> subprocess.CompletedProcess
   - **For exit 0,** the four outputs exist and the JSON validates against the schema.
 - **`tests/test_decode_fuzz.py`** (the `test` job), tagged `G1-11`, parametrized over `range(200)`. Mutation `i` is written to a temporary file with its suffix and passed to `audio.decode` in the test's process. It returns a one-dimensional float32 array with at least one sample, or raises `InputError` (exit code 3). Any other exception fails, naming `i`. The time is measured with `perf_counter` and must be ≤ 10 s. `faulthandler.dump_traceback_later(60, exit=True)` around each call turns a hang into a failure with a traceback, rather than a job timeout.
 
-**Test of the item:** the tests above in the `test` and `test-models` jobs of the PR. The PR lists each end-to-end case's exit code and each mutation's outcome. **If a case fails,** for example random bytes that FFmpeg decodes, or library output on stderr, that is a product finding. The Developer reports it on the item for the Architect, who designs the fix in decode. Neither the input nor the expected code changes.
+**Test of the item:** the tests above in the `test` and `test-models` jobs of the PR. The PR lists each end-to-end case's exit code and each mutation's outcome. **If a case fails,** for example random bytes that FFmpeg decodes, or library output on stderr, that is a product finding. The Developer reports it on the item for the Architect, who designs the fix in the product: in decode, or in the stage whose library prints (P11). Neither the input nor the expected code changes.
 
 ## P5. The two-speaker product run and G1-3
 
@@ -322,9 +324,25 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 
 **Test of the item:** `tests/test_criteria.py` and `.github/scripts/test_criteria.py`. `criteria.py` on `main`'s latest records then gives `pass` for each criterion marked, and the PR shows that output.
 
+## P11. onnxruntime's log down to errors
+
+**The finding** (#345, PR #364's `test-models`, run 40946404376). On the Linux runner, `silence.wav` and `noise.wav` exit 4 with the right error line, but onnxruntime prints `[W:onnxruntime:Default, device_discovery.cc:95 GetPciBusId] Skipping pci_bus_id …` on stderr ahead of it, so stderr has two lines. onnxruntime (1.31.1 in `uv.lock`) is faster-whisper's, for the Silero VAD that `vad_filter=True` turns on. The line comes from its default logger, when its environment is created and discovers devices. faster-whisper's own `SessionOptions.log_severity_level` covers only the session's logger, and Python's `logging` and `warnings`, which `diarize._quiet` sets, never see it. macOS prints no such line, so P4 passes there.
+
+**`asr.quiet_onnxruntime()`**, called first in `asr.load`, before `WhisperModel`: `import onnxruntime`, then `onnxruntime.set_default_logger_severity(3)` (errors and fatal only). onnxruntime's own errors still print. It runs once per process; a second call is harmless. faster-whisper creates the VAD session later, inside `transcribe`, so the severity is set before onnxruntime's environment discovers devices. Nothing else changes: no setting of `transcribe`, no threads, no model.
+
+**If the line still prints** on Linux with the severity set (the test below says so: for example, onnxruntime creates its environment, and discovers devices, inside that call or at `import`), `quiet_onnxruntime` also does this, in the same item. Around the import, the severity call and `faster_whisper.vad.get_vad_model()` (cached, so `transcribe` reuses that session), it flushes `sys.stderr` and points file descriptor 2 at a `tempfile.TemporaryFile`. Afterwards, in a `finally`, it restores descriptor 2 and writes back to `sys.stderr` every captured line that doesn't start with `[V:onnxruntime`, `[I:onnxruntime` or `[W:onnxruntime`. So only onnxruntime's verbose, info and warning lines are dropped. Its errors, and anything else, still print, and an exception still propagates. The PR says which of the two it needed, with the CI run's link.
+
+**Tests.** `tests/test_asr.py`:
+- With `onnxruntime` replaced in `sys.modules` by a fake that records calls, as the file's `fake` fixture does for `faster_whisper`, `asr.load` calls `set_default_logger_severity(3)` before it builds the `WhisperModel`.
+- In a fresh process (`subprocess.run([sys.executable, "-c", …])`), `asr.quiet_onnxruntime()` then `faster_whisper.vad.get_vad_model()`, and one call of the model on a second of zeros, leave stderr empty. The VAD model ships inside faster-whisper's wheel, so this needs no download and runs in the `test` job. It fails on the Linux runner without the change.
+- With the fallback: a line written to descriptor 2 inside the capture that starts `[E:onnxruntime` is written back, and one that starts `[W:onnxruntime` isn't.
+
+**Test of the item:** those tests in the `test` job on both platforms, and G1-1's test still passing in `test-models`. Then #364, rebased onto P11, shows `silence.wav` and `noise.wav` passing in `test-models` with their test unchanged.
+
 ## Risks
 
 - **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move.
 - **Determinism of the double run.** ASR and diarization run side by side. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3.
 - **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
 - **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
+- **Other libraries' output on stderr.** onnxruntime's was the first (P11). Any other library line that reaches stderr is a product finding too, fixed in the stage that loads the library. The test that found it doesn't change.
