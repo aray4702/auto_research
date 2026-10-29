@@ -784,3 +784,4 @@
 {"at": "2026-10-29T02:58:41+00:00", "cost_usd": 0.652044, "denials": 0, "denied": [], "event": "end", "five_hour": 0.16, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T025636Z", "seven_day": 0.45, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 31}
 {"at": "2026-10-29T02:58:36+00:00", "event": "end", "item": null, "role": "coordinator", "run_id": "coordinator-20261029T025636Z", "status": "cut-off"}
 {"at": "2026-10-29T02:58:42+00:00", "cost_usd": 0.399882, "denials": 0, "denied": [], "event": "end", "five_hour": 0.16, "item": 247, "role": "reviewer", "run_id": "reviewer-20261029T025636Z", "seven_day": 0.45, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 21}
+{"at": "2026-10-29T02:58:36+00:00", "event": "end", "item": 247, "role": "reviewer", "run_id": "reviewer-20261029T025636Z", "status": "cut-off"}
