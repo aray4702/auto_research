@@ -1,0 +1,99 @@
+# The model manifest (design/internal/g1-stage1.md §3, G1-12, G1-15). Every file a stage loads is pinned
+# by repository, revision, SHA-256 and size; `lmt models` downloads and verifies them. Each model's
+# licence, creators and model card are its attribution, which NOTICE and README.md's ## Licences give.
+# The revisions are those the builder cached on the Mac (#81, 19:57 PT); the hashes and sizes were
+# computed from those files (#108, 2026-10-28 22:25 PT). The ASR model's model.bin was cross-checked
+# against the Hub's own SHA-256; the gated pyannote repositories weren't, as the builder's token request failed.
+
+schema_version = 1
+default_asr = "distil-large-v3"
+
+[[model]]
+name = "distil-large-v3"
+role = "asr"                              # asr | diarization | segmentation | embedding
+repository = "Systran/faster-distil-whisper-large-v3"
+revision = "c3058b475261292e64a0412df1d2681c06260fab"
+licence = "MIT"
+creators = "SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3"
+card = "https://huggingface.co/Systran/faster-distil-whisper-large-v3"
+gated = false
+
+[[model.file]]
+path = "config.json"
+sha256 = "90c55f775cc4e0bb17293d0bf12f96557a486f20dea886fabd8e6075a3588b21"
+size = 2690
+
+[[model.file]]
+path = "model.bin"
+sha256 = "b79368e19b6623813609431a6e5ee309a71506701ebc49fd7820e692dec7c5f5"
+size = 1512927867
+
+[[model.file]]
+path = "preprocessor_config.json"
+sha256 = "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
+size = 340
+
+[[model.file]]
+path = "tokenizer.json"
+sha256 = "6d8cbd7cd0d8d5815e478dac67b85a26bbe77c1f5e0c6d76d1ce2abc0e5f21ca"
+size = 2480617
+
+[[model.file]]
+path = "vocabulary.json"
+sha256 = "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
+size = 1068114
+
+[[model]]
+name = "speaker-diarization-3.1"
+role = "diarization"
+repository = "pyannote/speaker-diarization-3.1"
+revision = "84fd25912480287da0247647c3d2b4853cb3ee5d"
+licence = "MIT"
+creators = "pyannote (Hervé Bredin and Alexis Plaquet)"
+card = "https://huggingface.co/pyannote/speaker-diarization-3.1"
+gated = true
+
+[[model.file]]
+path = "config.yaml"
+sha256 = "04ad9cd59a93c3a7c754200ecc9e1c4ba87bf1657ef8a4debf7555e711daeeda"
+size = 469
+
+[[model]]
+name = "segmentation-3.0"
+role = "segmentation"
+repository = "pyannote/segmentation-3.0"
+revision = "e66f3d3b9eb0873085418a7b813d3b369bf160bb"
+licence = "MIT"
+creators = "pyannote (Hervé Bredin and Alexis Plaquet)"
+card = "https://huggingface.co/pyannote/segmentation-3.0"
+gated = true
+
+[[model.file]]
+path = "config.yaml"
+sha256 = "fa65a47a751602f04cc570135007d76859b69e8f9f1bfdf5878a5145980d4263"
+size = 399
+
+[[model.file]]
+path = "pytorch_model.bin"
+sha256 = "da85c29829d4002daedd676e012936488234d9255e65e86dfab9bec6b1729298"
+size = 5905440
+
+[[model]]
+name = "wespeaker-voxceleb-resnet34-LM"
+role = "embedding"
+repository = "pyannote/wespeaker-voxceleb-resnet34-LM"
+revision = "837717ddb9ff5507820346191109dc79c958d614"
+licence = "CC-BY-4.0"
+creators = "the WeSpeaker project, packaged for pyannote.audio by pyannote"
+card = "https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM"
+gated = true
+
+[[model.file]]
+path = "config.yaml"
+sha256 = "6ff718cff3c5d7a4493537ab7f4780cad7e3d32453f59099b4076aefa07a9974"
+size = 221
+
+[[model.file]]
+path = "pytorch_model.bin"
+sha256 = "366edf44f4c80889a3eb7a9d7bdf02c4aede3127f7dd15e274dcdb826b143c56"
+size = 26645418
