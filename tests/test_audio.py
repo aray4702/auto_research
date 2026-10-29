@@ -1,5 +1,6 @@
-"""Decode (design/internal/g1-slice.md, S2), with no model."""
+"""Decode (design/internal/g1-slice.md, S2; design/internal/g1-stage2.md, P1), with no model."""
 
+import struct
 import wave
 from pathlib import Path
 
@@ -89,3 +90,43 @@ def test_each_failure_is_an_input_error(tmp_path, make, problem):
     assert caught.value.subject == str(path)
     assert caught.value.problem.startswith(problem)
     assert "\n" not in str(caught.value)
+
+
+def test_a_wav_with_truncated_data_is_an_input_error(tmp_path):
+    clip = CLIP.read_bytes()
+    assert clip[12:16] == b"fmt " and clip[36:40] == b"data"  # the clip's header is 44 bytes
+    declared = struct.unpack("<I", clip[40:44])[0]
+    assert declared > 16_000
+    path = tmp_path / "truncated.wav"
+    path.write_bytes(clip[:44 + 16_000])
+    with pytest.raises(InputError) as caught:
+        audio.decode(path)
+    assert caught.value.exit_code == 3
+    assert caught.value.subject == str(path)
+    assert caught.value.problem == f"truncated: its data chunk declares {declared} bytes, the file holds 16000"
+
+
+def test_a_list_chunk_before_data_decodes(tmp_path):
+    samples = tone(16_000)
+    plain = write_wav(tmp_path / "plain.wav", samples, 16_000).read_bytes()
+    assert plain[36:40] == b"data"
+    info = b"INFOx"  # an odd size, so the chunk's pad byte is skipped too
+    listed = b"LIST" + struct.pack("<I", len(info)) + info + b"\0"
+    body = plain[12:36] + listed + plain[36:]
+    path = tmp_path / "listed.wav"
+    path.write_bytes(b"RIFF" + struct.pack("<I", 4 + len(body)) + b"WAVE" + body)
+    got = audio.decode(path)
+    assert got.shape == (16_000,)
+    assert numpy.max(numpy.abs(got - samples / 32768)) <= 1e-7
+
+
+def test_a_data_size_of_0xffffffff_is_no_truncation(tmp_path):
+    data = bytearray(write_wav(tmp_path / "tone.wav", tone(16_000), 16_000).read_bytes())
+    assert data[36:40] == b"data"
+    data[40:44] = struct.pack("<I", 0xFFFFFFFF)
+    path = tmp_path / "streamed.wav"
+    path.write_bytes(bytes(data))
+    try:
+        audio.decode(path)
+    except InputError as e:
+        assert not e.problem.startswith("truncated"), e.problem
