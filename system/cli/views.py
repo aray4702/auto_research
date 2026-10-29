@@ -72,8 +72,17 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}.mu
 .banner{grid-column:1/-1;padding:12px 16px;border-radius:10px;font-weight:600}.banner.bad{background:color-mix(in srgb,var(--bad) 12%,transparent)}
 .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 10px}.bar>div{height:100%;background:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:14px}td{padding:4px 0;border-top:1px solid var(--line)}td:last-child{text-align:right}
-@media (max-width:600px){header{padding:12px 16px}main{padding:12px 16px}}
+nav{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line)}
+nav a{padding:10px 14px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600}
+nav a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent)}nav a:hover{text-decoration:none;color:var(--ink)}
+.grid{overflow-x:auto}.grid table td,.grid table th{padding:6px 10px 6px 0;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+.grid table th{font-size:12px;color:var(--muted);font-weight:600;border-top:0}.grid table td.num{text-align:right;white-space:nowrap}
+.grid table td.when{white-space:nowrap}
+@media (max-width:600px){header{padding:12px 16px}main{padding:12px 16px}nav{padding:0 12px}}
 """
+
+# Progress is the default tab, then Roles (#246). Overview is the page / showed before.
+TABS = (("/", "Progress"), ("/roles", "Roles"), ("/overview", "Overview"))
 
 
 def link(d, n, kind="issues"):
@@ -121,13 +130,119 @@ def html_page(d):
     parts.append(f'<section><h2>Merges from your account</h2><ul>{"".join(merges) or "<li class=muted>None.</li>"}</ul></section>')
     items = [f'<li>{link(d, i["number"])} {e(i["title"])}' + "".join(f'<span class="pill">{e(x)}</span>' for x in i["labels"]) + "</li>" for i in d["items"]]
     parts.append(f'<section class="wide"><h2>Open items</h2><ul>{"".join(items) or "<li class=muted>None.</li>"}</ul></section>')
+    return frame(d, "/overview", "".join(parts))
+
+
+def frame(d, here, body):
+    """A dashboard page: the header, the tabs with the current one marked, and its sections. Tabs may repeat
+    each other's facts (#241)."""
     favicon_data = "data:image/svg+xml," + ICON_SVG.replace('"', "'").replace("#", "%23")
+    tabs = "".join(f'<a href="{path}"{" aria-current=page" if path == here else ""}>{name}</a>' for path, name in TABS)
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="60">'
-        '<title>auto_research</title>'
+        f'<title>auto_research · {dict(TABS)[here]}</title>'
         f'<link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" href="{favicon_data}">'
         f'<link rel="apple-touch-icon" href="/favicon.svg"><style>{CSS}</style></head><body>'
-        f'<header>{ICON_SVG}<h1>auto_research</h1><span class="when">{local(d["now"], tz)} · refreshes every minute</span></header>'
-        f'<main>{"".join(parts)}</main></body></html>'
+        f'<header>{ICON_SVG}<h1>auto_research</h1><span class="when">{local(d["now"], tz=d["time_zone"])} · refreshes every minute</span></header>'
+        f'<nav aria-label="Tabs">{tabs}</nav><main>{body}</main></body></html>'
     )
+
+
+def met_line(p):
+    """"Met: n of 9 features, n of 10 requirements", from the Progress table."""
+    count = lambda k: (sum(r["status"] == "met" for r in p["rows"] if r["id"][0] == k), sum(r["id"][0] == k for r in p["rows"]))
+    (f, fn), (q, qn) = count("F"), count("Q")
+    return f"Met: {f} of {fn} features, {q} of {qn} requirements"
+
+
+STATUS_NOTE = ("Nothing records each criterion's check yet (#239), so status comes from the items: a criterion is "
+               "built when every feature item naming it is closed. Built isn't verified, so nothing shows as met. "
+               "Start is the first run on its items; End is when its last criterion was built.")
+
+
+def when(t, tz):
+    return t.astimezone(ZoneInfo(tz)).strftime("%m-%d %H:%M") if t else "—"
+
+
+def started(r, tz):
+    return when(r["started"], tz)
+
+
+def progress_text(p):
+    tz = p["time_zone"]
+    lines = [f"Progress — {local(p['now'], tz)}", met_line(p), STATUS_NOTE, ""]
+    for r in p["rows"]:
+        lines.append(f"  {r['id']:<4} {r['name']}")
+        lines.append(f"       {', '.join(r['criteria']) or 'no criteria'} · {r['status']} · started {started(r, tz)}"
+                     f" · ended {when(r['ended'], tz)} · due {r['due'] or '—'} · ${r['cost']:.2f}")
+    lines += ["", f"Cost since {started({'started': p['since']}, tz)}: ${p['total']:.2f}"]
+    lines += [f"  {k}: ${v:.2f}" for k, v in p["costs"]]
+    return "\n".join(lines)
+
+
+def progress_page(p):
+    e, tz = html.escape, p["time_zone"]
+    pill = lambda r: ("bad" if r["status"].startswith("no criterion") else "good" if r["status"] == "met"
+                      else "you" if r["status"].startswith(("in progress", "built")) else "")
+    rows = "".join(
+        f'<tr><td><b>{r["id"]}</b></td><td>{e(r["name"])}</td><td class="muted">{e(", ".join(r["criteria"]) or "none")}</td>'
+        f'<td><span class="pill {pill(r)}">{e(r["status"])}</span></td><td class="when">{started(r, tz)}</td>'
+        f'<td class="when">{when(r["ended"], tz)}</td>'
+        f'<td class="when">{e(r["due"] or "—")}</td><td class="num">${r["cost"]:.2f}</td></tr>' for r in p["rows"])
+    head = "<tr><th>ID</th><th>Feature or requirement</th><th>Criteria</th><th>Status</th><th>Start</th><th>End</th><th>Due</th><th>Cost</th></tr>"
+    split = "".join(f'<tr><td>{e(k)}</td><td>${v:.2f}</td></tr>' for k, v in p["costs"])
+    body = (f'<section class="wide"><h2>{e(met_line(p))}</h2><p class="muted">{e(STATUS_NOTE)}</p>'
+            f'<div class="grid"><table>{head}{rows}</table></div></section>'
+            f'<section><h2>Cost since {started({"started": p["since"]}, tz)}: ${p["total"]:.2f}</h2><table>{split}</table>'
+            f'<p class="muted">API list prices, from each run\'s own report. The Max plan has no charge per run.</p></section>')
+    return frame(p, "/", body)
+
+
+def role_lines(x, tz):
+    """(state, what) for a role: what it's working on, or since when it has been idle."""
+    ref = lambda i: f"#{i['number']} {i['title']}" if i["number"] else i["title"]
+    if x["working"]:
+        return "working", [f"{ref(w)}, since {local(w['since'], tz)} ({w['run_id']})" for w in x["working"]]
+    last = x["last"]
+    return "idle", [f"since {local(last['at'], tz)}, after {ref(last)} ({last['status'] or 'ended'})" if last else "no run yet"]
+
+
+def runs_today(x, d):
+    return f"{x['today']}, daily cap lifted" if d.get("caps_lifted_until") else f"{x['today']} of {x['cap']}"
+
+
+def roles_text(d):
+    tz = d["time_zone"]
+    lines = [f"Roles — {local(d['now'], tz)}", ""]
+    for x in d["roles"]:
+        state, what = role_lines(x, tz)
+        lines.append(f"  {x['role']:<12} {state:<8} {what[0]}" + "".join(f"\n  {'':<12} {'':<8} {w}" for w in what[1:]))
+        lines.append(f"  {'':<12} {'':<8} runs today: {runs_today(x, d)}")
+    return "\n".join(lines)
+
+
+def roles_page(d):
+    e, tz = html.escape, d["time_zone"]
+    link_to = lambda i: (f'<a href="https://github.com/{d["repo"]}/{i["kind"]}/{i["number"]}">#{i["number"]}</a> {e(i["title"])}'
+                         if i["number"] else e(i["title"]))
+    rows = []
+    for x in d["roles"]:
+        if x["working"]:
+            what = "".join(f'<div>{link_to(w)}</div><div class="muted">since {local(w["since"], tz)} · {e(w["run_id"])}</div>'
+                           for w in x["working"])
+        elif x["last"]:
+            what = (f'<div class="muted">since {local(x["last"]["at"], tz)}, after {link_to(x["last"])} '
+                    f'({e(x["last"]["status"] or "ended")})</div>')
+        else:
+            what = '<div class="muted">no run yet</div>'
+        state = "working" if x["working"] else "idle"
+        rows.append(f'<tr><td><b>{e(x["role"])}</b></td><td><span class="pill {"good" if x["working"] else ""}">{state}</span></td>'
+                    f'<td>{what}</td><td class="num">{e(runs_today(x, d))}</td></tr>')
+    head = "<tr><th>Role</th><th>State</th><th>Working on</th><th>Runs today</th></tr>"
+    busy = sum(bool(x["working"]) for x in d["roles"])
+    lifted = (f'<p class="muted">Daily run caps are lifted until {local(d["caps_lifted_until"], tz)}, by your override.</p>'
+              if d.get("caps_lifted_until") else "")
+    body = (f'<section class="wide"><h2>{busy} of {len(d["roles"])} roles working</h2>{lifted}'
+            f'<div class="grid"><table>{head}{"".join(rows)}</table></div></section>')
+    return frame(d, "/roles", body)
