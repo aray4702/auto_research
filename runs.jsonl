@@ -1124,3 +1124,4 @@
 {"at": "2026-10-29T17:31:13+00:00", "cost_usd": 0.285717, "denials": 0, "denied": [], "event": "end", "five_hour": 0.14, "item": 328, "role": "architect", "run_id": "architect-20261029T172842Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 27}
 {"at": "2026-10-29T17:31:50+00:00", "event": "start", "item": 354, "pid": 15406, "role": "reviewer", "run_id": "reviewer-20261029T173143Z", "task": "Review PR #354."}
 {"at": "2026-10-29T17:32:39+00:00", "cost_usd": 0.19604, "denials": 0, "denied": [], "event": "end", "five_hour": 0.15, "item": 354, "role": "reviewer", "run_id": "reviewer-20261029T173143Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 16}
+{"at": "2026-10-29T17:34:14+00:00", "event": "start", "item": 338, "pid": 16548, "role": "builder", "run_id": "builder-20261029T173406Z", "task": "PR #338 needs work: the Reviewer asked for changes."}
