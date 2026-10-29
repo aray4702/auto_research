@@ -149,10 +149,11 @@ def file_status(model, f) -> str:
     return "verified" if _matches(path, f) else "mismatch"
 
 
-def model_status(model) -> str:
-    """The worst of its files' statuses."""
-    statuses = {file_status(model, f) for f in model.files}
-    return next(s for s in ("mismatch", "missing", "verified") if s in statuses)
+def model_status(model) -> tuple[str, int]:
+    """The worst of its files' statuses, and its verified files' bytes. Hashes each file once."""
+    statuses = [(f, file_status(model, f)) for f in model.files]
+    worst = next(s for s in ("mismatch", "missing", "verified") if any(s == got for _, got in statuses))
+    return worst, sum(f.size for f, got in statuses if got == "verified")
 
 
 def download(models, token=None) -> None:
@@ -224,10 +225,6 @@ def ensure(models, offline=False) -> dict[str, Path]:
     return {model.name: model_dir(model) for model in models}
 
 
-def verified_bytes(model) -> int:
-    return sum(f.size for f in model.files if file_status(model, f) == "verified")
-
-
 def cli_models(args) -> int:
     manifest = load_manifest(MANIFEST_PATH)
     if args.action == "download":
@@ -244,10 +241,9 @@ def _list(manifest, with_bytes):
     print("\t".join(header))
     total = 0
     for model in manifest.models:
-        row = [model.name, model.role, model.revision, "yes" if model.name in defaults else "no",
-               model_status(model)]
+        status, size = model_status(model)
+        row = [model.name, model.role, model.revision, "yes" if model.name in defaults else "no", status]
         if with_bytes:
-            size = verified_bytes(model)
             total += size if model.name in defaults else 0
             row.append(str(size))
         print("\t".join(row))

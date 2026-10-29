@@ -46,14 +46,19 @@ def fake_manifest(tmp_path, *, gated=False, weights=GOOD):
     return path
 
 
+def hub_env(monkeypatch, cache):
+    monkeypatch.setenv("LMT_CACHE_DIR", str(cache))
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    # Not delenv: it records nothing when the variable is absent, so teardown wouldn't undo ensure()'s.
+    monkeypatch.setenv("HF_HUB_OFFLINE", "0")
+
+
 @pytest.fixture
 def hub(tmp_path, monkeypatch):
     """The fake manifest in MANIFEST_PATH, an empty LMT_CACHE_DIR, no HF_TOKEN, and hf_hub_download
     replaced by one that writes known bytes. `served` maps (repo, path) to the bytes it serves."""
     cache = tmp_path / "cache"
-    monkeypatch.setenv("LMT_CACHE_DIR", str(cache))
-    monkeypatch.delenv("HF_TOKEN", raising=False)
-    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    hub_env(monkeypatch, cache)
     monkeypatch.setattr(models, "MANIFEST_PATH", fake_manifest(tmp_path))
     served = {("org/tiny", "config.json"): CONFIG, ("org/tiny", "model.bin"): GOOD,
               ("org/other", "model.bin"): b"other\n", ("org/diar", "config.yaml"): CONFIG,
@@ -191,6 +196,16 @@ def test_ensure_downloads_verifies_and_goes_offline(hub):
     assert len(hub["calls"]) == 2
 
 
+def test_hub_env_restores_the_offline_flag_ensure_sets(tmp_path, monkeypatch):
+    monkeypatch.setenv("HF_HUB_OFFLINE", "unset")  # so this test's own teardown removes it
+    monkeypatch.delenv("HF_HUB_OFFLINE")
+    with pytest.MonkeyPatch.context() as inner:  # the `hub` fixture's monkeypatch
+        hub_env(inner, tmp_path / "cache")
+        models.ensure([])
+        assert os.environ["HF_HUB_OFFLINE"] == "1"
+    assert "HF_HUB_OFFLINE" not in os.environ, "ensure()'s HF_HUB_OFFLINE outlives the hub fixture"
+
+
 @pytest.mark.criterion("G1-15")
 def test_ensure_deletes_a_mismatched_file_and_exits_5(hub):
     tiny = hub["manifest"].get("tiny")
@@ -248,6 +263,15 @@ def test_list_bytes_prints_the_documented_columns_and_total(hub, capsys):
     code, out, _ = run(["models", "list"], capsys)
     assert out.splitlines()[0] == "NAME\tROLE\tREVISION\tDEFAULT\tSTATUS"
     assert out.splitlines()[1] == f"tiny\tasr\t{rev}\tyes\tverified"
+
+
+def test_list_bytes_hashes_each_file_once(hub, capsys, monkeypatch):
+    assert run(["models", "download"], capsys)[0] == 0
+    hashed = []
+    real = models.sha256_of
+    monkeypatch.setattr(models, "sha256_of", lambda path: hashed.append(path) or real(path))
+    assert run(["models", "list", "--bytes"], capsys)[0] == 0
+    assert len(hashed) == len(set(hashed)) == 5, hashed  # the default models' five files
 
 
 def test_malformed_manifest_names_the_file(tmp_path):
