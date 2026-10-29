@@ -639,3 +639,4 @@
 {"at": "2026-10-29T00:10:08+00:00", "event": "start", "item": 225, "pid": 33967, "role": "reviewer", "run_id": "reviewer-20261029T001002Z", "task": "Review PR #225."}
 {"at": "2026-10-29T00:12:14+00:00", "cost_usd": 0.608057, "denials": 0, "denied": [], "event": "end", "five_hour": 0, "item": 225, "role": "reviewer", "run_id": "reviewer-20261029T001002Z", "seven_day": 0.42, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 17}
 {"at": "2026-10-29T00:12:19+00:00", "event": "start", "item": null, "pid": 34457, "role": "coordinator", "run_id": "coordinator-20261029T001213Z", "task": "Items closed since your last run: #206. Record their goals' progress, close what is done, and chart and schedule what comes next."}
+{"at": "2026-10-29T00:14:32+00:00", "event": "start", "item": 225, "pid": 34926, "role": "builder", "run_id": "builder-20261029T001427Z", "task": "PR #225 needs work: the Reviewer asked for changes."}
