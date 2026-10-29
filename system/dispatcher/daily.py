@@ -25,32 +25,55 @@ def ends(runs):
     return [r for r in runs if r["event"] == "end"]
 
 
-def denials(runs, now, explained=()):
+DENIAL_KINDS = ("denial", "outside", "compound")
+SINCE = " since "
+
+
+def denials_raised(anomalies):
+    """When each denial signature was last raised, whatever its kind. #183 raised `python3 > ;` as a gap;
+    once #147 sorted it as compound, the same three runs raised it again as #322 under its new key."""
+    out = {}
+    for a in anomalies:
+        kind, _, rest = a.get("key", "").partition(":")
+        if kind in DENIAL_KINDS and a.get("at"):
+            sig, at = rest.split(SINCE)[0], datetime.fromisoformat(a["at"])
+            out[sig] = max(out.get(sig, at), at)
+    return out
+
+
+def denials(runs, now, explained=(), raised=()):
     """The same denial (tool and first words) in three or more runs this week: a permission gap (#44).
     A denial the rules explain (runner.toml [denials] explained) is no gap, and isn't raised (#138). A
     compound command's denial (its signature keeps a shell operator) isn't one either but a breach of the
-    one-command rule, raised as its own (#140); nor is one that reaches outside the worktree (#177)."""
+    one-command rule, raised as its own (#140); nor is one that reaches outside the worktree (#177).
+    A run counts once per signature: once raised (raised: the anomaly records), only runs after it count,
+    and three of them raise it again, as the response didn't hold (#322)."""
+    last = denials_raised(raised)
     seen = {}
     for r in ends(recent(runs, now)):
         for signature in set(r.get("denied") or []) - set(explained):
-            seen.setdefault(signature, set()).add(r["run_id"])
+            if signature not in last or datetime.fromisoformat(r["at"]) > last[signature]:
+                seen.setdefault(signature, set()).add(r["run_id"])
     out = []
     for sig, ids in sorted(seen.items()):
         if len(ids) < 3:
             continue
         where = f"Denied in {len(ids)} runs this week: {', '.join(sorted(ids))}."
+        since = f"{SINCE}{last[sig].isoformat()}" if sig in last else ""
+        if since:
+            where += f" Raised before, at {last[sig].isoformat()}; these runs came after it, so that response didn't hold."
         if usage.OUTSIDE in sig.split():
-            out.append((f"outside:{sig}", "builder", f"Recurring denial outside the worktree: {sig} — the rules keep runs inside it",
+            out.append((f"outside:{sig}{since}", "builder", f"Recurring denial outside the worktree: {sig} — the rules keep runs inside it",
                         f"{where} Not a permission gap: --restricted denies any path outside a run's worktree. Find why runs still reach outside it, and fix that.", None))
         elif set(sig.split()) & set(usage.COMPOUND):
-            out.append((f"compound:{sig}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
+            out.append((f"compound:{sig}{since}", "builder", f"Recurring compound-command denial: {sig} — the rules say one command at a time",
                         f"{where} Not a permission gap: find why runs still send compound commands, and fix that.", None))
         elif set(sig.split()) & {"?", "…/?"}:
-            out.append((f"denial:{sig}", "builder", f"Recurring denial of an unrecognized command: {sig}",
+            out.append((f"denial:{sig}{since}", "builder", f"Recurring denial of an unrecognized command: {sig}",
                         f"{where} The signature doesn't say what was denied, so nothing can be granted: find the commands in "
                         "the runs' logs, and teach usage.first_word their shape (#176).", None))
         else:
-            out.append((f"denial:{sig}", "builder", f"Recurring permission denial: {sig}",
+            out.append((f"denial:{sig}{since}", "builder", f"Recurring permission denial: {sig}",
                         f"{where} Grant it by rule, or say in the rules why not.", None))
     return out
 
