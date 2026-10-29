@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The CI checks of S1-1 to S1-5 (spec/acceptance.md, S1's done-check) on README.md.
 
 Usage: python3 -I .github/scripts/check_readme.py [--root DIR] [--no-install]
@@ -27,10 +26,10 @@ GATE_COMMAND = "python3 -I system/gate/generic.py --base origin/main"
 PRODUCT_COMMANDS = ["uv run --frozen pytest"]
 PRODUCT_YML = ".github/workflows/product.yml"
 
-FENCE = re.compile(r"^```(\S*)[^\n]*\n(.*?)^```[ \t]*$", re.M | re.S)
+FENCE = re.compile(r"^```(\S*)[^\n]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
 INLINE_LINK = re.compile(r"!?\[[^\]]*\]\(\s*<?([^)\s>]*)>?(?:\s+[\"'(][^)]*)?\)")
-REFERENCE_LINK = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?", re.M)
-SCHEME = re.compile(r"^(?:https?|mailto):", re.I)
+REFERENCE_LINK = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)>?", re.MULTILINE)
+SCHEME = re.compile(r"^(?:https?|mailto):", re.IGNORECASE)
 
 
 def section(text, heading):
@@ -73,18 +72,20 @@ def names_version(text, version):
 
 def run_sh(script, cwd, env=None):
     """Run a whole block as one `sh -e` script; return its exit code and the end of its output."""
-    r = subprocess.run(["sh", "-e", "-c", script], cwd=cwd, env=env, capture_output=True, text=True)
+    r = subprocess.run(["sh", "-e", "-c", script], cwd=cwd, env=env, capture_output=True, text=True,
+                       check=False)
     return r.returncode, (r.stdout + r.stderr)[-2000:]
 
 
 def head_of(path):
-    r = subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", str(path), "rev-parse", "HEAD"], capture_output=True, text=True,
+                       check=False)
     return r.stdout.strip() if r.returncode == 0 else None
 
 
 def heading_and_block(text, heading):
     """Problems with the section's heading, and its one `sh` block (None if not exactly one)."""
-    n = len(re.findall(rf"^## {re.escape(heading)}$", text, re.M))
+    n = len(re.findall(rf"^## {re.escape(heading)}$", text, re.MULTILINE))
     if n != 1:
         return [f"'## {heading}' appears {n} times, not once"], None
     blocks = [code for lang, code in FENCE.findall(section(text, heading)) if lang == "sh"]
@@ -101,7 +102,7 @@ def check_title(root, text):
 
 
 def check_what_it_is(root, text):
-    n = len(re.findall(r"^## What it is$", text, re.M))
+    n = len(re.findall(r"^## What it is$", text, re.MULTILINE))
     return [] if n == 1 else [f"'## What it is' appears {n} times, not once"]
 
 

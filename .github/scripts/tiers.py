@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """The tier filter: which of product.yml's tiers a change runs, by the paths it touches.
 
 Usage: python3 -I .github/scripts/tiers.py --event EVENT --base BASE --head HEAD
@@ -56,7 +55,7 @@ def decide(event, base, head, repo="."):
         return ALL_TIERS, [], f"the base {base!r} gives no change to compare"
     # --no-renames lists a renamed file's old path too, so moving it out of a tier can't hide it.
     r = subprocess.run(["git", "-C", repo, "diff", "--name-only", "--no-renames", f"{base}...{head}"],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, check=False)
     if r.returncode != 0:
         return ALL_TIERS, [], f"git can't compute the change {base}...{head}: {r.stderr.strip()}"
     paths = [p for p in r.stdout.splitlines() if p]
