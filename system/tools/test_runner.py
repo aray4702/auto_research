@@ -49,6 +49,11 @@ class SettingsTest(unittest.TestCase):
             self.assertIn("Bash(mkdir -p:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
         self.assertNotIn("Bash(mkdir -p:*)", settings["permissions"]["allow"])
 
+    def test_every_role_may_compare_a_prs_revisions(self):
+        # Reviewers and the Coordinator (SR2) ask whether a PR's own commits changed or only main (#181).
+        for role in CONFIG["runner"]["roles"]:
+            self.assertIn("Bash(git range-diff:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
+
     def test_product_tools_reach_only_the_roles_that_take_them(self):
         config = with_toolchain(["Bash(make test:*)"])
         self.assertIn("Bash(make test:*)", runner.role_settings(config, "developer")["permissions"]["allow"])
