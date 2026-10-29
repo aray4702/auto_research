@@ -16,6 +16,7 @@ The runner is headless Claude Code (`claude -p`, version 2.1.303) on the Owner's
 - **Per-run hard caps work:** `--max-turns` and `--max-budget-usd`. A budget cap stops the run with `error_max_budget_usd` and overshoots by at most one model call. `--model` and `--effort` select the model and effort level.
 - **Calibration (an estimate, ±2–10×):** this 7-day window held about $990 of API-equivalent usage across all local sessions at a reading of 4 %, which puts 1 point at roughly $250. Until the supervised runs of step 5 calibrate it, the caps assume 1 point per $100.
 - **Step 5 update (2026-10-26 22:40 PT):** the window had $1,137 at 7 %. That's about $160 per point on average, but about $50 per point at the margin (from 4 % to 7 %). The readings are whole percents, so the margin is coarse: the 4 → 7 % change is 2–4 points, a range of about $37–$75 per point. The caps now assume **1 point per $50**, the marginal point estimate (not a bound), until the builder's calibration tool (#43) measures it. The system's own 18 supervised runs cost $7.53, which is 0.05–0.15 points.
+- **First calibration (2026-10-28, #202):** at 16:46 PT `calibrate.py` read 42 % at $1,597 of local usage. That's an average of 0.026 points/$, but 0.0686 at the margin since the window's first run reading (6 % at $1,072 by the same pricing, 2026-10-26 20:47 PT; 0.0667–0.0705 for ±1 point). Step 5's $1,137 at 7 % two hours later is comparable and gives 0.074–0.078. The early window was cheap per point and the cause isn't known. Usage the tool can't see (claude.ai, other devices) would only overstate the margin, which errs on the safe side. The caps now assume **0.08** (1 point = $12.50), at or above every marginal, and `calibrate.py` now measures the marginal from each window's first run reading.
 
 ## Roles and parallelism
 
@@ -74,11 +75,11 @@ These are per-run estimates until step 5 measures real runs.
 | Architect   | 3  | ~$6   | ~$18  |
 | Tester      | 3 once on | ~$3 | ~$9 |
 | Builder     | 7 daily + ~3 | ~$4 | ~$40 |
-| **Total**   | | | **~$170 ≈ 1.7 points** at 1 point per $100 (~0.7 at the estimate) |
+| **Total**   | | | **~$170 ≈ 13.6 points** at the calibrated 0.08 points/$ |
 
 **Idle week, with no goals:** about $20, all from the builder.
 
-Either way the system stays far inside its 20 points. The binding constraints are one-at-a-time merges and the Owner's attention, not usage. Expected Owner attention:
+Either way the system stays inside its 20 points, an active week by about 6 points. The binding constraints are one-at-a-time merges and the Owner's attention, not usage. Expected Owner attention:
 - **During steps 3–7:** reading and merging about 10–15 builder PRs, creating the Reviewer App, and providing secrets.
 - **Afterwards:** protected merges, stage-end confirmations and escalation answers, aiming at under 15 minutes a day.
 
