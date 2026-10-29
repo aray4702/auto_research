@@ -165,7 +165,7 @@ def test_bad_checksum_exits_5_and_leaves_nothing(hub, capsys):
     assert err.splitlines()[-1] == "lmt: error: org/tiny/model.bin: SHA-256 doesn't match the manifest"
 
 
-@pytest.mark.criterion("G1-15")
+@pytest.mark.criterion("G1-15", "G1-6")
 def test_verify_deletes_a_corrupted_file_and_exits_5(hub, capsys):
     assert run(["models", "download", "--model", "tiny"], capsys)[0] == 0
     weights = models.model_dir(hub["manifest"].get("tiny")) / "model.bin"
@@ -235,13 +235,21 @@ def test_hf_token_is_passed_and_never_printed(hub, capsys, monkeypatch):
     assert "hf_secret_value" not in out + err
 
 
+@pytest.mark.criterion("G1-6")
+def test_download_model_fetches_that_model_and_the_diarization_models(hub, capsys):
+    code, out, _ = run(["models", "download", "--model", "other"], capsys)
+    assert (code, out) == (0, "")
+    assert [c["repo"] for c in hub["calls"]] == ["org/other", "org/diar", "org/seg", "org/emb"]
+    assert not (hub["cache"] / "org" / "tiny").exists(), "the default ASR model isn't downloaded"
+
+
 def test_unknown_model_is_a_usage_error(hub, capsys):
     code, _, err = run(["models", "download", "--model", "diar"], capsys)
     assert code == 2
     assert err.startswith("lmt: error: --model: 'diar' isn't an ASR model")
 
 
-@pytest.mark.criterion("G1-10")
+@pytest.mark.criterion("G1-10", "G1-6")
 def test_list_bytes_prints_the_documented_columns_and_total(hub, capsys):
     assert run(["models", "download"], capsys)[0] == 0
     (models.model_dir(hub["manifest"].get("seg")) / "pytorch_model.bin").write_bytes(b"sex\n")
