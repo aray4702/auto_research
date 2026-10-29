@@ -10,7 +10,7 @@ fixture's encodings are made by ffmpeg, with the arguments in ENCODINGS (design/
     python -m lmt.eval.datasets fetch ci
     python -m lmt.eval.datasets build-fixture clip [--write]
     python -m lmt.eval.datasets encode-fixture clip [--write]
-    python -m lmt.eval.datasets pin <url> [--member GLOB ...]
+    python -m lmt.eval.datasets pin <url> [--member GLOB ...] [--write-members SOURCE_ID]
 """
 
 import argparse
@@ -18,6 +18,7 @@ import fnmatch
 import hashlib
 import http.client
 import io
+import itertools
 import os
 import re
 import subprocess
@@ -165,7 +166,10 @@ def data_dir() -> Path:
 
 def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
     """Both files, with their format checked and every id resolved. A bad manifest raises ValueError."""
-    sources_file, sets_file = Path(dir) / "sources.toml", Path(dir) / "sets.toml"
+    return _load(Path(dir) / "sources.toml", Path(dir) / "sets.toml")
+
+
+def _load(sources_file, sets_file):
     sources = {}
     for i, entry in enumerate(_read(sources_file).get("source", [])):
         where = f"{sources_file}: source {i + 1}"
@@ -218,7 +222,7 @@ def load_manifests(dir: Path = MANIFEST_DIR) -> Manifests:
     datasets = {}
     for i, entry in enumerate(sets.get("dataset", [])):
         where = f"{sets_file}: dataset {i + 1}"
-        dataset = _dataset(entry, where)
+        dataset = _dataset(entry, sources, where)
         if dataset.name in datasets:
             raise ValueError(f"{where}: name {dataset.name!r} is repeated")
         _check_dataset(dataset, sources, where)
@@ -315,12 +319,20 @@ def _piece(entry, sources, where):
     return Piece(source=source_id, start=start, end=end)
 
 
-def _dataset(entry, where):
+def _dataset(entry, sources, where):
     common = {"name": _get(entry, "name", str, where), "set": _get(entry, "set", str, where),
               "kind": _get(entry, "kind", str, where)}
     if common["kind"] == "librispeech":
-        return Dataset(**common, source=_get(entry, "source", str, where),
-                       utterances=_strings(entry, "utterances", where))
+        source = _get(entry, "source", str, where)
+        if "utterances" in entry:
+            utterances = _strings(entry, "utterances", where)
+        else:  # every .flac member of the source, in sorted id order (LS full, design/internal/g1-stage1.md §5b)
+            if source not in sources:
+                raise ValueError(f"{where}: source {source!r} isn't in sources.toml")
+            utterances = tuple(sorted(_flac_members(sources[source])))
+            if not utterances:
+                raise ValueError(f"{where}: without utterances, {source} must have .flac members")
+        return Dataset(**common, source=source, utterances=utterances)
     if common["kind"] == "ami":
         crop = entry.get("crop")
         sha = entry.get("derived_sha256")
@@ -346,10 +358,11 @@ def _check_dataset(dataset, sources, where):
     if dataset.kind == "librispeech":
         source = sources[dataset.source]
         listed = {m.path for m in source.members}
+        flacs = _flac_members(source)
         for uid in dataset.utterances:
             if not _UTTERANCE.match(uid):
                 raise ValueError(f"{where}: {uid!r} isn't a LibriSpeech utterance id")
-            flac = _utterance_member(source, uid)
+            flac = flacs.get(uid)
             if flac is None:
                 raise ValueError(f"{where}: {uid}.flac isn't a member of {source.id}")
             if str(_trans_member(flac)) not in listed:
@@ -373,14 +386,16 @@ def _source_ids(dataset):
     return (dataset.source,) if dataset.kind == "librispeech" else (dataset.audio, dataset.words, dataset.rttm)
 
 
-def _utterance_member(source, uid):
-    """The member path of the utterance's FLAC: <...>/<speaker>/<chapter>/<id>.flac, or None."""
-    speaker, chapter, _ = uid.split("-")
+def _flac_members(source):
+    """{utterance id: member path} of the source's utterance FLACs, each <...>/<speaker>/<chapter>/<id>.flac."""
+    flacs = {}
     for member in source.members:
         path = PurePosixPath(member.path)
-        if path.name == f"{uid}.flac" and path.parent.parts[-2:] == (speaker, chapter):
-            return path
-    return None
+        if path.suffix == ".flac" and _UTTERANCE.match(path.stem):
+            speaker, chapter, _ = path.stem.split("-")
+            if path.parent.parts[-2:] == (speaker, chapter):
+                flacs.setdefault(path.stem, path)
+    return flacs
 
 
 def _trans_member(flac):
@@ -717,9 +732,10 @@ def sample_meeting(*, offline: bool = False) -> Path:
 def _librispeech(dataset, manifests):
     """One item per utterance: its FLAC, its duration from the FLAC's header, and its line in .trans.txt."""
     source = manifests.sources[dataset.source]
+    flacs = _flac_members(source)
     items = []
     for uid in dataset.utterances:
-        path = data_dir() / "sources" / source.id / _utterance_member(source, uid)
+        path = data_dir() / "sources" / source.id / flacs[uid]
         info = soundfile.info(str(path))
         items.append(Item(dataset.name, uid, path, info.frames / info.samplerate, ref_text=_transcript(path)))
     return items
@@ -832,28 +848,102 @@ def pin(url: str, members: tuple[str, ...] = ()) -> list[str]:
     archive's order: `<member> <sha256>`. A .flac or .wav, the file or a member, adds `<frames> <rate>
     <channels>` to its line. Only URLs under URL_PREFIXES are fetched. Nothing is cached.
     """
+    _check_pin_url(url, members)
+    lines, _ = _pin(url, members)
+    return lines
+
+
+def _check_pin_url(url, members):
     if not url.startswith(URL_PREFIXES):
         raise UsageError(url, "isn't under a pinned LibriSpeech or AMI prefix")
-    name = PurePosixPath(urllib.parse.urlsplit(url).path).name
-    archive = name.endswith(ARCHIVE_SUFFIXES)
-    if members and not archive:
+    if members and not PurePosixPath(urllib.parse.urlsplit(url).path).name.endswith(ARCHIVE_SUFFIXES):
         raise UsageError(url, f"--member needs an archive ({', '.join(ARCHIVE_SUFFIXES)})")
+
+
+def _pin(url, members, check=None):
+    """pin's lines, and (member, sha256) of each matching member. `check(size, sha256)` runs on the download
+    before its members are read."""
+    name = PurePosixPath(urllib.parse.urlsplit(url).path).name
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / (name or "download")
         size, sha256 = _save(url, path)
-        lines = [f"{url} {size} {sha256}{_audio_facts(name, path)}"]
+        if check:
+            check(size, sha256)
+        lines, hashed = [f"{url} {size} {sha256}{_audio_facts(name, path)}"], []
         if not members:
-            return lines
+            return lines, hashed
         try:
             for member, stream in _entries(path):
                 member = member.removeprefix("./")
                 if stream is None or not any(fnmatch.fnmatchcase(member, glob) for glob in members):
                     continue
                 data = stream.read()
-                lines.append(f"{member} {hashlib.sha256(data).hexdigest()}{_audio_facts(member, io.BytesIO(data))}")
+                hashed.append((member, hashlib.sha256(data).hexdigest()))
+                lines.append(f"{member} {hashed[-1][1]}{_audio_facts(member, io.BytesIO(data))}")
         except (tarfile.TarError, zipfile.BadZipFile) as e:
             raise InputError(url, f"can't read the archive: {e}") from e
-    return lines
+    return lines, hashed
+
+
+def write_members(url: str, members: tuple[str, ...], source_id: str, dir: Path = MANIFEST_DIR) -> list[str]:
+    """`pin --write-members`: the source's [[source.member]] tables in sources.toml, replaced by the members
+    `pin` hashed, in the archive's order (design/internal/g1-stage1.md §5b, decision 2).
+
+    The URL must be one of the source's urls, and the download's size and SHA-256 must be its entry's; otherwise,
+    or without `members`, nothing is written and InputError is raised. The new file is written beside
+    sources.toml, loaded with sets.toml, and renamed into place only if that passes. Every line outside the
+    source's member tables stays as it was. Returns the download's line and one line of what was written.
+    """
+    path = Path(dir) / "sources.toml"
+    if not members:
+        raise InputError("--write-members", "needs --member")
+    source = _load(path, Path(dir) / "sets.toml").sources.get(source_id)
+    if source is None:
+        raise InputError(source_id, f"isn't a source in {path}")
+    if url not in source.urls:
+        raise InputError(url, f"isn't one of {source_id}'s urls")
+    _check_pin_url(url, members)
+
+    def check(size, sha256):
+        if (size, sha256) != (source.size, source.sha256):
+            raise InputError(url, f"size {size} and SHA-256 {sha256} don't match {source_id}'s entry")
+
+    lines, hashed = _pin(url, members, check)
+    if not hashed:
+        raise InputError(url, f"has no member matching {', '.join(members)}")
+    text = _replace_members(path.read_text(encoding="utf-8"), source_id, hashed)
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=".sources.toml.", suffix=".tmp")
+    temp = Path(temp)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as out:
+            out.write(text)
+        _load(temp, Path(dir) / "sets.toml")
+        temp.replace(path)
+    finally:
+        temp.unlink(missing_ok=True)
+    return [lines[0], f"{source_id}: {len(hashed)} members written to {path}"]
+
+
+def _replace_members(text, source_id, members):
+    """sources.toml's text with the source's member tables replaced. They run from its first [[source.member]]
+    to its last line that isn't blank or a comment, before the next [[source]] or the end; a source without
+    members gets them after its last such line."""
+    lines = text.splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.strip() == "[[source]]"] + [len(lines)]
+    for begin, end in itertools.pairwise(starts):
+        if any(line.split("#")[0].strip() == f'id = "{source_id}"' for line in lines[begin:end]):
+            break
+    else:
+        raise InputError(source_id, "has no [[source]] table in sources.toml")
+    content = [i for i in range(begin, end) if lines[i].strip() and not lines[i].lstrip().startswith("#")]
+    tables = [i for i in content if lines[i].strip() == "[[source.member]]"]
+    first, last = (tables[0], content[-1] + 1) if tables else (content[-1] + 1, content[-1] + 1)
+    new = "".join(f'\n[[source.member]]\npath = "{p}"\nsha256 = "{h}"\n' for p, h in members)
+    if tables:
+        new = new.removeprefix("\n")
+    elif not lines[first - 1].endswith("\n"):
+        new = "\n" + new
+    return "".join(lines[:first]) + new + "".join(lines[last:])
 
 
 def _audio_facts(name, file):
@@ -887,12 +977,18 @@ def main(argv=None) -> int:
     p.add_argument("url", help="Under one of the pinned LibriSpeech or AMI prefixes.")
     p.add_argument("--member", action="append", default=[], metavar="GLOB",
                    help="Archive members to hash, by glob; may be repeated.")
+    p.add_argument("--write-members", metavar="SOURCE_ID",
+                   help="Replace the source's members in sources.toml with the hashed ones, instead of printing them.")
     args = parser.parse_args(argv)
     try:
         if args.command == "fetch":
             return _fetch_command(args.set)
         if args.command == "pin":
-            print("\n".join(pin(args.url, tuple(args.member))))
+            members = tuple(args.member)
+            if args.write_members is not None:
+                print("\n".join(write_members(args.url, members, args.write_members, MANIFEST_DIR)))
+            else:
+                print("\n".join(pin(args.url, members)))
             return 0
         command = _build_fixture_command if args.command == "build-fixture" else _encode_fixture_command
         return command(args.name, args.write)

@@ -168,6 +168,21 @@ def test_bad_input_exits_3_and_writes_nothing(fakes, tmp_path, out, capsys):
     assert list(out.iterdir()) == []
 
 
+def test_missing_input_exits_3_before_the_models(monkeypatch, tmp_path, out, capsys):
+    ensured = []
+
+    def ensure(needed, offline=False):
+        ensured.append(needed)
+        pytest.fail("models.ensure was called before decode")
+
+    monkeypatch.setattr(models, "ensure", ensure)
+    missing = tmp_path / "missing.wav"
+    code, stdout, stderr = run(capsys, "transcribe", missing, "-o", out)
+    assert (code, stdout, ensured) == (3, "", [])
+    assert stderr == f"lmt: error: {missing}: no such file\n"
+    assert list(out.iterdir()) == []
+
+
 def test_one_format_writes_one_file(fakes, wav, out, capsys):
     code, stdout, stderr = run(capsys, "transcribe", wav, "-o", out, "-f", "json")
     assert code == 0, stderr

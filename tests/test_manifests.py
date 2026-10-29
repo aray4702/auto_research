@@ -88,6 +88,33 @@ class TestCISubset:
         assert HEX64.match(ami["derived_sha256"])
 
 
+class TestLSFull:
+    """LS full (design/internal/g1-stage1.md §5b, decision 3)."""
+
+    @pytest.fixture
+    def sources(self):
+        return {s["id"]: s for s in SOURCES["source"]}
+
+    def test_its_source_is_the_ci_archive_with_every_member(self, sources):
+        full, ci = sources["librispeech-test-clean-full"], sources["librispeech-test-clean"]
+        assert (full["urls"], full["sha256"], full["size"], full["keep"]) == (ci["urls"], ci["sha256"], ci["size"], False)
+        paths = [m["path"] for m in full["member"]]
+        assert len(set(paths)) == len(paths) == 2707
+        assert sum(p.endswith(".flac") for p in paths) == 2620
+        assert sum(p.endswith(".trans.txt") for p in paths) == 87
+        # fetch ci extracts only its own members, not the full set's.
+        assert len(ci["member"]) < 100
+
+    def test_it_is_every_test_clean_utterance(self):
+        (entry,) = [d for d in SETS["dataset"] if d["name"] == "LS full"]
+        assert (entry["set"], entry["kind"], entry["source"]) == ("full", "librispeech", "librispeech-test-clean-full")
+        assert "utterances" not in entry
+        utterances = datasets.load_manifests().datasets["LS full"].utterances
+        assert len(set(utterances)) == len(utterances) == 2620
+        assert len({u.split("-")[0] for u in utterances}) == 40
+        assert list(utterances) == sorted(utterances)
+
+
 class TestCommittedClip:
     """The fixture can't change without its manifest."""
 
