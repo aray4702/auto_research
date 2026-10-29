@@ -1012,3 +1012,4 @@
 {"at": "2026-10-29T08:15:40+00:00", "event": "start", "item": 303, "pid": 3153, "role": "reviewer", "run_id": "reviewer-20261029T081534Z", "task": "Review PR #303."}
 {"at": "2026-10-29T08:15:42+00:00", "event": "end", "item": 304, "role": "reviewer", "run_id": "reviewer-20261029T081534Z", "status": "failed: launcher: CalledProcessError"}
 {"at": "2026-10-29T08:16:21+00:00", "cost_usd": 0.861045, "denials": 1, "denied": ["Bash: ffmpeg"], "event": "end", "five_hour": 0.36, "item": 299, "role": "developer", "run_id": "developer-20261029T081245Z", "seven_day": 0.57, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 45}
+{"at": "2026-10-29T08:16:58+00:00", "cost_usd": 0.382999, "denials": 1, "denied": ["Bash: python3 -I -c"], "event": "end", "five_hour": 0.37, "item": 303, "role": "reviewer", "run_id": "reviewer-20261029T081534Z", "seven_day": 0.57, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 19}
