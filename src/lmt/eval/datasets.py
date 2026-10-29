@@ -62,8 +62,8 @@ ENCODINGS: dict[str, tuple[str, ...]] = {
              "-f", "flac", "<out>"),
     "mp3": (*_AUDIO_IN, "-c:a", "libmp3lame", "-b:a", "128k", "-ar", "44100", "-ac", "1", "-f", "mp3", "<out>"),
     "m4a": (*_AUDIO_IN, *_AAC, "-f", "ipod", "<out>"),
-    "mp4": (*_VIDEO_IN, *_AAC, *_STILL, "-f", "mp4", "<out>"),
-    "mov": (*_VIDEO_IN, *_AAC, *_STILL, "-f", "mov", "<out>"),
+    "mp4": (*_VIDEO_IN, *_AAC, *_STILL, "-max_interleave_delta", "0", "-f", "mp4", "<out>"),
+    "mov": (*_VIDEO_IN, *_AAC, *_STILL, "-max_interleave_delta", "0", "-f", "mov", "<out>"),
 }
 
 
