@@ -65,8 +65,9 @@ class LoadTest(unittest.TestCase):
         self.assertEqual(export.render(t, "json").encode("utf-8"), (GOLDEN / "transcript.json").read_bytes())
 
     def test_every_format_from_a_loaded_transcript(self):
-        """The text, SRT and WebVTT goldens are S5's transcript, so it is written as JSON, loaded, and rendered."""
-        (path,) = export.write(test_export_formats.small(), self.dir, "m", ["json"], overwrite=False)
+        """The text, SRT and WebVTT goldens are S5's transcript, so its JSON is rendered, loaded, and rendered again."""
+        path = self.dir / "transcript.json"
+        path.write_bytes(export.render(test_export_formats.small(), "json").encode("utf-8"))
         t = load(path)
         self.assertEqual(export.render(t, "json").encode("utf-8"), path.read_bytes())
         for fmt in ("txt", "srt", "vtt"):
