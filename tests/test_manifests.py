@@ -18,12 +18,14 @@ SOURCES = tomllib.loads((datasets.MANIFEST_DIR / "sources.toml").read_text(encod
 SETS = tomllib.loads((datasets.MANIFEST_DIR / "sets.toml").read_text(encoding="utf-8"))
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
-# Only LibriSpeech and AMI sources (design/internal/g1-stage1.md, 5a). #110 adds the BUT RTTM prefix with its
-# pinned commit when it lists that source.
+# Only LibriSpeech and AMI sources (design/internal/g1-stage1.md, 5a). AMI's RTTMs come from BUT's diarization
+# setup, at the one commit the manifest pins.
+BUT_COMMIT = "2509d8933721023fab4def2618aabd5c28eb82e9"
 URL_PREFIXES = (
     "https://www.openslr.org/resources/12/",
     "https://us.openslr.org/resources/12/",
     "https://groups.inf.ed.ac.uk/ami/",
+    f"https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/{BUT_COMMIT}/",
 )
 
 
@@ -61,6 +63,33 @@ class TestManifests:
             assert fixture["concat"], fixture["name"]
             for piece in fixture["concat"]:
                 assert (piece["source"], piece["member"]) in members, piece
+
+    def test_every_dataset_source_id_resolves(self):
+        ids = {s["id"] for s in SOURCES["source"]}
+        for dataset in SETS["dataset"]:
+            for key in ("source", "audio", "words", "rttm"):
+                if key in dataset:
+                    assert dataset[key] in ids, (dataset["name"], key)
+
+
+class TestCISubset:
+    @pytest.fixture
+    def datasets(self):
+        return {d["name"]: d for d in SETS["dataset"] if d["set"] == "ci"}
+
+    def test_it_is_ls_ci_and_ami_ci(self, datasets):
+        assert sorted(datasets) == ["AMI-ci", "LS-ci"]
+
+    def test_ls_ci_has_20_utterances_from_20_speakers(self, datasets):
+        utterances = datasets["LS-ci"]["utterances"]
+        assert len(set(utterances)) == 20
+        assert len({u.split("-")[0] for u in utterances}) == 20
+
+    def test_ami_ci_is_es2004a_cropped_to_300_s(self, datasets):
+        ami = datasets["AMI-ci"]
+        assert ami["meetings"] == ["ES2004a"]
+        assert ami["crop"] == 300.0
+        assert HEX64.match(ami["derived_sha256"])
 
 
 class TestCommittedClip:

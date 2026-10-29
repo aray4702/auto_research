@@ -2,9 +2,10 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
-| 2026-10-29 | architect, #289 | First version: ten Developer items on top of the slice, G1-2's design and #110, with the two-speaker clip's rule for #123 and #286's two findings decided |
+| 2026-10-29 | architect, #289 | Reviewer's findings on #304: P9 builds #286 as `g1-slice.md` decides it (#303), by reference; G1-8c's rounding argument restated for WER, and DER equal to its bound after rounding goes to the Architect; P4's time limit is its own `run_bounded`; G1-4's default formats are tagged through P3; FFmpeg's log is already off |
+| 2026-10-29 | architect, #289 | First version: ten Developer items on top of the slice, G1-2's design and #110, with the two-speaker clip's rule for #123 |
 
-This is what a Developer needs to build each item below in one run. It finishes G1's stage 2 for **G1-3, G1-4, G1-5, G1-6, G1-7, G1-8c, G1-11 and G1-13** in `spec/acceptance.md`, each exactly as the spec gives it, with no bound, scoring or fixture loosened. It also adds `lmt.transcript.load`, which G3 assumes, and decides #286. G1-2 is `g1-formats.md`'s. It extends the code on `main`: `g1-slice.md`'s pipeline and product run, `g1-stage1.md`'s harness (§4, §5a, §6), #110's CI subset (PR #298), and `criteria.md`'s record. Where this file and those, `architecture.md` or `public-api.md` disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
+This is what a Developer needs to build each item below in one run. It finishes G1's stage 2 for **G1-3, G1-4, G1-5, G1-6, G1-7, G1-8c, G1-11 and G1-13** in `spec/acceptance.md`, each exactly as the spec gives it, with no bound, scoring or fixture loosened. It also adds `lmt.transcript.load`, which G3 assumes, and builds #286 as `g1-slice.md` decides it. G1-2 is `g1-formats.md`'s. It extends the code on `main`: `g1-slice.md`'s pipeline and product run, `g1-stage1.md`'s harness (§4, §5a, §6), #110's CI subset (PR #298), and `criteria.md`'s record. Where this file and those, `architecture.md` or `public-api.md` disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
 **What doesn't change.** Every bound (G1-8c's 5.0 %, 25.0 % and 25.0 %, inclusive), the scoring (#109's `wer` and `der`), the fixtures (the clip, its encodings, the two-speaker clip and the CI subset, each fixed before it is measured) and the product's defaults. If a measurement misses, the product is what gets fixed. G1-8c's subset bound changes only by the Architect's proposal to the Owner, as the spec says.
 
@@ -20,7 +21,7 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | **P6** | The exports' checks (G1-4) | P5 | `tests/subtitle_checks.py` (new), `tests/test_g1_4.py` (new), `.github/workflows/product.yml` (`test-models` only) | 3 |
 | **P7** | The network and files (G1-13) | P5 | `tests/isolation.py` (new), `tests/netguard/sitecustomize.py` (new), `tests/test_netguard.py` (new), `tests/test_g1_13.py` (new) | 2 |
 | **P8** | `lmt eval --set full` and `--update-readme`, on fakes (G1-6's last two options) | P2 | `src/lmt/eval/runner.py`, `src/lmt/eval/cli.py`, `tests/test_eval_full.py` (new) | 3 |
-| **P9** | `lmt.transcript.load`, `jsonschema` at run time, #286's two findings | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
+| **P9** | `lmt.transcript.load`, `jsonschema` at run time, and the code for #286 as `g1-slice.md` decides it | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
 | **P10** | The registry: `complete = true` for each criterion whose checks have passed on `main` | the items it marks | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 |
 
 **Parallel-safe,** by the files above, except two pairs. P1 and P3 both rely on decode coming first, so P3 waits for P1. P2 and P6 both edit `product.yml`, in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
@@ -102,9 +103,12 @@ On top of #110's steps, which restore the data cache and run `pytest -m data`:
   - `worker.main` runs in process, with `asr.load` and `diarize.load` faked as in `tests/test_pipeline.py`. Its stages file holds the fakes' words and turns, and its exit code is `cli.main`'s. With a fake ASR that finds no words, it exits 4 and writes no stages file.
 - **`tests/test_eval_ci.py`**, marked `data`, reads the job's two files: `$LMT_EVAL_CI_FIRST` and `results/ci.json`. Without the variable it skips, saying so, except under `CI`, where it fails.
   - **G1-5 and G1-12** (tagged both): both files exist with `set` `"ci"`, they hold the figures listed above with those values non-null, and `report.same_accuracy(first, second)` is true. On failure it prints both stripped files' unified diff.
-  - **G1-8c** (tagged): from `results/ci.json`'s `product` figures, LS-ci WER ≤ 0.050, AMI-ci WER ≤ 0.250 and AMI-ci DER ≤ 0.250. Each bound is a constant whose comment cites the spec. The file rounds to 6 decimal places. For any set under 10⁶ reference words, a rate above a bound exceeds it by at least 10⁻⁶ before rounding, so the rounding can't let a miss pass. Every figure goes to the test's output and to `$GITHUB_STEP_SUMMARY`, pass or fail.
+  - **G1-8c** (tagged): from `results/ci.json`'s `product` figures, LS-ci WER ≤ 0.050, AMI-ci WER ≤ 0.250 and AMI-ci DER ≤ 0.250. Each bound is a constant whose comment cites the spec. `score._figure` rounds `wer` and `der` to 6 decimal places, so rounding can lower a value by up to 5 × 10⁻⁷. The two rates need different rules for that:
+    - **WER** is `E/N`, whole errors over `N` reference words. If `E/N > 1/20`, then `20E ≥ N + 1`, so it exceeds 0.05 by at least `1/(20N)`. That is more than 5 × 10⁻⁷, and survives rounding, only while `N < 100,000`. For 0.25 the margin is `1/(4N)`, so `N < 500,000`. LS-ci's 20 utterances and AMI-ci's 300 s hold on the order of a thousand reference words between them, far below both. So for WER, the rounded value `≤` its bound is exactly the spec's inclusive test. A comment beside the WER bounds states this, and that it must be redone if a CI subset ever nears 100,000 reference words.
+    - **DER** is a ratio of durations, with no such spacing: a true 0.2500004 rounds to 0.250000. So AMI-ci's DER passes only when the rounded value is **below** 0.250. A rounded value equal to 0.250 fails, with the message "DER equals its bound after rounding, so a pass can't be told from a miss", and goes to the Architect as a miss does (below). That can't pass a miss. It can hold back a true pass of exactly 0.250, which the Architect then settles.
+  - Every figure goes to the test's output and to `$GITHUB_STEP_SUMMARY`, pass or fail.
 
-**Test of the item:** the tests above, in the `test` and `eval-ci` jobs of the PR (tier 3), with the summary's figures and `criteria-eval-ci` giving G1-5 and G1-8c `passed`. **If G1-8c misses a bound** while the double run passes, the Developer reports the figures on the item and holds it for the Architect (`needs-decision:architect`), without changing the bounds or the subset. The Architect then decides between a product fix and the spec's route: a subset bound proposed to the Owner, only if the full set meets G1-8, which needs the Mac's run.
+**Test of the item:** the tests above, in the `test` and `eval-ci` jobs of the PR (tier 3), with the summary's figures and `criteria-eval-ci` giving G1-5 and G1-8c `passed`. **If G1-8c misses a bound,** or its DER equals the bound after rounding, while the double run passes, the Developer reports the figures on the item and holds it for the Architect (`needs-decision:architect`), without changing the bounds or the subset. The Architect then decides between a product fix and the spec's route: a subset bound proposed to the Owner, only if the full set meets G1-8, which needs the Mac's run.
 
 ## P3. G1-6's tests, and G1-7's
 
@@ -122,7 +126,7 @@ On top of #110's steps, which restore the data cache and run `pytest -m data`:
 | `--overwrite` | An existing output is replaced. Without the option, it exits 2 and the file is unchanged. |
 | `-v`, `--verbose` | Six stage lines on stderr, and none without it. |
 
-The other commands' options are tagged where their tests already are: `models download --model`, `list --bytes` and `verify` in `tests/test_models.py`; `eval --check-readme` in `tests/test_readme_table.py`; and `--version` and `--help` already in `tests/test_cli.py`. `eval --set ci` and `--out` are P2's, and `--set full` and `--update-readme` P8's.
+The other commands' options are tagged where their tests already are: `models download --model`, `list --bytes` and `verify` in `tests/test_models.py`; `eval --check-readme` in `tests/test_readme_table.py`; and `--version` and `--help` already in `tests/test_cli.py`. P3 also tags `tests/test_cli.py`'s `test_default_formats` `G1-4`, for P6 (below). `eval --set ci` and `--out` are P2's, and `--set full` and `--update-readme` P8's.
 
 **Bad input,** through `lmt transcribe` in a subprocess (`conftest.run_lmt`), with no model needed since P1:
 
@@ -153,14 +157,17 @@ OPS = ("flip", "truncate", "splice")
 E2E_MUTATIONS = (0, 7, 14, 21, 28)
 def mutation(i: int) -> tuple[str, bytes]               # (suffix, bytes)
 def build(name: str, directory: Path) -> Path           # one end-to-end input, by its name below
+def run_bounded(argv, *, cwd, timeout=120) -> subprocess.CompletedProcess
 ```
+
+- **`run_bounded`** is `subprocess.run([sys.executable, "-m", "lmt", *argv], cwd=cwd, capture_output=True, text=True, check=False, timeout=timeout)`: `conftest.run_lmt` with a time limit. It lives here, not in `tests/conftest.py`, which is P5's file, so P4 shares no file with P3 or P5. `subprocess.TimeoutExpired` propagates, and fails the test.
 
 - **`mutation(i)`** reads `clip.<SOURCES[i % 6]>` and applies `OPS[(i // 6) % 3]`, with `rng = numpy.random.default_rng(i)`. **flip:** `n = rng.integers(1, 33)` positions from `rng.integers(0, len, n)`, each byte XORed with `rng.integers(1, 256)`. **truncate:** the first `rng.integers(0, len)` bytes. **splice:** `n = rng.integers(1, 4097)`, `p, q = rng.integers(0, len − n, 2)`, and bytes `[p, p + n)` replaced by `[q, q + n)`. So `E2E_MUTATIONS` covers a flipped WAV, a truncated FLAC, a spliced MP3, a flipped M4A and a truncated MP4.
 - **The end-to-end inputs** (`build`): `empty.wav` (0 bytes); `zero.wav` (the `wave` module, 16 kHz mono 16-bit, no frames); `truncated.wav` (`clip.wav`'s first 44 + 32,000 bytes, so its header declares 56.565 s and it holds 1 s); `random.wav`, `random.mp3` and `random.m4a` (65,536 bytes from `default_rng(1)`, `(2)` and `(3)`); `text.mp4` (a line of English text); `video-only.mp4` (three 64×64 black frames in `mpeg4`, written with PyAV, with no audio stream); `notes.txt`; `notes.docx` (a zip with `[Content_Types].xml` and `word/document.xml`); `silence.wav` (60 s of zeros); `noise.wav` (60 s of white noise, `default_rng(4).standard_normal`, scaled to an RMS of 10^(−60/20) of full scale, × 32,767, rounded and clipped to 16 bits); and `mutation-<i>.<suffix>` for each of `E2E_MUTATIONS`.
 
 ### Tests
 
-- **`tests/test_g1_11.py`**, tagged `G1-11`, one test per input, each run as `run_lmt(["transcribe", <its absolute path>], cwd=<a fresh empty directory>)` with a 120 s `timeout`. A timeout fails the test.
+- **`tests/test_g1_11.py`**, tagged `G1-11`, one test per input, each run as `run_bounded(["transcribe", <its absolute path>], cwd=<a fresh empty directory>)`, so with a 120 s limit. A timeout fails the test.
   - **The decode cases**, in the `test` job: every input except silence, noise and the mutations. Each exits 3.
   - **The rest**, marked `models`, in `test-models`. `silence.wav` and `noise.wav` exit 4. A mutation exits 3 or 4, or exits 0.
   - **For exits 3 and 4,** stderr is exactly one line, starting `lmt: error: `, holding the input's file name and a problem after it. stderr contains no `Traceback`, and the directory is still empty.
@@ -182,7 +189,7 @@ def build(name: str, directory: Path) -> Path           # one end-to-end input, 
 
 ### The two-speaker clip's rule (for #123)
 
-`g1-stage1.md` §5b describes the clip but doesn't fix which utterances it uses. This rule fixes them now, before anything is measured on the clip. #123 applies it, and records the result in a comment in `sets.toml` as S1 did:
+`g1-stage1.md` §5b describes the clip but doesn't fix which utterances it uses. This rule fixes them now, before anything is measured on the clip. #123 applies it, and records the result in a comment in `sets.toml` as S1 did, with the clip's resulting duration: at least 55.5 s, and longer when a turn's last utterance runs past 13.5 s. The rule stands whatever that duration is, since it is fixed before measurement:
 
 1. **The speakers.** From `LibriSpeech/SPEAKERS.TXT` (a member to add to the archive source), the test-clean speaker with the lowest id whose sex is `F`, and the one with the lowest id whose sex is `M`.
 2. **The turns** alternate, F, M, F, M. Each speaker's utterances are taken in ascending id order, continuing from where that speaker's previous turn stopped. A turn is the shortest run of them that lasts at least 13.5 s.
@@ -205,7 +212,7 @@ def words(path, fmt, labels) -> list[str]
 - **`ffmpeg_reencode`** fails, saying so, when `shutil.which("ffmpeg")` is `None`: it never skips.
 - **`words`** gives each format's words in order. For `json`, each segment's `text` split on white space. For `txt`, each line after its `] <label>: `. For `srt`, each cue's lines joined, after its `<label>: `. For `vtt`, each cue's text after its voice tag and its `<label>: `, with character references decoded (`html.unescape`).
 
-**`tests/test_g1_4.py`**, marked `models` and tagged `G1-4`, runs for both `clip_run` and `two_speakers_run`, their default four formats:
+**`tests/test_g1_4.py`**, marked `models` and tagged `G1-4`, runs for both `clip_run` and `two_speakers_run`. Those runs pass no option, so they write the default formats. The spec's run names `--formats txt,srt,vtt,json`, and the two are the same run only because the default is exactly those four, in that order. `tests/test_cli.py::…test_default_formats` checks that, and P3 tags it `G1-4` (P3 already edits `tests/test_cli.py`, so P6 doesn't touch it). Running the defaults keeps one product run per clip, which G1-13's byte comparison also uses. The test checks:
 
 1. stdout lists four paths, and `<stem>.txt`, `.srt`, `.vtt` and `.json` exist.
 2. The JSON validates against `schema/transcript.schema.json` with `jsonschema.Draft202012Validator`.
@@ -255,7 +262,7 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 
 **Test of the item:** that test, in the `test` job.
 
-## P9. `lmt.transcript.load`, `jsonschema` at run time, and #286
+## P9. `lmt.transcript.load`, `jsonschema` at run time, and #286's code
 
 **`load(path) -> Transcript`** (`g3-stage1.md` assumes it):
 
@@ -267,17 +274,13 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 
 **`jsonschema` at run time.** It moves from the `dev` group to `[project] dependencies`, at the lock's version (`jsonschema>=<locked major.minor>`), and `uv lock` refreshes `uv.lock`. Its tree is already locked and licence-checked as part of `dev`, so the inventory doesn't change. The PR shows `check_licences.py` passing on both platforms.
 
-**#286, finding 1: the patterns' end.** Python's `jsonschema` matches a pattern with `re.search`, whose `$` also matches before a final newline. So `"Ana\n"` passes in Python and fails in a JavaScript validator, and `"S1\n"` and `"1.1\n"` slip through the same way. In all three patterns (`schema_version`, `speaker_id` and the label), the final `$` becomes `(?![\s\S])`, written `(?![\\s\\S])` in JSON. That means the end of the string in ECMA-262 and in Python alike. (`\Z` isn't ECMA-262, and in JavaScript's non-Unicode mode it would match a literal `Z`.) The rule in `public-api.md` doesn't change: the schema now states it exactly. `g3-stage1.md`'s copy of the label pattern changes with this design.
-
-**#286, finding 2: outputs' file mode.** It isn't intended. An output should get the mode any newly created file gets, `0o666` less the user's umask, as `open(path, "w")` would give it, not `mkstemp`'s `0o600`. So `export.write` creates each temporary file with `os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)`, where `temp` is `out_dir / f".{stem}.{secrets.token_hex(8)}.{fmt}.tmp"`, trying a new name on `FileExistsError`. The kernel applies the umask. Everything else in `write` stays: the renames happen only once every file is written, and the clean-up runs on any exception.
+**#286's code.** #286 is decided in `g1-slice.md` S4 (PR #303), and P9 builds that text as it stands; this file doesn't restate it. That is: "The schema"'s patterns and its "Every pattern ends with `(?![\s\S])`" rule, in both schema copies; `write`'s `os.open(…, 0o666)` and "An output's mode", in `src/lmt/export/__init__.py`; and S4's Tests for both, in `tests/test_export.py`. Where S4 and this paragraph differ, S4 wins.
 
 **Tests.** `tests/test_transcript.py`:
 - `load` of the committed export golden (`tests/fixtures/export/transcript.json`) renders each format byte-identical to its golden.
 - A missing file, a directory, `{` alone, `[]`, a document without `segments`, and `schema_version` `"2.0"` each raise `InputError` naming the path, with the problems above.
 
-`tests/test_export.py`:
-- The schema rejects the labels `"Ana\n"`, `" Ana"`, `""` and 33 code points, and the values `"S1\n"` for an id and `"1.1\n"` for `schema_version`. It accepts `"José & Ana"` and 32 code points.
-- Under `os.umask(0o022)`, `write`'s outputs have mode `0o644`. Under `0o077`, they have `0o600`. The test restores the umask.
+`tests/test_export.py`: every #286 case in `g1-slice.md` S4's Tests that the file doesn't already have.
 
 **Test of the item:** those tests, in the `test` job, and the licence check passing.
 
@@ -288,7 +291,7 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 | Criterion | Complete when | Its tests |
 | --- | --- | --- |
 | G1-3 | P5 | `tests/test_g1_3.py` |
-| G1-4 | P6 | `tests/test_g1_4.py` |
+| G1-4 | P3 and P6 | `tests/test_g1_4.py`, `tests/test_cli.py` (`test_default_formats`) |
 | G1-5 | P2 | `tests/test_eval_ci.py` |
 | G1-6 | P3, P2 and P8 | `tests/test_cli.py`, `tests/test_g1_6.py`, `tests/test_models.py`, `tests/test_readme_table.py`, `tests/test_eval_runner.py`, `tests/test_eval_full.py` |
 | G1-7 | P3 and #110, with the Reviewer's reading of `public-api.md` on this PR | `tests/test_asr.py`, `tests/test_manifests.py`, `tests/test_cli.py` |
@@ -307,4 +310,4 @@ G1-6 needs a test of every documented option, and these two are `eval`'s last. T
 - **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2, above). The bounds don't move.
 - **Determinism of the double run.** ASR and diarization run side by side. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3.
 - **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
-- **FFmpeg's own log** may reach stderr on a corrupt input, breaking "one line". Then decode sets FFmpeg's log level to quiet through PyAV's `av.logging` before opening the file. That's a product fix, to be found by P4's test.
+- **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
