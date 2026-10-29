@@ -3,6 +3,9 @@ S2). The model loads only from the verified directory that `lmt.models.ensure` g
 """
 
 import os
+import re
+import sys
+import tempfile
 from pathlib import Path
 
 import numpy
@@ -11,10 +14,42 @@ from lmt.transcript import Word
 
 BEAM_SIZE = 5
 THREADS = min(8, os.cpu_count() or 1)  # fixed per machine (Q7)
+# The lines quiet_onnxruntime drops: onnxruntime's verbose, info and warning ones, which on Linux start with
+# a colour code and a timestamp, as in "\x1b[0;93m2026-10-29 22:31:07.5 [W:onnxruntime:Default, ...] ..."
+_ONNXRUNTIME_QUIET = re.compile(r"(\x1b\[[0-9;]*m)?([0-9-]+ [0-9:.]+ )?\[[VIW]:onnxruntime")
+
+
+def quiet_onnxruntime() -> None:
+    """onnxruntime's default logger down to errors and fatal, so its warnings (on Linux, GetPciBusId's) stay
+    off stderr and its errors still print (design/internal/g1-stage2.md, P11). It is faster-whisper's, for the
+    Silero VAD. On Linux a warning prints with the severity set too, so descriptor 2 is captured around the
+    import, the severity and the VAD model's load (cached, so `transcribe` reuses that session), and every
+    line but onnxruntime's verbose, info and warning ones is written back. A second call is harmless."""
+    sys.stderr.flush()
+    saved = os.dup(2)
+    with tempfile.TemporaryFile() as captured:
+        os.dup2(captured.fileno(), 2)
+        try:
+            import onnxruntime
+
+            onnxruntime.set_default_logger_severity(3)
+            from faster_whisper.vad import get_vad_model
+
+            get_vad_model()
+        finally:
+            sys.stderr.flush()
+            os.dup2(saved, 2)
+            os.close(saved)
+            captured.seek(0)
+            for line in captured.read().decode(errors="replace").splitlines(keepends=True):
+                if not _ONNXRUNTIME_QUIET.match(line):
+                    sys.stderr.write(line)
+            sys.stderr.flush()
 
 
 def load(model_dir: Path) -> "Engine":
     """The model in `model_dir`. Call after `models.ensure`, which sets HF_HUB_OFFLINE."""
+    quiet_onnxruntime()
     from faster_whisper import WhisperModel
 
     model = WhisperModel(str(model_dir), device="cpu", compute_type="int8", cpu_threads=THREADS,
