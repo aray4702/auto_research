@@ -120,7 +120,8 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-  # The tests that run the models (design/internal/g1-stage1.md §3). Item #108 adds its steps.
+  # The tests that run the models (design/internal/g1-stage1.md §3): the pinned model files, cached by the
+  # manifest's hash, downloaded on a miss and verified on every run.
   test-models:
     needs: changes
     if: fromJSON(needs.changes.outputs.tier) >= 2
@@ -135,6 +136,29 @@ jobs:
           version: "0.13.6"
           enable-cache: true
       - run: uv sync --locked --all-extras
+      - uses: actions/cache@PENDING # the builder's pin (#108)
+        id: models
+        with:
+          path: ~/.cache/lmt/models
+          key: models-${{ hashFiles('src/lmt/models.toml') }}
+      - name: Download the default models
+        if: steps.models.outputs.cache-hit != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}   # this step only (#96)
+        run: uv run --frozen lmt models download
+      - run: uv run --frozen lmt models verify
+      # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
+      - env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: uv run --frozen pytest -m models --criteria-out=criteria-test-models.json
+      # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-test-models
+          path: criteria-test-models.json
+          retention-days: 90
+          if-no-files-found: error
 
   # `lmt eval --set ci` (design/internal/g1-stage1.md §5a). Item #110 adds its steps.
   eval-ci:
