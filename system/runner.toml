@@ -50,6 +50,7 @@ explained = [
   # The file tools are allowed without limit, so their only denial is --restricted: a path outside the run's
   # worktree. Not granted, since that keeps runs out of the Owner's checkout and the logs; rules.md, How a run works, 2 (#185).
   "Glob", "Grep", "Read",
+  "Bash: ls",  # ls is allowed, so a plain ls denied went outside the worktree; the same rule, step 2 (#182)
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
