@@ -68,3 +68,202 @@ sha256 = "980dd86b87c173dc5c0e5395de5619c95523fb59e8dfbece50108afb4ce2277f"
 [[source.member]]
 path = "LibriSpeech/test-clean/61/70968/61-70968.trans.txt"
 sha256 = "b196e5dd2f4799b120d31f6e75589f2e4141fc78ac6670a7ff727e154ea03dd7"
+
+# LS-ci (sets.toml): one utterance for each of the first 20 speakers, and its chapter's transcript. Speaker 61's,
+# 61-70968-0000, is listed above with the clip's.
+
+[[source.member]]
+path = "LibriSpeech/test-clean/121/121726/121-121726-0000.flac"
+sha256 = "81378fdb3e648b43efb1cb8c4f87da3fc9cfbe19c5dda97e9e7361c4a2470d2f"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/121/121726/121-121726.trans.txt"
+sha256 = "aef21ad2ec551651cada3748a10e592091a61e4c89effe68aca96674a1bb7f43"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/237/126133/237-126133-0001.flac"
+sha256 = "dfde7ea9d4eb3121b32043dffe260b257aaaad3ba163a815491d5b6dad01e5d0"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/237/126133/237-126133.trans.txt"
+sha256 = "96cd15cdf4fdb24dae87d3f18e55f8a0e744043be420508860153d30f524c73a"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/260/123286/260-123286-0000.flac"
+sha256 = "d654a43d06f0e8b586b525e8ec83d6e3c0dc83c3f4742f8e25fd291db77248b3"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/260/123286/260-123286.trans.txt"
+sha256 = "6f9c739a9de3b10677291f2d9a82b6c2bffd33c7f1d854b0701aebd32609ce19"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/672/122797/672-122797-0000.flac"
+sha256 = "776b1ce553e7ecb2dc0254b2aa4b35af0bde50db65dbf7bdbdfa1560a2c9ec36"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/672/122797/672-122797.trans.txt"
+sha256 = "dbdb4e39ee9799afc6360ab8a7fc08ecd9c55bc9dd0704b64fb794e5b1c5aff7"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/908/31957/908-31957-0001.flac"
+sha256 = "2782509f3e0125cdc87858930b23fac16cc438cadf87ea107605c97f31f334f0"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/908/31957/908-31957.trans.txt"
+sha256 = "ccc0a979b76d017087d7043363dd5432b8acfb8d92f715b137a8728cdb3167a5"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1089/134686/1089-134686-0000.flac"
+sha256 = "30885601173f96b0d8ddd020dc959b055c6c1582b85a33e3fcab8c4b08ed94c2"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1089/134686/1089-134686.trans.txt"
+sha256 = "acc2353d5507053a02adc1ecb8d497bf3453a60d32fe7da97577d1c212c9b075"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1188/133604/1188-133604-0000.flac"
+sha256 = "4a10149395cb5af8aa5d04ef3adb49b3980baa93114d0851046e6343744b26cb"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1188/133604/1188-133604.trans.txt"
+sha256 = "d833bb07d79d40debbbfeb5bd7d1a290ff6aa04974fb1f907108a50cf833981a"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1221/135766/1221-135766-0002.flac"
+sha256 = "1f02bae046f9567010f0163e8f204612fd1035a751383586a7aef6cb0fcc6e60"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1221/135766/1221-135766.trans.txt"
+sha256 = "388486b3bc2cf35761d8796c27362c7055fdbe9ed56120476ba92e4e03e41fe2"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1284/1180/1284-1180-0000.flac"
+sha256 = "1b76cef86ab0f918aac7f576be7398f29bfa968e6c78bdf024c335faedd378f1"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1284/1180/1284-1180.trans.txt"
+sha256 = "257080c8ef2b34918c88d43f8e7a47af532f0655f56cc7aae33eef1e1c7df003"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1320/122612/1320-122612-0001.flac"
+sha256 = "0a79505430aa3995a69d287ed16f8368a889b652ff6f3f4f25c371e07f7f0a20"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1320/122612/1320-122612.trans.txt"
+sha256 = "d4f37376ef3f5cfe4ada37c40610218a5e9397c856dff7d846a6ee54e08c2e79"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1580/141083/1580-141083-0000.flac"
+sha256 = "59123e88017e4bf645e39506a878b5734b3d94fe990018de25b712ba881cf7a5"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1580/141083/1580-141083.trans.txt"
+sha256 = "5220a35c444fa48337e03f8ce53cf0b6f7fc7342614541b80dbc270509dee60c"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1995/1826/1995-1826-0000.flac"
+sha256 = "74596627a026feb72e3acba17ee9268f120ee25e9f4afb935bb2f3d3ba779e57"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/1995/1826/1995-1826.trans.txt"
+sha256 = "e876fa794280e3ba34189a443a81d3c64cf8821ef87ab1108c2271228a156617"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2094/142345/2094-142345-0001.flac"
+sha256 = "b4fb8a76b5026b1cff5193cba298dc66156f93e228a221a06d26790c34cc049f"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2094/142345/2094-142345.trans.txt"
+sha256 = "0ce1dbcc944bdb2bf0174971fc36f2761f8e0be2c260f0852517b096df996a3c"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2300/131720/2300-131720-0000.flac"
+sha256 = "84cb3f03857e7a68d5811c2f07f14725f8583a61d3a280816e30ec44956d8d7e"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2300/131720/2300-131720.trans.txt"
+sha256 = "e24a2d858d772bfb8000d9ce952d84eb1059aa965c6c8bbd9877c15c75591e06"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2830/3979/2830-3979-0000.flac"
+sha256 = "b21719bb12120d2ec798c65e4b251c3dca7a002d2c5fda59859524b171fa9d5c"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2830/3979/2830-3979.trans.txt"
+sha256 = "c6fc4d885304b3c5c39b677b53fbf8edce90c8507f238263147c0dbba4e83bc9"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2961/960/2961-960-0001.flac"
+sha256 = "73a2c08a15dc492ae512877618f9bd2ba6dd8b3c1bd5a5e8d59ef63d7ef3d5fb"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/2961/960/2961-960.trans.txt"
+sha256 = "60a64fd4e90e8204e604838657e4523f73fb32f4ff6dfee6490e1d8839fda8c1"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/3570/5694/3570-5694-0001.flac"
+sha256 = "83d42febda01d467c35c0b90dc7bb5d5d80b18ed95d65748a831afca53f2e3cd"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/3570/5694/3570-5694.trans.txt"
+sha256 = "4a142dea39f70b4a514929ad23b216d0d8a669d8eaafece84c49a38edab486a0"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/3575/170457/3575-170457-0000.flac"
+sha256 = "96ab958dda879bdd4bc9fc61c2e5b0d632c569c256b54bcb1c0ecbeadd31448e"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/3575/170457/3575-170457.trans.txt"
+sha256 = "92b673b3dda1eacbe6859b932a44e3ae6bcf317debba7066b0793042105c17fb"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/3729/6852/3729-6852-0000.flac"
+sha256 = "3fa96f8e0276d79ec027bb1595215a8bbeb488cefcc1702ff798e91ec8504403"
+
+[[source.member]]
+path = "LibriSpeech/test-clean/3729/6852/3729-6852.trans.txt"
+sha256 = "0480ac34fb6fa46de455a8d25c75c90b41e74da21e5bb8317d93c32a8412fc6b"
+
+# AMI-ci (sets.toml): meeting ES2004a. AMI publishes no checksums, so these are first-use hashes, taken from a local
+# download (#110), never from CI's.
+
+[[source]]
+id = "ami-ES2004a"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004a/audio/ES2004a.Mix-Headset.wav"]
+sha256 = "3e2560b19bee6952c7c7ce041b0f1ea8a7ea9468044c4eea79d2a2c67e24ab0f"
+size = 33579394                  # 16 kHz, mono, 16-bit, 16,789,675 frames (1,049.4 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-annotations-1.6.2"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusAnnotations/ami_public_manual_1.6.2.zip"]
+sha256 = "b56e5babb2496b8795deeeda7e71178d7fbc9963f94276cf2a3f4b56ebbc9f9d"
+size = 22887865
+licence = "CC-BY-4.0"
+keep = false
+
+[[source.member]]
+path = "words/ES2004a.A.words.xml"
+sha256 = "3b91765c8985e7c2652f1004832c00840e88bad4c3213296192b9fd741d675cc"
+
+[[source.member]]
+path = "words/ES2004a.B.words.xml"
+sha256 = "0e24646b84f2772bb3ca28e666df5f7ba48cde647589f7ae8f85e2724ff5cbc3"
+
+[[source.member]]
+path = "words/ES2004a.C.words.xml"
+sha256 = "07c25c4831fdc91cdff736ebf27c1380d0a7ef98e9835e33b15d44797fed7fd1"
+
+[[source.member]]
+path = "words/ES2004a.D.words.xml"
+sha256 = "e085188b2f4855808911934c309ba965c283e54371044c9086185f27913d44f8"
+
+# BUT's AMI-diarization-setup at its main on 2026-10-29, the commit of 2023-10-17. Every RTTM URL uses this commit.
+[[source]]
+id = "ami-rttm-ES2004a"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/ES2004a.rttm"]
+sha256 = "9869c6146c2fd9595403edb36c2caeda65c12ffa2c0af4ce48d6814b673fd5a9"
+size = 14796
+licence = "Apache-2.0"           # the repository's LICENSE at that commit
+keep = true
