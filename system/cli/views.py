@@ -72,8 +72,16 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}.mu
 .banner{grid-column:1/-1;padding:12px 16px;border-radius:10px;font-weight:600}.banner.bad{background:color-mix(in srgb,var(--bad) 12%,transparent)}
 .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:4px 0 10px}.bar>div{height:100%;background:var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:14px}td{padding:4px 0;border-top:1px solid var(--line)}td:last-child{text-align:right}
-@media (max-width:600px){header{padding:12px 16px}main{padding:12px 16px}}
+nav{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line)}
+nav a{padding:10px 14px;color:var(--muted);border-bottom:2px solid transparent;font-weight:600}
+nav a[aria-current=page]{color:var(--ink);border-bottom-color:var(--accent)}nav a:hover{text-decoration:none;color:var(--ink)}
+.grid{overflow-x:auto}.grid table td,.grid table th{padding:6px 10px 6px 0;text-align:left;vertical-align:top;border-top:1px solid var(--line)}
+.grid table th{font-size:12px;color:var(--muted);font-weight:600;border-top:0}.grid table td.num{text-align:right;white-space:nowrap}
+.grid table td.when{white-space:nowrap}
+@media (max-width:600px){header{padding:12px 16px}main{padding:12px 16px}nav{padding:0 12px}}
 """
+
+TABS = (("/", "Overview"), ("/progress", "Progress"))
 
 
 def link(d, n, kind="issues"):
@@ -121,13 +129,64 @@ def html_page(d):
     parts.append(f'<section><h2>Merges from your account</h2><ul>{"".join(merges) or "<li class=muted>None.</li>"}</ul></section>')
     items = [f'<li>{link(d, i["number"])} {e(i["title"])}' + "".join(f'<span class="pill">{e(x)}</span>' for x in i["labels"]) + "</li>" for i in d["items"]]
     parts.append(f'<section class="wide"><h2>Open items</h2><ul>{"".join(items) or "<li class=muted>None.</li>"}</ul></section>')
+    return frame(d, "/", "".join(parts))
+
+
+def frame(d, here, body):
+    """A dashboard page: the header, the tabs with the current one marked, and its sections. Tabs may repeat
+    each other's facts (#241)."""
     favicon_data = "data:image/svg+xml," + ICON_SVG.replace('"', "'").replace("#", "%23")
+    tabs = "".join(f'<a href="{path}"{" aria-current=page" if path == here else ""}>{name}</a>' for path, name in TABS)
     return (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="60">'
-        '<title>auto_research</title>'
+        f'<title>auto_research · {dict(TABS)[here]}</title>'
         f'<link rel="icon" type="image/svg+xml" href="/favicon.svg"><link rel="alternate icon" href="{favicon_data}">'
         f'<link rel="apple-touch-icon" href="/favicon.svg"><style>{CSS}</style></head><body>'
-        f'<header>{ICON_SVG}<h1>auto_research</h1><span class="when">{local(d["now"], tz)} · refreshes every minute</span></header>'
-        f'<main>{"".join(parts)}</main></body></html>'
+        f'<header>{ICON_SVG}<h1>auto_research</h1><span class="when">{local(d["now"], tz=d["time_zone"])} · refreshes every minute</span></header>'
+        f'<nav aria-label="Tabs">{tabs}</nav><main>{body}</main></body></html>'
     )
+
+
+def met_line(p):
+    """"Met: n of 9 features, n of 10 requirements", from the Progress table."""
+    count = lambda k: (sum(r["status"] == "met" for r in p["rows"] if r["id"][0] == k), sum(r["id"][0] == k for r in p["rows"]))
+    (f, fn), (q, qn) = count("F"), count("Q")
+    return f"Met: {f} of {fn} features, {q} of {qn} requirements"
+
+
+STATUS_NOTE = ("Nothing records each criterion's check yet (#239), so status comes from the items: a criterion is "
+               "built when every feature item naming it is closed. Built isn't verified, so nothing shows as met.")
+
+
+def started(r, tz):
+    return r["started"].astimezone(ZoneInfo(tz)).strftime("%m-%d %H:%M") if r["started"] else "—"
+
+
+def progress_text(p):
+    tz = p["time_zone"]
+    lines = [f"Progress — {local(p['now'], tz)}", met_line(p), STATUS_NOTE, ""]
+    for r in p["rows"]:
+        lines.append(f"  {r['id']:<4} {r['name']}")
+        lines.append(f"       {', '.join(r['criteria']) or 'no criteria'} · {r['status']} · started {started(r, tz)}"
+                     f" · due {r['due'] or '—'} · ${r['cost']:.2f}")
+    lines += ["", f"Cost since {started({'started': p['since']}, tz)}: ${p['total']:.2f}"]
+    lines += [f"  {k}: ${v:.2f}" for k, v in p["costs"]]
+    return "\n".join(lines)
+
+
+def progress_page(p):
+    e, tz = html.escape, p["time_zone"]
+    pill = lambda r: ("bad" if r["status"].startswith("no criterion") else "good" if r["status"] == "met"
+                      else "you" if r["status"].startswith(("in progress", "built")) else "")
+    rows = "".join(
+        f'<tr><td><b>{r["id"]}</b></td><td>{e(r["name"])}</td><td class="muted">{e(", ".join(r["criteria"]) or "none")}</td>'
+        f'<td><span class="pill {pill(r)}">{e(r["status"])}</span></td><td class="when">{started(r, tz)}</td>'
+        f'<td class="when">{e(r["due"] or "—")}</td><td class="num">${r["cost"]:.2f}</td></tr>' for r in p["rows"])
+    head = "<tr><th>ID</th><th>Feature or requirement</th><th>Criteria</th><th>Status</th><th>Started</th><th>Due</th><th>Cost</th></tr>"
+    split = "".join(f'<tr><td>{e(k)}</td><td>${v:.2f}</td></tr>' for k, v in p["costs"])
+    body = (f'<section class="wide"><h2>{e(met_line(p))}</h2><p class="muted">{e(STATUS_NOTE)}</p>'
+            f'<div class="grid"><table>{head}{rows}</table></div></section>'
+            f'<section><h2>Cost since {started({"started": p["since"]}, tz)}: ${p["total"]:.2f}</h2><table>{split}</table>'
+            f'<p class="muted">API list prices, from each run\'s own report. The Max plan has no charge per run.</p></section>')
+    return frame(p, "/progress", body)
