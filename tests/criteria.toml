@@ -23,6 +23,12 @@ complete = true
 [G1-1]
 complete = true
 
+# G1-2: tests/test_g1_2.py runs the product run on each of the clip's five encodings in test-models and
+# compares each WER with the WAV's from the same session (design/internal/g1-formats.md), which is the
+# whole of its check.
+[G1-2]
+complete = true
+
 [G1-4m]
 ci = false
 owner = "The two-speaker clip's SRT and WebVTT show their cues at the right times, with the speaker's label, in QuickTime Player and in VLC"

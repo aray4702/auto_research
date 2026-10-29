@@ -290,6 +290,136 @@ class TestRecipe:
             "lmt: error: tests/fixtures/clip.txt: the rebuilt file's SHA-256 doesn't match sets.toml"]
 
 
+FORMATS =("flac", "mp3", "m4a", "mp4", "mov")
+
+
+def recipe(wav, out):
+    """The table in design/internal/g1-formats.md, "The recipe", word for word."""
+    mp4 = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1:d=57",
+           "-map", "0:a:0", "-map", "1:v:0", "-map_metadata", "-1", "-fflags", "+bitexact",
+           "-flags:a", "+bitexact", "-flags:v", "+bitexact", "-threads", "1", "-c:a", "aac", "-profile:a", "aac_low",
+           "-b:a", "128k", "-ar", "48000", "-ac", "1", "-c:v", "mpeg4", "-pix_fmt", "yuv420p",
+           "-max_interleave_delta", "0"]
+    return {
+        "flac": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
+                 "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "flac",
+                 "-compression_level", "8", "-sample_fmt", "s16", "-ar", "16000", "-ac", "1", "-f", "flac", out],
+        "mp3": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "libmp3lame",
+                "-b:a", "128k", "-ar", "44100", "-ac", "1", "-f", "mp3", out],
+        "m4a": ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", wav, "-map", "0:a:0", "-map_metadata", "-1",
+                "-fflags", "+bitexact", "-flags:a", "+bitexact", "-threads", "1", "-c:a", "aac",
+                "-profile:a", "aac_low", "-b:a", "128k", "-ar", "48000", "-ac", "1", "-f", "ipod", out],
+        "mp4": [*mp4, "-f", "mp4", out],
+        "mov": [*mp4, "-f", "mov", out],
+    }
+
+
+def encoded(fmt):
+    return f"encoded as {fmt}\n".encode()
+
+
+class FakeFfmpeg:
+    """Stands in for subprocess.run: answers `ffmpeg -version`, and for each encoding records its argv and writes
+    encoded(<format>) to the last argument, or fails on the format `fail`."""
+
+    def __init__(self, version="8.0", fail=None):
+        self.version, self.fail = version, fail
+        self.calls = []
+
+    def __call__(self, argv, check=None, capture_output=None, text=None):
+        if argv == ["ffmpeg", "-version"]:
+            return subprocess.CompletedProcess(argv, 0, f"ffmpeg version {self.version} Copyright (c)\n", "")
+        fmt = FORMATS[len(self.calls)]
+        self.calls.append(argv)
+        if fmt == self.fail:
+            return subprocess.CompletedProcess(argv, 1, "", "[mp3 @ 0x1] warning\nUnknown encoder 'libmp3lame'\n")
+        datasets.Path(argv[-1]).write_bytes(encoded(fmt))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+
+class TestEncodeFixture:
+    @pytest.fixture
+    def fixtures(self, cache, tmp_path, monkeypatch):
+        """A WAV in a temporary tests/fixtures, and manifests giving it encodings recorded by ffmpeg 8.0."""
+        setup(tmp_path, monkeypatch)
+        (tmp_path / "tests/fixtures").mkdir(parents=True)
+        (tmp_path / "tests/fixtures/clip.wav").write_bytes(b"the clip")
+        self.record(tmp_path)
+        return tmp_path / "tests/fixtures"
+
+    @staticmethod
+    def record(tmp_path, version="8.0", hashes=None):
+        hashes = {fmt: sha256(encoded(fmt)) for fmt in FORMATS} | (hashes or {})
+        listed = "".join(f'  {{format = "{fmt}", sha256 = "{hashes[fmt]}"}},\n' for fmt in FORMATS)
+        sets = tmp_path / "manifests" / "sets.toml"
+        sets.write_text(sets.read_text() + f'ffmpeg = "{version}"\nencodings = [\n{listed}]\n')
+
+    @staticmethod
+    def fake(monkeypatch, **kwargs):
+        ffmpeg = FakeFfmpeg(**kwargs)
+        monkeypatch.setattr(datasets.subprocess, "run", ffmpeg)
+        return ffmpeg
+
+    def test_write_runs_the_recipe_in_order_writes_the_files_and_exits_0(self, fixtures, monkeypatch, capsys):
+        ffmpeg = self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip", "--write"]) == 0
+        wav = str((fixtures / "clip.wav").resolve())
+        for fmt, argv in zip(FORMATS, ffmpeg.calls, strict=True):
+            out = datasets.Path(argv[-1])
+            assert out.parent == fixtures.resolve() and out.name.endswith(f".{fmt}.tmp")
+            assert argv == recipe(wav, argv[-1])[fmt]
+        assert sorted(p.name for p in fixtures.iterdir()) == sorted(["clip.wav", *(f"clip.{f}" for f in FORMATS)])
+        for fmt in FORMATS:
+            assert (fixtures / f"clip.{fmt}").read_bytes() == encoded(fmt)
+        out, err = capsys.readouterr()
+        assert out.splitlines() == [f"tests/fixtures/clip.{fmt} {sha256(encoded(fmt))}" for fmt in FORMATS] + [
+            "ffmpeg 8.0"]
+        assert err == ""
+
+    def test_without_write_nothing_is_written(self, fixtures, monkeypatch):
+        ffmpeg = self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip"]) == 0
+        assert len(ffmpeg.calls) == 5
+        assert [p.name for p in fixtures.iterdir()] == ["clip.wav"]
+
+    def test_a_hash_that_doesnt_match_exits_3_naming_the_first(self, fixtures, tmp_path, monkeypatch, capsys):
+        setup(tmp_path, monkeypatch)
+        self.record(tmp_path, hashes={"m4a": "e" * 64, "mov": "e" * 64})
+        self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip", "--write"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: tests/fixtures/clip.m4a: the encoded file's SHA-256 doesn't match sets.toml"]
+        assert (fixtures / "clip.m4a").read_bytes() == encoded("m4a")  # --write writes before it compares
+
+    def test_another_ffmpeg_version_exits_3(self, fixtures, monkeypatch, capsys):
+        self.fake(monkeypatch, version="7.1")
+        assert datasets.main(["encode-fixture", "clip"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: ffmpeg: version 7.1 here, sets.toml records 8.0; the hashes can't be compared"]
+
+    def test_a_failed_encoding_exits_3_and_leaves_no_file(self, fixtures, monkeypatch, capsys):
+        self.fake(monkeypatch, fail="mp3")
+        assert datasets.main(["encode-fixture", "clip", "--write"]) == 3
+        assert capsys.readouterr().err.splitlines() == [
+            "lmt: error: tests/fixtures/clip.mp3: ffmpeg failed: Unknown encoder 'libmp3lame'"]
+        assert [p.name for p in fixtures.iterdir()] == ["clip.wav"]
+
+    def test_no_ffmpeg_on_path_is_one_error_line(self, fixtures, monkeypatch, capsys):
+        def missing(argv, **kwargs):
+            raise FileNotFoundError(2, "No such file or directory", argv[0])
+
+        monkeypatch.setattr(datasets.subprocess, "run", missing)
+        assert datasets.main(["encode-fixture", "clip"]) == 3
+        assert capsys.readouterr().err.splitlines() == ["lmt: error: ffmpeg: not found on PATH"]
+
+    def test_a_fixture_without_encodings_is_a_usage_error(self, cache, tmp_path, monkeypatch, capsys):
+        setup(tmp_path, monkeypatch)
+        self.fake(monkeypatch)
+        assert datasets.main(["encode-fixture", "clip"]) == 2
+        assert capsys.readouterr().err.splitlines() == ["lmt: error: clip: has no encodings in sets.toml"]
+
+
 # --- The CI subset (design/internal/g1-stage1.md §5a) ----------------------------------------------------------
 
 AMI_WAV_URL = "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004a/audio/ES2004a.Mix-Headset.wav"
