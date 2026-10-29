@@ -1140,3 +1140,4 @@
 {"at": "2026-10-29T17:54:04+00:00", "cost_usd": 0.133869, "denials": 0, "denied": [], "event": "end", "five_hour": 0.18, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T175240Z", "seven_day": 0.03, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 18}
 {"at": "2026-10-29T17:55:08+00:00", "event": "start", "item": 356, "pid": 33391, "role": "reviewer", "run_id": "reviewer-20261029T175459Z", "task": "Review PR #356."}
 {"at": "2026-10-29T17:58:34+00:00", "cost_usd": 0.25004, "denials": 0, "denied": [], "event": "end", "five_hour": 0.19, "item": 356, "role": "reviewer", "run_id": "reviewer-20261029T175459Z", "seven_day": 0.03, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 18}
+{"at": "2026-10-29T17:59:32+00:00", "event": "start", "item": 357, "pid": 36599, "role": "reviewer", "run_id": "reviewer-20261029T175926Z", "task": "Review PR #357."}
