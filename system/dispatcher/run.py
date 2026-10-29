@@ -18,7 +18,7 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +45,22 @@ def paths(config, run_id):
         "log": logs / f"{run_id}.jsonl",
         "state": home / "state",
     }
+
+
+def reserve(config, role, at, tries=60):
+    """A run ID no other launcher holds, taken by creating its settings file exclusively. The Dispatcher
+    starts several runs a pass, and two of a role in one second shared an ID: the second's worktree
+    add failed, and its item was released and failed again each pass (#325). Returns (run_id, paths)."""
+    for s in range(tries):
+        run_id = new_run_id(role, at + timedelta(seconds=s))
+        p = paths(config, run_id)
+        p["settings"].parent.mkdir(parents=True, exist_ok=True)
+        try:
+            p["settings"].open("x").close()
+            return run_id, p
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"no free run ID for {role} in the {tries} s from {at.isoformat()}")
 
 
 def environment(config, role, run_id):
@@ -127,11 +143,13 @@ def main(argv=None):
         print("not started: " + "; ".join(reasons))
         return 4
 
-    cmd = runner.claude_command(config, args.role, task_text(args.task, args.item), p["settings"])
     if args.dry_run:
+        cmd = runner.claude_command(config, args.role, task_text(args.task, args.item), p["settings"])
         print(json.dumps({"run_id": run_id, "cwd": str(p["worktree"]), "command": cmd,
                           "settings": runner.role_settings(config, args.role)}, indent=2))
         return 0
+    run_id, p = reserve(config, args.role, at)
+    cmd = runner.claude_command(config, args.role, task_text(args.task, args.item), p["settings"])
 
     dispatcher = ("dispatcher", run_id)
     if args.claim and args.item:
@@ -142,9 +160,12 @@ def main(argv=None):
         return launch(args, config, gh, store, p, run_id, cmd, dispatcher, ended)
     except BaseException as e:
         # A launcher that fails must not strand its claim or leave a run that looks active.
+        # The detail (a failed command, never a secret) saves reading the launcher log, which runs can't.
         if not ended["recorded"]:
             store.append("runs", {"run_id": run_id, "role": args.role, "item": args.item, "event": "end",
-                                  "at": now_utc().isoformat(), "status": f"failed: launcher: {type(e).__name__}"})
+                                  "at": now_utc().isoformat(), "status": f"failed: launcher: {type(e).__name__}",
+                                  "detail": str(e)[:500]})
+        p["settings"].unlink(missing_ok=True)
         if args.claim and args.item:
             post.cmd_release(gh, dispatcher, args.item)
         raise
