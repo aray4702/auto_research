@@ -1203,3 +1203,4 @@
 {"at": "2026-10-29T20:31:15+00:00", "cost_usd": 0.814086, "denials": 3, "denied": ["Bash: gh api", "Bash: gh api > | ;", "Bash: python3 -m unittest"], "event": "end", "five_hour": 0.02, "item": 345, "role": "builder", "run_id": "builder-20261029T202704Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 37}
 {"at": "2026-10-29T20:31:49+00:00", "event": "start", "item": 366, "pid": 99868, "role": "reviewer", "run_id": "reviewer-20261029T203140Z", "task": "Review PR #366."}
 {"at": "2026-10-29T20:33:12+00:00", "cost_usd": 0.2241, "denials": 0, "denied": [], "event": "end", "five_hour": 0.02, "item": 366, "role": "reviewer", "run_id": "reviewer-20261029T203140Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 16}
+{"at": "2026-10-29T20:34:09+00:00", "event": "start", "item": 367, "pid": 1336, "role": "reviewer", "run_id": "reviewer-20261029T203402Z", "task": "Review PR #367."}
