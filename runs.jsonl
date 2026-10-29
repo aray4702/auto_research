@@ -787,3 +787,4 @@
 {"at": "2026-10-29T02:58:36+00:00", "event": "end", "item": 247, "role": "reviewer", "run_id": "reviewer-20261029T025636Z", "status": "cut-off"}
 {"at": "2026-10-29T03:01:23+00:00", "event": "start", "item": null, "pid": 26747, "role": "coordinator", "run_id": "coordinator-20261029T030118Z", "task": "Items closed since your last run: #239. Record their goals' progress, close what is done, and chart and schedule what comes next."}
 {"at": "2026-10-29T03:01:24+00:00", "event": "start", "item": 247, "pid": 26790, "role": "builder", "run_id": "builder-20261029T030118Z", "task": "Item #247 needs your decision (needs-decision:builder)."}
+{"at": "2026-10-29T03:03:10+00:00", "cost_usd": 0.38049, "denials": 1, "denied": ["Bash: python3 -m unittest"], "event": "end", "five_hour": 0.17, "item": 247, "role": "builder", "run_id": "builder-20261029T030118Z", "seven_day": 0.46, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 17}
