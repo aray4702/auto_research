@@ -21,3 +21,4 @@
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: gh api", "level": "builder", "title": "Recurring permission denial: Bash: gh api"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: gh pr", "level": "builder", "title": "Recurring permission denial: Bash: gh pr"}
 {"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: gh run", "level": "builder", "title": "Recurring permission denial: Bash: gh run"}
+{"at": "2026-10-29T14:30:04+00:00", "key": "denial:Bash: git ls-remote", "level": "builder", "title": "Recurring permission denial: Bash: git ls-remote"}
