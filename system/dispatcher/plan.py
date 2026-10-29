@@ -26,6 +26,12 @@ DECISION_ROLE = {
 SEVERE = ("sev:1", "sev:2")
 
 
+def fixes_severe(pr, snap):
+    """Whether the PR resolves a sev:1 or sev:2 item."""
+    issues = {i["number"]: i["labels"] for i in snap["issues"]}
+    return bool(set().union(*[issues.get(n, set()) for n in pr.get("resolves", [])]) & set(SEVERE))
+
+
 def upkeep(candidate, snap):
     """Whether a candidate is the system's own upkeep rather than work for a goal: a builder PR or a `type:system`
     item, unless the work is sev:1 or sev:2. A builder's SR3 approval of a product PR is goal work: the PR is what
@@ -34,12 +40,10 @@ def upkeep(candidate, snap):
     role, item, _, why = candidate
     if item is None:
         return False
-    issues = {i["number"]: i["labels"] for i in snap["issues"]}
     pr = next((p for p in snap["prs"] if p["number"] == item), None)
     if pr:
-        labels = set().union(*[issues.get(n, set()) for n in pr.get("resolves", [])])
-        return pr["author_role"] == "builder" and not labels & set(SEVERE)
-    labels = issues.get(item, set())
+        return pr["author_role"] == "builder" and not fixes_severe(pr, snap)
+    labels = next((i["labels"] for i in snap["issues"] if i["number"] == item), set())
     return "type:system" in labels and not labels & set(SEVERE)
 
 
@@ -88,7 +92,10 @@ def candidates(snap, active_items, identity, skip_review=(), answered=None, dail
             out.append(("developer", i["number"], f"Item #{i['number']} is sev:1: revert first (blueprint §3), then fix the cause.", "sev:1"))
     for pr in agent_prs:
         why = []
-        if pr["gate"] == "FAILURE":
+        # While main's own gate is red, a PR's red gate is likely main's: the author has nothing to change, and
+        # restarting it every poll only says so (#336). Once main is green, the red PR is offered again. The exception
+        # is a PR that resolves a sev:1 or sev:2 item: it is likely main's fix, and its red gate is the fix failing.
+        if pr["gate"] == "FAILURE" and (snap.get("main_gate") != "FAILURE" or fixes_severe(pr, snap)):
             why.append("its gate is red")
         review = latest_review(pr, bot)
         # Once the author has answered, by a change or a comment, the PR goes back to the Reviewer (#257): an answer by
