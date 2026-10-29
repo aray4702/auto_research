@@ -14,8 +14,9 @@ hold_new_runs_at_five_hour = 0.50
 pause_at_seven_day = 0.90
 
 [concurrency]
-max_runs = 2
-max_runs_per_role = 1
+# The Owner, 2026-10-28 22:19 PT, for the G1-1 push: "You can use two developers." (#84)
+max_runs = 3
+max_runs_per_role = 2
 
 [wip]
 max_open_agent_prs = 3

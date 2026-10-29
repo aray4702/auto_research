@@ -38,7 +38,8 @@ owner_discord_user_id = "1334397293616562197"
 required_check = "gate"
 required_check_app_id = 15368
 strict = true
-enforce_admins = true
+# false since 2026-10-28 22:22 PT: the Owner had the builder admin-merge G1-1's PRs without waiting for CI (#84).
+enforce_admins = false
 required_approvals = 1
 # false: a conflict-free refresh from main keeps an approval; the Dispatcher checks that nothing else
 # changed since (merge_rules.current, #118), as GitHub's dismissal did.
