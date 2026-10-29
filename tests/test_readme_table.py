@@ -55,7 +55,12 @@ Two runs of the CI subset gave identical accuracy figures: yes.
 | --- | --- | ---: | ---: | ---: |
 | LS full | product | 3.1 % | — | 0.21 |
 | AMI full | product | 21.2 % | 20.1 % | 0.30 |
-| AMI full | pyannote-alone | — | 18.8 % | — |"""
+| AMI full | pyannote-alone | — | 18.8 % | — |
+
+RTF is wall-clock time over audio duration. For the product, it runs from process start to exit, model loading \
+included. Whisper alone and pyannote alone come from that same run: each is its own stage's model loading and \
+inference, without start-up, decoding or export, and, with diarization on, while the other stage runs beside it. \
+So the three RTFs aren't like for like."""
 
 README = """\
 # Title
@@ -129,6 +134,7 @@ class CheckReadmeTest(unittest.TestCase):
                          README.replace(markers, f"{readme.START}\n{EXPECTED}\n{readme.END}"))
         self.assertEqual(sorted(p.name for p in self.dir.iterdir()), ["README.md", "results"])
 
+    @pytest.mark.criterion("G1-6")
     def test_fresh_table_exits_0(self):
         readme.update(self.readme, self.results)
         self.assertEqual(run("eval", "--check-readme"), (0, "", ""))

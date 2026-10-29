@@ -229,13 +229,6 @@ class EnglishOnlyTest(unittest.TestCase):
 
 
 class HandlerTest(unittest.TestCase):
-    def test_stubs_exit_1_with_one_line(self):
-        for argv, command in ((["eval", "--set", "full", "--update-readme"], "eval"),):
-            with self.subTest(argv=argv):
-                code, out, err = run(*argv)
-                self.assertEqual((code, out), (1, ""))
-                self.assertEqual(err, f"lmt: error: {command}: not built yet (G1 stage 2)\n")
-
     def test_valid_speakers_reach_the_handler(self):
         with mock.patch("lmt.pipeline.cli_transcribe", return_value=None) as handler:
             code, _, err = run("transcribe", "a.wav", "--min-speakers", "2", "--max-speakers", "2")

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lmt.errors import InputError
-from lmt.eval import datasets, report
+from lmt.eval import datasets, readme, report
 from lmt.eval.score import Hypothesis, Item, Turn, hypothesis_from_transcript, score
 
 WORKER = ("-m", "lmt.eval.worker")  # tests point it at tests/fixtures/eval/fake_worker.py
@@ -103,4 +103,18 @@ def evaluate(set_name: str, *, out_dir: Path, determinism=None) -> dict:
     models = (diarized or runs)[0].transcript["models"]
     results = report.build(set_name, figures, models, determinism, out_dir=out_dir)
     report.write(Path(out_dir) / f"{set_name}.json", results)
+    return results
+
+
+def evaluate_full(out_dir: Path, *, update_readme: bool) -> dict:
+    """The CI subset twice, into a temporary directory, for `determinism` (G1-12's Mac half), then the full
+    set into <out_dir>/full.json, one file at a time (G1-9). With `update_readme`, README.md's table is then
+    rendered from it, which a dirty tree refuses with exit 3, after full.json is written."""
+    with tempfile.TemporaryDirectory(prefix="lmt-eval-ci-") as ci_dir:
+        first = evaluate("ci", out_dir=Path(ci_dir))
+        second = evaluate("ci", out_dir=Path(ci_dir))
+    determinism = {"runs": 2, "identical": report.same_accuracy(first, second)}
+    results = evaluate("full", out_dir=out_dir, determinism=determinism)
+    if update_readme:
+        readme.update(Path("README.md"), Path(out_dir) / "full.json")
     return results
