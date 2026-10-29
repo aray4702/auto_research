@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #328 | The results file states `rtf`'s basis for each system: the product's from process start to exit, Whisper alone's and pyannote alone's as their stage's time within the product run. Approved by the Owner on #328 (option 1) |
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: exit 130's row covers both `lmt live` and `lmt demo`, and `lmt demo`'s stopping bullet no longer calls it the one command whose Ctrl-C isn't 130; the speaker-name rule needs no new schema version, now that the schema is 1.1 |
 | 2026-10-27 | architect, #83 | Reviewer's findings on #129: `rename` trims a name's outer white space; WebVTT escapes `&` in the voice tag too; `lmt demo` reads the transcript again on each load and needs no `.vtt`; only `lmt eval` needs the `eval` extra |
 | 2026-10-27 | architect, #83 | G3: `lmt rename` and `lmt demo`; speaker names' rules; the WebVTT cue shows the speaker as text as well as in the voice tag; the install command and version 1.0.0. Holds the recommended options on #83, waiting for the Owner's approval |
@@ -237,6 +238,7 @@ Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case,
 ```
 
 - **Values:** `system` is `product`, `whisper-alone`, `pyannote-alone` or, in `results/live.json`, `product-live`. A figure that doesn't apply is `null`.
+- **`rtf`'s basis:** for `product`, the spec's RTF, from process start to exit. For `whisper-alone` and `pyannote-alone`, that stage's own time within the same product run: its model's loading and inference, without interpreter start, decoding or export, and, when diarization runs, beside the other stage. So the three aren't like for like.
 - **Live figures** (`results/live.json`, G2-6): `p50_delay_seconds`, `p95_delay_seconds`, `max_delay_seconds`, `matched_words`, `runs` (each run's `p95_delay_seconds` and `behind_seconds`, how far behind real time it was at the end), plus `wer` and `der`.
 - **Timing fields:** `date`, `wall_seconds`, `rtf`, `peak_rss_bytes`, and the live figures' delays and `behind_seconds`. Two runs are compared with these removed (G1-5, G1-12).
 - **`dirty`:** `true` when the working tree had uncommitted changes. A results file that the README's table is rendered from must have `dirty: false`.
