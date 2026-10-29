@@ -73,8 +73,12 @@ def login_of(actor):
 def gate_of(node, gate_app_id):
     """'SUCCESS', 'FAILURE' (any other completed conclusion) or None while pending or absent."""
     commits = node["commits"]["nodes"]
-    suites = commits[0]["commit"]["checkSuites"]["nodes"] if commits else []
-    for suite in suites:
+    return commit_gate(commits[0]["commit"] if commits else {}, gate_app_id)
+
+
+def commit_gate(commit, gate_app_id):
+    """gate_of for one commit: a PR's head, or main's (#336)."""
+    for suite in ((commit or {}).get("checkSuites") or {}).get("nodes", []):
         if (suite.get("app") or {}).get("databaseId") != gate_app_id:
             continue
         for check in suite["checkRuns"]["nodes"]:
@@ -114,8 +118,9 @@ def snapshot(gh, identity, closed_since=None, codeowners=ROOT / ".github" / "COD
         for i in everything if "pull_request" not in i
     ]
     patterns = protected_patterns(codeowners.read_text()) if codeowners.exists() else []
-    nodes = gh.graphql(QUERY, owner=owner, name=name)["repository"]["pullRequests"]["nodes"]
-    prs = [pull_request(n, labels_of.get(n["number"], set()), identity, patterns) for n in nodes]
+    repo = gh.graphql(QUERY, owner=owner, name=name)["repository"]
+    prs = [pull_request(n, labels_of.get(n["number"], set()), identity, patterns) for n in repo["pullRequests"]["nodes"]]
+    main_gate = commit_gate((repo.get("defaultBranchRef") or {}).get("target"), identity["gate_app_id"])
     order_issue = next((i for i in issues if "record:work-order" in i["labels"]), None)
     closed = []
     if closed_since:
@@ -129,5 +134,5 @@ def snapshot(gh, identity, closed_since=None, codeowners=ROOT / ".github" / "COD
     goals = requirement_goals(requirements_on_main(gh))
     records = gh.api("GET", f"repos/{gh.repo}/issues?state=all&labels=record%3Agoal&per_page=100", paginate=True)
     have = {m[1] for i in records if (m := GOAL_TITLE.match(i["title"]))}
-    return {"issues": issues, "prs": prs, "work_order": work_order(order_issue["body"] if order_issue else ""),
+    return {"issues": issues, "prs": prs, "main_gate": main_gate, "work_order": work_order(order_issue["body"] if order_issue else ""),
             "closed": sorted(closed), "new_goals": [g for g in goals if g not in have]}
