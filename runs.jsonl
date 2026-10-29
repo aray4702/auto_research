@@ -1103,3 +1103,4 @@
 {"at": "2026-10-29T17:14:46+00:00", "event": "start", "item": 330, "pid": 3735, "role": "reviewer", "run_id": "reviewer-20261029T171439Z", "task": "Review PR #330."}
 {"at": "2026-10-29T17:14:46+00:00", "event": "end", "item": 304, "role": "reviewer", "run_id": "reviewer-20261029T171439Z", "status": "failed: launcher: CalledProcessError"}
 {"at": "2026-10-29T17:16:25+00:00", "cost_usd": 0.601755, "denials": 0, "denied": [], "event": "end", "five_hour": 0.11, "item": 330, "role": "reviewer", "run_id": "reviewer-20261029T171439Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 23}
+{"at": "2026-10-29T17:16:32+00:00", "cost_usd": 0.167391, "denials": 0, "denied": [], "event": "end", "five_hour": 0.11, "item": null, "role": "coordinator", "run_id": "coordinator-20261029T171439Z", "seven_day": 0.02, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 31}
