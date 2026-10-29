@@ -218,7 +218,7 @@ class WatchListTest(unittest.TestCase):
 
 class ProtectionTest(unittest.TestCase):
     LIVE = {"required_status_checks": {"strict": True, "checks": [{"context": "gate", "app_id": 15368}]},
-            "enforce_admins": {"enabled": True},
+            "enforce_admins": {"enabled": False},
             "required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": False,
                                               "require_code_owner_reviews": False},
             "allow_force_pushes": {"enabled": False}, "allow_deletions": {"enabled": False}}
@@ -226,10 +226,10 @@ class ProtectionTest(unittest.TestCase):
     def test_the_recorded_settings_pass_and_any_change_is_a_breach_for_the_owner(self):
         self.assertEqual(daily.protection_breaches(self.LIVE, EXPECTED), [])
         loosened = json.loads(json.dumps(self.LIVE))
-        loosened["enforce_admins"]["enabled"] = False
+        loosened["allow_force_pushes"]["enabled"] = True
         got = daily.protection_breaches(loosened, EXPECTED)
         self.assertEqual([x[1] for x in got], ["owner"])
-        self.assertIn("enforce_admins: is False, recorded True", got[0][3])
+        self.assertIn("allow_force_pushes: is True, recorded False", got[0][3])
         self.assertIn("kill switch", got[0][3])
 
 
@@ -260,7 +260,7 @@ class DailyPassTest(unittest.TestCase):
 
     def test_a_breach_throws_the_kill_switch_and_goes_to_the_owner_once(self):
         loosened = json.loads(json.dumps(ProtectionTest.LIVE))
-        loosened["enforce_admins"]["enabled"] = False
+        loosened["allow_force_pushes"]["enabled"] = True
         lines, store, create, escalate, sh = self.run_pass(loosened)
         self.assertEqual(lines, ["raise (owner): Rule breach: branch protection on main changed"])
         self.assertIn(["gh", "variable", "set", "AGENTS_PAUSED", "--body", "true", "--repo", "aray4702/auto_research"],
