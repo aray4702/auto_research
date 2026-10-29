@@ -1266,3 +1266,4 @@
 {"at": "2026-10-29T21:22:23+00:00", "event": "start", "item": 376, "pid": 34702, "role": "reviewer", "run_id": "reviewer-20261029T212216Z", "task": "Review PR #376."}
 {"at": "2026-10-29T21:22:25+00:00", "event": "start", "item": 364, "pid": 34766, "role": "developer", "run_id": "developer-20261029T212217Z", "task": "PR #364 needs work: its gate is red."}
 {"at": "2026-10-29T21:23:14+00:00", "cost_usd": 0.23616, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 364, "role": "developer", "run_id": "developer-20261029T212217Z", "seven_day": 0.07, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 11}
+{"at": "2026-10-29T21:23:19+00:00", "cost_usd": 0.287301, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 368, "role": "developer", "run_id": "developer-20261029T212216Z", "seven_day": 0.07, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 14}
