@@ -1190,3 +1190,4 @@
 {"at": "2026-10-29T20:13:24+00:00", "event": "start", "item": 322, "pid": 88024, "role": "builder", "run_id": "builder-20261029T201317Z", "task": "Item #322 needs your decision (needs-decision:builder)."}
 {"at": "2026-10-29T20:17:35+00:00", "cost_usd": 0.86354, "denials": 1, "denied": ["Bash: git commit"], "event": "end", "five_hour": 0, "item": 322, "role": "builder", "run_id": "builder-20261029T201317Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 39}
 {"at": "2026-10-29T20:18:01+00:00", "event": "start", "item": 365, "pid": 90091, "role": "reviewer", "run_id": "reviewer-20261029T201754Z", "task": "Review PR #365."}
+{"at": "2026-10-29T20:19:18+00:00", "cost_usd": 0.273311, "denials": 0, "denied": [], "event": "end", "five_hour": 0, "item": 365, "role": "reviewer", "run_id": "reviewer-20261029T201754Z", "seven_day": 0.05, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 15}
