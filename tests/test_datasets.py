@@ -1,17 +1,21 @@
-"""The fetch of one source and the fixture recipe, with no network (design/internal/g1-slice.md, S1).
+"""The fetch of one source and the fixture recipe (design/internal/g1-slice.md, S1), and the CI subset's sources,
+recipes and `fetch` (design/internal/g1-stage1.md §5a), with no network.
 
 `urllib.request.urlopen` is replaced by one that serves a small .tar.gz built here, of FLAC files written
-with soundfile and their chapter's .trans.txt.
+with soundfile and their chapter's .trans.txt, and for the AMI recipes a small WAV, a .zip of two speakers'
+words.xml files and an RTTM.
 """
 
 import gzip
 import hashlib
 import io
+import re
 import subprocess
 import sys
 import tarfile
 import urllib.error
 import wave
+import zipfile
 
 import numpy as np
 import pytest
@@ -283,3 +287,302 @@ class TestRecipe:
         assert datasets.main(["build-fixture", "clip"]) == 3
         assert capsys.readouterr().err.splitlines() == [
             "lmt: error: tests/fixtures/clip.txt: the rebuilt file's SHA-256 doesn't match sets.toml"]
+
+
+# --- The CI subset (design/internal/g1-stage1.md §5a) ----------------------------------------------------------
+
+AMI_WAV_URL = "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004a/audio/ES2004a.Mix-Headset.wav"
+AMI_ZIP_URL = "https://groups.inf.ed.ac.uk/ami/AMICorpusAnnotations/ami_public_manual_1.6.2.zip"
+RTTM_URL = ("https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/" + "0" * 40
+            + "/only_words/rttms/test/ES2004a.rttm")
+CROP = 0.5  # seconds: 8,000 of the meeting's 16,000 frames
+
+# Two speakers. B's first word has no starttime (0); A's "so" takes "Okay"'s. "Okay", "so" and "well" start
+# together, so they sort by letter, then position. The "." is punctuation. "crossing"'s midpoint, 0.55 s, is
+# past the crop, but "yes"'s, 0.485 s, is before it.
+WORDS = {
+    "words/ES2004a.A.words.xml": """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<nite:root nite:id="ES2004a.A.words" xmlns:nite="http://nite.sourceforge.net/">
+   <w nite:id="ES2004a.A.words0" starttime="0.10" endtime="0.20">Okay</w>
+   <w nite:id="ES2004a.A.words1" starttime="0.20" endtime="0.20" punc="true">.</w>
+   <vocalsound nite:id="ES2004a.A.words2" starttime="0.21" endtime="0.25" type="laugh"/>
+   <w nite:id="ES2004a.A.words3" endtime="0.35">so</w>
+   <w nite:id="ES2004a.A.words4" starttime="0.40" endtime="0.70">crossing</w>
+</nite:root>
+""",
+    "words/ES2004a.B.words.xml": """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<nite:root nite:id="ES2004a.B.words" xmlns:nite="http://nite.sourceforge.net/">
+   <w nite:id="ES2004a.B.words0" endtime="0.05">um</w>
+   <w nite:id="ES2004a.B.words1" starttime="0.10" endtime="0.15">well</w>
+   <w nite:id="ES2004a.B.words2" starttime="0.30" endtime="0.40">right</w>
+   <w nite:id="ES2004a.B.words3" starttime="0.45" endtime="0.52">yes</w>
+</nite:root>
+""",
+}
+REF_WORDS = "um Okay so well right yes"  # without "crossing"
+RTTM = """SPEAKER ES2004a 1 0.000 0.300 <NA> <NA> MEE006 <NA> <NA>
+SPEAKER ES2004a 1 0.400 0.300 <NA> <NA> FEE005 <NA> <NA>
+SPEAKER ES2004a 1 0.500 0.200 <NA> <NA> MEE006 <NA> <NA>
+SPEAKER ES2004b 1 0.100 0.100 <NA> <NA> MEE007 <NA> <NA>
+"""
+
+
+def meeting_samples():
+    return (np.arange(16000) % 1000).astype(np.int16)
+
+
+def wav(samples):
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(16000)
+        w.writeframes(samples.astype("<i2").tobytes())
+    return buffer.getvalue()
+
+
+def zip_of(files):
+    """A directory entry, the files, and one file the manifest doesn't list."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as z:
+        z.writestr(zipfile.ZipInfo("words/", date_time=(1980, 1, 1, 0, 0, 0)), b"")
+        for name, data in {**files, "words/ES2004b.A.words.xml": "<nite:root/>"}.items():
+            z.writestr(zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0)), data)
+    return buffer.getvalue()
+
+
+def source_toml(id, url, data, *, members=None, keep=True, sha=None):
+    listed = "".join(f'\n[[source.member]]\npath = "{name}"\nsha256 = "{member_sha}"\n'
+                     for name, member_sha in (members or {}).items())
+    return (f'\n[[source]]\nid = "{id}"\nurls = ["{url}"]\nsha256 = "{sha or sha256(data)}"\nsize = {len(data)}\n'
+            f'licence = "CC-BY-4.0"\nkeep = {str(keep).lower()}\n{listed}')
+
+
+LS_CI = f"""
+[[dataset]]
+name = "LS-ci"
+set = "ci"
+kind = "librispeech"
+source = "librispeech-test-clean"
+utterances = {IDS[:2]!r}
+"""
+
+
+def ami_ci(derived, *, meetings='["ES2004a"]', crop=f"crop = {CROP}\n"):
+    return (f'\n[[dataset]]\nname = "AMI-ci"\nset = "ci"\nkind = "ami"\nmeetings = {meetings}\n'
+            f'audio = "ami-ES2004a"\nwords = "ami-annotations-1.6.2"\nrttm = "ami-rttm-ES2004a"\n{crop}'
+            f'derived_sha256 = "{derived}"\n')
+
+
+class CI:
+    """Manifests of the CI subset in small: LS-ci with two of members()'s utterances, and AMI-ci cropped."""
+
+    def __init__(self, tmp_path, monkeypatch, *, wav_sha=None, derived=None, datasets_toml=None, words_sha=None,
+                 meeting_wav=None):
+        self.ls = members()
+        self.archive = tar_gz(self.ls)
+        self.wav = wav(meeting_samples()) if meeting_wav is None else meeting_wav
+        self.zip = zip_of(WORDS)
+        self.rttm = RTTM.encode()
+        self.cropped = wav(meeting_samples()[:8000])
+        word_members = {name: sha256(data.encode()) for name, data in WORDS.items()} | (words_sha or {})
+        dir = tmp_path / "manifests"
+        dir.mkdir(parents=True, exist_ok=True)
+        (dir / "sources.toml").write_text(
+            "schema_version = 1\n"
+            + source_toml("librispeech-test-clean", URLS[0], self.archive, keep=False,
+                          members={name: sha256(data) for name, data in self.ls.items()})
+            + source_toml("ami-ES2004a", AMI_WAV_URL, self.wav, sha=wav_sha)
+            + source_toml("ami-annotations-1.6.2", AMI_ZIP_URL, self.zip, keep=False, members=word_members)
+            + source_toml("ami-rttm-ES2004a", RTTM_URL, self.rttm))
+        (dir / "sets.toml").write_text(
+            "schema_version = 1\n" + (datasets_toml if datasets_toml is not None
+                                      else LS_CI + ami_ci(derived or sha256(self.cropped))))
+        monkeypatch.setattr(datasets, "MANIFEST_DIR", dir)
+        self.server = serve(monkeypatch, {URLS[0]: self.archive, AMI_WAV_URL: self.wav, AMI_ZIP_URL: self.zip,
+                                          RTTM_URL: self.rttm})
+        self.dir = dir
+
+
+class TestFetchSet:
+    def test_fetch_ci_builds_ls_ci_and_ami_ci(self, cache, tmp_path, monkeypatch):
+        ci = CI(tmp_path, monkeypatch)
+        ls, ls_2, ami = datasets.fetch("ci")
+        ls_root = cache / "sources" / "librispeech-test-clean"
+        assert (ls.dataset, ls.id, ls.audio, ls.duration, ls.ref_text) == (
+            "LS-ci", IDS[0], ls_root / CHAPTER / f"{IDS[0]}.flac", 800 / 16000, TEXTS[0])
+        assert (ls_2.id, ls_2.ref_text, ls_2.ref_turns) == (IDS[1], TEXTS[1], None)
+
+        assert (ami.dataset, ami.id, ami.duration) == ("AMI-ci", "ES2004a", CROP)
+        assert ami.audio == cache / "derived" / "AMI-ci" / "ES2004a.wav"
+        assert ami.audio.read_bytes() == ci.cropped
+        assert ami.ref_text == REF_WORDS
+        assert ami.ref_turns == (datasets.Turn(0.0, 0.3, "MEE006"), datasets.Turn(0.4, CROP, "FEE005"))
+
+        # Every source once, single files kept, archives deleted after their members are extracted.
+        assert sorted(ci.server.requests) == sorted([URLS[0], AMI_WAV_URL, AMI_ZIP_URL, RTTM_URL])
+        assert cached_files(cache) == sorted(
+            [f"sources/librispeech-test-clean/{name}" for name in ci.ls]
+            + [f"sources/ami-annotations-1.6.2/{name}" for name in WORDS]
+            + ["sources/ami-ES2004a/ES2004a.Mix-Headset.wav", "sources/ami-rttm-ES2004a/ES2004a.rttm",
+               "derived/AMI-ci/ES2004a.wav"])
+
+        # A second fetch verifies the cache and downloads nothing.
+        assert datasets.fetch("ci") == [ls, ls_2, ami]
+        assert len(ci.server.requests) == 4
+
+    def test_the_fetch_command_prints_one_line_per_dataset(self, cache, tmp_path, monkeypatch, capsys):
+        CI(tmp_path, monkeypatch)
+        assert datasets.main(["fetch", "ci"]) == 0
+        assert capsys.readouterr().out.splitlines() == ["LS-ci: 2 items, 0.100 s", "AMI-ci: 1 items, 0.500 s"]
+
+    def test_an_unknown_set_exits_2(self, cache, tmp_path, monkeypatch, capsys):
+        CI(tmp_path, monkeypatch)
+        assert datasets.main(["fetch", "full"]) == 2
+        assert capsys.readouterr().err.splitlines() == ["lmt: error: full: not a set in sets.toml (ci)"]
+
+    def test_a_bad_single_file_exits_3_and_leaves_nothing_in_the_cache(self, cache, tmp_path, monkeypatch, capsys):
+        CI(tmp_path, monkeypatch, wav_sha="a" * 64, datasets_toml=ami_ci("b" * 64))
+        assert datasets.main(["fetch", "ci"]) == 3
+        assert f"lmt: error: {AMI_WAV_URL}: SHA-256 doesn't match the manifest" in capsys.readouterr().err
+        assert not any(name.startswith("sources/ami-ES2004a/") for name in cached_files(cache))
+
+    def test_a_changed_single_file_in_the_cache_is_fetched_again(self, cache, tmp_path, monkeypatch):
+        ci = CI(tmp_path, monkeypatch)
+        datasets.fetch("ci")
+        (cache / "sources" / "ami-rttm-ES2004a" / "ES2004a.rttm").write_text("changed\n")
+        datasets.fetch("ci")
+        assert (cache / "sources" / "ami-rttm-ES2004a" / "ES2004a.rttm").read_bytes() == ci.rttm
+        assert ci.server.requests.count(RTTM_URL) == 2
+
+    def test_a_zip_member_whose_hash_doesnt_match_exits_3(self, cache, tmp_path, monkeypatch, capsys):
+        name = "words/ES2004a.B.words.xml"
+        CI(tmp_path, monkeypatch, words_sha={name: "f" * 64})
+        assert datasets.main(["fetch", "ci"]) == 3
+        dest = cache / "sources" / "ami-annotations-1.6.2" / name
+        assert f"lmt: error: {dest}: SHA-256 doesn't match the manifest" in capsys.readouterr().err
+        assert not dest.exists()
+        assert not any(name.endswith((".part", ".zip")) for name in cached_files(cache))
+
+    def test_a_cropped_wav_that_doesnt_match_exits_3_and_writes_nothing(self, cache, tmp_path, monkeypatch, capsys):
+        CI(tmp_path, monkeypatch, derived="c" * 64)
+        assert datasets.main(["fetch", "ci"]) == 3
+        path = cache / "derived" / "AMI-ci" / "ES2004a.wav"
+        assert capsys.readouterr().err.splitlines() == [
+            f"lmt: error: {path}: the cropped WAV's SHA-256 doesn't match sets.toml"]
+        assert not any(name.startswith("derived/") for name in cached_files(cache))
+
+    def test_a_changed_cropped_wav_is_rebuilt(self, cache, tmp_path, monkeypatch):
+        ci = CI(tmp_path, monkeypatch)
+        (_, _, ami) = datasets.fetch("ci")
+        ami.audio.write_bytes(b"changed")
+        datasets.fetch("ci")
+        assert ami.audio.read_bytes() == ci.cropped
+
+
+class TestSampleMeeting:
+    def test_it_downloads_only_the_audio_and_returns_the_cropped_wav(self, cache, tmp_path, monkeypatch):
+        ci = CI(tmp_path, monkeypatch)
+        path = datasets.sample_meeting()
+        assert path == cache / "derived" / "AMI-ci" / "ES2004a.wav"
+        assert path.read_bytes() == ci.cropped
+        assert ci.server.requests == [AMI_WAV_URL]
+        assert datasets.sample_meeting(offline=True) == path
+        assert ci.server.requests == [AMI_WAV_URL]
+
+    def test_offline_without_it_is_an_input_error(self, cache, tmp_path, monkeypatch):
+        ci = CI(tmp_path, monkeypatch)
+        with pytest.raises(datasets.InputError) as e:
+            datasets.sample_meeting(offline=True)
+        assert str(e.value) == "LMT_DATA_DIR: the sample meeting isn't downloaded; run once without --offline"
+        assert ci.server.requests == []
+
+    def test_offline_with_a_changed_file_is_an_input_error(self, cache, tmp_path, monkeypatch):
+        CI(tmp_path, monkeypatch)
+        datasets.sample_meeting().write_bytes(b"changed")
+        with pytest.raises(datasets.InputError, match="the sample meeting isn't downloaded"):
+            datasets.sample_meeting(offline=True)
+
+
+class TestAmiRecipes:
+    @pytest.fixture
+    def words(self, tmp_path):
+        paths = []
+        for name, data in WORDS.items():
+            path = tmp_path / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data, encoding="iso-8859-1")
+            paths.append((name.split(".")[1], path))
+        return datasets.ami_words(paths)
+
+    def test_words_sorted_by_start_then_letter_then_position(self, words):
+        assert [text for _, _, text in words] == ["um", "Okay", "so", "well", "right", "crossing", "yes"]
+
+    def test_a_missing_start_takes_the_previous_words_or_0(self, words):
+        assert words[0] == (0.0, 0.05, "um")
+        assert words[2] == (0.10, 0.35, "so")
+
+    def test_punctuation_is_skipped(self, words):
+        assert "." not in [text for _, _, text in words]
+
+    def test_the_crop_keeps_words_by_midpoint_and_clips_turns(self, words, tmp_path):
+        rttm = tmp_path / "ES2004a.rttm"
+        rttm.write_text(RTTM)
+        turns = datasets.rttm_turns(rttm, "ES2004a")
+        assert [t.speaker for t in turns] == ["MEE006", "FEE005", "MEE006"]
+        kept_words, kept_turns = datasets.crop_references(words, turns, CROP)
+        assert " ".join(text for _, _, text in kept_words) == REF_WORDS
+        assert kept_turns == [datasets.Turn(0.0, 0.3, "MEE006"), datasets.Turn(0.4, CROP, "FEE005")]
+
+    def test_a_wav_that_isnt_16_khz_mono_raises(self, cache, tmp_path, monkeypatch):
+        stereo = io.BytesIO()
+        with wave.open(stereo, "wb") as w:
+            w.setnchannels(2)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(bytes(4 * 16000))
+        CI(tmp_path, monkeypatch, meeting_wav=stereo.getvalue())
+        with pytest.raises(ValueError, match="16000 Hz, 2 channels, 16-bit; the crop takes 16 kHz mono"):
+            datasets.sample_meeting()
+
+
+class TestDatasetManifests:
+    def load(self, tmp_path, monkeypatch, datasets_toml):
+        ci = CI(tmp_path, monkeypatch, datasets_toml=datasets_toml)
+        return datasets.load_manifests(ci.dir)
+
+    def test_the_ci_manifests_load(self, tmp_path, monkeypatch):
+        manifests = self.load(tmp_path, monkeypatch, LS_CI + ami_ci("0" * 64))
+        assert list(manifests.datasets) == ["LS-ci", "AMI-ci"]
+        assert manifests.datasets["AMI-ci"].crop == CROP
+
+    @pytest.mark.parametrize("datasets_toml, problem", [
+        (LS_CI.replace(IDS[1], "61-70968-0009"), "61-70968-0009.flac isn't a member of librispeech-test-clean"),
+        (LS_CI.replace(IDS[1], "61_70968"), "'61_70968' isn't a LibriSpeech utterance id"),
+        (LS_CI.replace('"librispeech-test-clean"', '"elsewhere"'), "source 'elsewhere' isn't in sources.toml"),
+        (LS_CI.replace('"librispeech"', '"other"'), "kind must be one of librispeech, ami"),
+        (LS_CI + LS_CI, "name 'LS-ci' is repeated"),
+        (ami_ci("0" * 64, meetings='["ES2004a", "ES2004b"]'), "an ami dataset has one meeting"),
+        (ami_ci("0" * 64, crop=""), "crop and derived_sha256 go together"),
+        (ami_ci("0" * 64, meetings='["ES2004c"]'), "has no ES2004c.<speaker>.words.xml member"),
+        (ami_ci("0" * 64).replace('audio = "ami-ES2004a"', 'audio = "ami-annotations-1.6.2"'),
+         "ami-annotations-1.6.2 must be a single file"),
+    ])
+    def test_a_bad_dataset_is_refused(self, tmp_path, monkeypatch, datasets_toml, problem):
+        with pytest.raises(ValueError, match=re.escape(problem)):
+            self.load(tmp_path, monkeypatch, datasets_toml)
+
+    def test_a_dataset_needs_its_chapters_transcript(self, tmp_path, monkeypatch):
+        ci = CI(tmp_path, monkeypatch, datasets_toml=LS_CI)
+        sources = (ci.dir / "sources.toml").read_text()
+        (ci.dir / "sources.toml").write_text(
+            sources.replace(f'\n[[source.member]]\npath = "{TRANS}"\nsha256 = "{sha256(ci.ls[TRANS])}"\n', ""))
+        with pytest.raises(ValueError, match=re.escape(f"{TRANS} isn't a member of librispeech-test-clean")):
+            datasets.load_manifests(ci.dir)
+
+    def test_a_single_file_source_must_be_kept(self, tmp_path):
+        (tmp_path / "sources.toml").write_text(
+            "schema_version = 1\n" + source_toml("ami-ES2004a", AMI_WAV_URL, b"x", keep=False))
+        (tmp_path / "sets.toml").write_text("schema_version = 1\n")
+        with pytest.raises(ValueError, match="a source without members is a single file, so keep must be true"):
+            datasets.load_manifests(tmp_path)
