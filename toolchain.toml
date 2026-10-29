@@ -55,6 +55,12 @@ bundled = [
 # Where a distribution's metadata gives no clear SPDX licence. Pinned to the version that was read, from the
 # licence file in the wheel's .dist-info.
 [[licences.override]]
+distribution = "cloudpickle"
+version = "3.1.2"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/cloudpickle/3.1.2/ (cloudpickle-3.1.2.dist-info/licenses/LICENSE)"
+
+[[licences.override]]
 distribution = "contourpy"
 version = "1.3.3"
 licence = "BSD-3-Clause"
@@ -125,6 +131,20 @@ distribution = "sympy"
 version = "1.14.0"
 licence = "BSD-3-Clause AND MIT"
 source = "https://pypi.org/project/sympy/1.14.0/ (sympy-1.14.0.dist-info/licenses/LICENSE)"
+
+# torch's file is PyTorch's BSD-3-Clause, then the third-party code its source repository bundles, which the
+# file lists by third_party/ path; torch's bundled shared libraries are entries below.
+[[licences.override]]
+distribution = "torch"
+version = "2.8.0"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/torch/2.8.0/ (torch-2.8.0.dist-info/licenses/LICENSE, lines 1-84)"
+
+[[licences.override]]
+distribution = "torch"
+version = "2.8.0+cpu"
+licence = "BSD-3-Clause"
+source = "https://download.pytorch.org/whl/cpu/torch/ (torch-2.8.0+cpu.dist-info/licenses/LICENSE, lines 1-84)"
 
 [[licences.override]]
 distribution = "torchaudio"
