@@ -61,6 +61,20 @@ def sign_off_question(pr, approved):
             f"(`system/standing-rules.md`).")
 
 
+def approval_question(pr):
+    """The SR3 question (#221), asked once per head on the PR: the builder approves it in the Owner's place, or
+    escalates it to the Owner."""
+    n, head = pr["number"], pr["head"]
+    return (f"**SR3.** The Reviewer approved this protected PR at `{head}`, and its gate is green. Approve it in the "
+            f"Owner's place, or pass it to the Owner (`system/standing-rules.md`, SR3; your role file says what to check).\n\n"
+            f"- **It's yours to approve:** `post.py builder-approve {n} --head {head}` with what you checked as the "
+            f"body. SR1 then merges it in its turn.\n"
+            f"- **It's an Owner matter, or you can't tell:** `post.py escalate {n} --level owner`, with one question "
+            f"and a recommendation. The Owner then approves it on GitHub, or not.\n\n"
+            f"Only an approval from a builder run on this PR that started after the Reviewer approved it counts: never "
+            f"from the run that wrote it. Don't push to this PR: a new commit needs the Reviewer again.")
+
+
 def expired_claims(gh, items, active_items, now):
     out = []
     for n in items:
@@ -194,6 +208,10 @@ def dispatch_pass(command, dry_run, now=None):
             say(f"ask the {'Coordinator' if level == 'coordinator' else level} to judge PR #{n} under SR2 (the Owner approved {detail[:7]})")
             if not dry_run:
                 post.cmd_escalate(gh, me, n, level, sign_off_question(next(p for p in snap["prs"] if p["number"] == n), detail))
+        elif action == "ask-builder-to-approve":
+            say(f"ask the builder to approve PR #{n} under SR3, in the Owner's place (head {detail[:7]})")
+            if not dry_run:
+                post.cmd_escalate(gh, me, n, "builder", approval_question(next(p for p in snap["prs"] if p["number"] == n)))
         else:
             wanted.append(notify.merge_notice(action, n, detail, url(n)))
 
