@@ -1263,3 +1263,4 @@
 {"at": "2026-10-29T21:20:41+00:00", "cost_usd": 0.492771, "denials": 1, "denied": ["Bash: uv run --frozen pytest"], "event": "end", "five_hour": 0.09, "item": 370, "role": "reviewer", "run_id": "reviewer-20261029T211743Z", "seven_day": 0.07, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 21}
 {"at": "2026-10-29T21:21:09+00:00", "cost_usd": 0.235842, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 368, "role": "developer", "run_id": "developer-20261029T211959Z", "seven_day": 0.07, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 12}
 {"at": "2026-10-29T21:22:21+00:00", "event": "start", "item": 368, "pid": 34654, "role": "developer", "run_id": "developer-20261029T212216Z", "task": "PR #368 needs work: its gate is red."}
+{"at": "2026-10-29T21:22:23+00:00", "event": "start", "item": 376, "pid": 34702, "role": "reviewer", "run_id": "reviewer-20261029T212216Z", "task": "Review PR #376."}
