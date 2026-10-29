@@ -54,6 +54,10 @@ explained = [
   "Glob", "Grep", "Read",
   "Bash: ls",  # ls is allowed, so a plain ls denied went outside the worktree; the same rule, step 2 (#182)
   "Bash: ls [outside]",  # the same denial, since #177 marks the path; "Bash: ls" goes once no run this week recorded it
+  # toolchain.toml grants uv pip only to roles with Write, as `uv pip compile` and the hash-pinned, no-build
+  # `uv pip install --no-deps --require-hashes --no-build --target` (#92, #220). Any other form takes any
+  # package, runs a package's build or changes the shared venv; the macOS inventory reads the `uv sync` venv (#323).
+  "Bash: uv pip",
 ]
 
 # Per role. product_tools adds the allow list in the product's toolchain.toml, once the product has one.
