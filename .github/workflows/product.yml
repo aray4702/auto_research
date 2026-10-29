@@ -13,8 +13,31 @@ permissions:
   contents: read
 
 jobs:
+  # The tier filter (design/architecture.md "CI"): the tiers this change runs, by the paths it
+  # touches. Every tier when the change can't be computed, and on workflow_dispatch and schedule.
+  # A job skipped by its tier passes.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tier: ${{ steps.tier.outputs.tier }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: tier
+        env:
+          # In a called workflow, the gate's event.
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.sha }}
+        run: python3 -I .github/scripts/tiers.py --event "$EVENT" --base "$BASE" --head "$HEAD"
+
   # S1's done-check (spec/acceptance.md, S1-1 to S1-5): README.md stays true.
+  # Tier 0 runs the checks that need no install; tier 1 and up run them all.
   readme:
+    needs: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -22,18 +45,25 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: The README checks' own tests
+        run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
+      - name: README checks that need no install (S1-1, S1-2's heading, S1-5)
+        if: fromJSON(needs.changes.outputs.tier) < 1
+        run: python3 -I .github/scripts/check_readme.py --root . --no-install
       # S1-3's Build block runs uv, at toolchain.toml's version (tests/test_toolchain.py).
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: fromJSON(needs.changes.outputs.tier) >= 1
         with:
           version: "0.13.6"
           enable-cache: true
-      - name: The README checks' own tests
-        run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
       - name: README checks (S1-1 to S1-5)
+        if: fromJSON(needs.changes.outputs.tier) >= 1
         run: python3 -I .github/scripts/check_readme.py --root .
 
   # The product's tests that need no model or data, and ruff (design/internal/g1-stage1.md §1a).
   test:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.tier) >= 1
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -47,3 +77,35 @@ jobs:
       - run: uv sync --locked --all-extras
       - run: uv run --frozen ruff check
       - run: uv run --frozen pytest
+
+  # The tests that run the models (design/internal/g1-stage1.md §3). Item #108 adds its steps.
+  test-models:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.tier) >= 2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+
+  # `lmt eval --set ci` (design/internal/g1-stage1.md §5a). Item #110 adds its steps.
+  eval-ci:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.tier) >= 3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv sync --locked --all-extras
