@@ -719,3 +719,4 @@
 {"at": "2026-10-29T01:49:18+00:00", "cost_usd": 0.664444, "denials": 0, "denied": [], "event": "end", "five_hour": 0.08, "item": 199, "role": "builder", "run_id": "builder-20261029T014626Z", "seven_day": 0.44, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 29}
 {"at": "2026-10-29T01:51:01+00:00", "event": "start", "item": 230, "pid": 81762, "role": "reviewer", "run_id": "reviewer-20261029T015055Z", "task": "Review PR #230."}
 {"at": "2026-10-29T01:52:46+00:00", "cost_usd": 0.385393, "denials": 1, "denied": ["Bash: python3 -m unittest"], "event": "end", "five_hour": 0.08, "item": 230, "role": "reviewer", "run_id": "reviewer-20261029T015055Z", "seven_day": 0.44, "seven_day_resets_at": 1793289600, "status": "finished", "turns": 18}
+{"at": "2026-10-29T01:53:12+00:00", "event": "start", "item": 230, "pid": 82341, "role": "builder", "run_id": "builder-20261029T015306Z", "task": "PR #230 needs work: the Reviewer asked for changes."}
