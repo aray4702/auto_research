@@ -24,3 +24,29 @@ concat = [
   {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0011.flac"},
   {source = "librispeech-test-clean", member = "LibriSpeech/test-clean/61/70968/61-70968-0012.flac"},
 ]
+
+# LS-ci: test-clean's 40 speakers in numeric order, the first 20, and for each the first utterance in sorted id
+# order that lasts 4–12 s (design/internal/g1-stage1.md §5a). 20 utterances, 162.360 s.
+[[dataset]]
+name = "LS-ci"
+set = "ci"
+kind = "librispeech"
+source = "librispeech-test-clean"
+utterances = [
+  "61-70968-0000", "121-121726-0000", "237-126133-0001", "260-123286-0000", "672-122797-0000",
+  "908-31957-0001", "1089-134686-0000", "1188-133604-0000", "1221-135766-0002", "1284-1180-0000",
+  "1320-122612-0001", "1580-141083-0000", "1995-1826-0000", "2094-142345-0001", "2300-131720-0000",
+  "2830-3979-0000", "2961-960-0001", "3570-5694-0001", "3575-170457-0000", "3729-6852-0000",
+]
+
+# AMI-ci: ES2004a's first 300 s. derived_sha256 is the cropped WAV's, as the wave module writes it.
+[[dataset]]
+name = "AMI-ci"
+set = "ci"
+kind = "ami"
+meetings = ["ES2004a"]
+audio = "ami-ES2004a"            # source ids
+words = "ami-annotations-1.6.2"
+rttm = "ami-rttm-ES2004a"
+crop = 300.0                     # seconds from the start
+derived_sha256 = "1bca9b7c6b9faf216939a69200cfc14059f561a64168424adb5a331ad24b8527"
