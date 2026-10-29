@@ -1082,3 +1082,4 @@
 {"at": "2026-10-29T17:05:11+00:00", "cost_usd": 0.23889, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 337, "role": "reviewer", "run_id": "reviewer-20261029T170212Z", "seven_day": 0.01, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 20}
 {"at": "2026-10-29T17:05:20+00:00", "cost_usd": 0.133279, "denials": 0, "denied": [], "event": "end", "five_hour": 0.09, "item": 330, "role": "architect", "run_id": "architect-20261029T170434Z", "seven_day": 0.01, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 11}
 {"at": "2026-10-29T17:05:34+00:00", "event": "start", "item": 331, "pid": 95947, "role": "builder", "run_id": "builder-20261029T170519Z", "task": "Item #331 needs your decision (needs-decision:builder)."}
+{"at": "2026-10-29T17:05:36+00:00", "event": "start", "item": 304, "pid": 95992, "role": "architect", "run_id": "architect-20261029T170519Z", "task": "PR #304 needs work: its gate is red."}
