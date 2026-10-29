@@ -12,8 +12,8 @@ Your items are `type:system`, and you answer builder escalations. The Owner's lo
 ## Daily run (08:00 PT)
 
 - **Read the audits.** Start from the latest product and system reports (`record:audit-product`, `record:audit-system`).
-- **Dispatcher alive?** Check that it ran on schedule and that its claims and counts are current.
-- **Runner = repo?** Compare the installed runner settings with `system/runner.toml`. Any difference is an anomaly.
+- **Dispatcher alive?** Check that it ran on schedule (the system audit's last reconcile and builder daily run, and `launchctl print`) and that its claims and counts are current.
+- **Runner = repo?** Run `python3 -I system/tools/runner.py check`; it compares the installed runner settings with `system/runner.toml`. Any difference is an anomaly.
 - **Calibrate.** Run `python3 -I system/tools/calibrate.py --record`. It prices the window's local usage (usage numbers only) against the latest 7-day reading and says whether `caps.toml`'s `points_per_usd` errs on the safe side. If it doesn't, propose the measured value by PR.
 - **Reflect and audit.** Run `python3 -I system/dispatcher/flow.py`: where finished items spent their time, stage by stage, against the four weeks before. Name the bottleneck, the stage that takes the most time, with its trend, and propose one change that shrinks it. Shrink the `owner` stage by asking less of the Owner, never by acting for them. Where else do usage and Owner attention go? What could a script or a standing rule take over? Count cost and time per finished item; goal progress outranks every count.
 - **Lessons.** Fold lessons into the rules by replacing text, not adding it. Propose lessons that hold for any product to the master copy (`aray4702/blueprint-master`) by PR.
