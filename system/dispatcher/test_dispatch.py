@@ -158,6 +158,33 @@ class CandidatesTest(unittest.TestCase):
         # The Architect answers and removes the label: the Reviewer picks it up again.
         self.assertEqual([c[3] for c in plan.candidates(snap(prs=[pr(5)]), set(), IDENTITY)], ["review"])
 
+    def test_goal_work_goes_ahead_of_the_systems_own_upkeep(self):
+        # #229: at 18:20 PT on 10-28 the builder took SR3 approvals of system PRs #199 and #201 before G1's #217.
+        sr3 = lambda n, role: pr(n, role=role, protected=True, labels=["needs-decision:builder"], reviews=[(BOT, "APPROVED", "h2")])
+        s = snap(prs=[sr3(199, "builder"), sr3(201, "builder"), sr3(217, "developer")])
+        self.assertEqual([c[1] for c in plan.candidates(s, set(), IDENTITY)], [217, 199, 201], "the order within each group stays")
+        self.assertEqual([(r, i) for r, i, _, _ in plan.choose(s, [], CAPS, IDENTITY, NOW)[0]], [("builder", 217)])
+        # 14:24 PT: the Architect's decision on G1's #188 waited behind builder rework of system PRs.
+        rework = pr(193, role="builder", gate="FAILURE")
+        decision = pr(188, labels=["needs-decision:architect"], reviews=[(BOT, "APPROVED", "h2")])
+        self.assertEqual([(c[0], c[1]) for c in plan.candidates(snap(prs=[rework, decision]), set(), IDENTITY)],
+                         [("architect", 188), ("builder", 193)])
+        # A system item's own decision waits behind a goal item's too.
+        items = [issue(5, "type:system", "needs-decision:builder"), issue(6, "type:feature", "needs-decision:architect")]
+        self.assertEqual([c[1] for c in plan.candidates(snap(issues=items), set(), IDENTITY)], [6, 5])
+
+    def test_severe_system_work_and_the_daily_run_keep_their_place(self):
+        # A sev:2 system fix isn't starved by goal work (#196 fixed the sev:2 #192).
+        fix = pr(196, role="builder", gate="FAILURE", resolves=[192])
+        decision = pr(188, labels=["needs-decision:architect"], reviews=[(BOT, "APPROVED", "h2")])
+        s = snap(issues=[issue(192, "type:system", "sev:2")], prs=[fix, decision])
+        self.assertEqual([c[1] for c in plan.candidates(s, set(), IDENTITY)], [196, 188])
+        s = snap(issues=[issue(192, "type:system", "sev:2", "needs-decision:builder"), issue(6, "type:feature", "needs-decision:architect")])
+        self.assertEqual([c[1] for c in plan.candidates(s, set(), IDENTITY)], [192, 6])
+        # The builder's overdue daily run stays ahead of triage (#186).
+        s = snap(issues=[issue(2, "state:triage")])
+        self.assertEqual([c[3] for c in plan.candidates(s, set(), IDENTITY, daily="Daily run")], ["daily-catch-up", "triage"])
+
     def test_changes_requested_on_the_head_sends_it_back_to_its_author(self):
         s = snap(prs=[pr(5, role="builder", reviews=[(BOT, "CHANGES_REQUESTED", "h2")])])
         self.assertEqual([(c[0], c[3]) for c in plan.candidates(s, set(), IDENTITY)], [("builder", "pr-work")])
