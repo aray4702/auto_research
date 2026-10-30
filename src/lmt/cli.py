@@ -6,6 +6,7 @@ command runs, so `lmt --help` loads no heavy library. Later items replace a stub
 
 import argparse
 import importlib
+import math
 import re
 import sys
 
@@ -65,6 +66,34 @@ def build_parser():
     t.add_argument("--overwrite", action="store_true", help="Replace existing outputs.")
     t.add_argument("-v", "--verbose", action="store_true", help="Print each stage's time to stderr.")
     t.set_defaults(handler="lmt.pipeline:cli_transcribe")
+
+    lv = commands.add_parser("live", help="Transcribe live from an input device.",
+                             description="Transcribes live from an input device, printing segments as they're "
+                                         "recognised, until Ctrl-C, SIGTERM, --duration or the end of "
+                                         "--from-file. Then it writes the transcript.")
+    lv.add_argument("-o", "--output-dir", metavar="DIR", default=".",
+                    help="Where the outputs go, as <DIR>/<stem>.<ext> (default: the current directory).")
+    lv.add_argument("-n", "--name", metavar="STEM",
+                    help="The outputs' file stem (default: live-YYYYMMDD-HHMMSS, the local start time).")
+    lv.add_argument("-f", "--formats", metavar="LIST", default=",".join(FORMATS),
+                    help="A comma-separated subset of txt, srt, vtt and json (default: all four). "
+                         "<stem>.txt gets each segment as it completes.")
+    lv.add_argument("--device", metavar="NAME_OR_INDEX",
+                    help="The input device, as --list-devices shows it (default: the system's default input).")
+    lv.add_argument("--list-devices", action="store_true", help="List the input devices and exit.")
+    lv.add_argument("--from-file", metavar="FILE",
+                    help="Read FILE instead of a device, at real-time pace. Any format transcribe takes.")
+    lv.add_argument("--duration", metavar="SECONDS", type=float, help="Stop after this much audio.")
+    lv.add_argument("--max-speakers", metavar="N", type=int, help="At most N speakers, from 1 to 20.")
+    lv.add_argument("--no-diarize", action="store_true", help="Every segment is speaker S1.")
+    lv.add_argument("--model", metavar="NAME", help="The ASR model (default: the manifest's live default).")
+    lv.add_argument("--save-audio", action="store_true",
+                    help="Also write the audio as <stem>.wav (16 kHz mono, 16-bit).")
+    lv.add_argument("--jsonl", action="store_true", help="Print events to stdout, one JSON object per line.")
+    lv.add_argument("--offline", action="store_true", help="Never download. Exits 5 if a model is missing.")
+    lv.add_argument("--overwrite", action="store_true", help="Replace existing outputs.")
+    lv.add_argument("-v", "--verbose", action="store_true", help="Print each stage's time to stderr.")
+    lv.set_defaults(handler="lmt.live.command:cli_live")
 
     m = commands.add_parser("models", help="Download, list and verify the models.",
                             description="Downloads, lists and verifies the models.")
@@ -128,6 +157,8 @@ def validate(args):
     """Raise UsageError for what argparse can't express."""
     if args.command == "transcribe":
         _validate_transcribe(args)
+    elif args.command == "live":
+        _validate_live(args)
     elif args.command == "eval":
         _validate_eval(args)
     elif args.command == "rename":
@@ -148,7 +179,6 @@ def _validate_formats(args):
 
 def _validate_transcribe(args):
     _validate_formats(args)
-
     for option in ("num_speakers", "min_speakers", "max_speakers"):
         value = getattr(args, option)
         if value is not None and not SPEAKERS_MIN <= value <= SPEAKERS_MAX:
@@ -163,6 +193,27 @@ def _validate_transcribe(args):
                 raise UsageError(_flag(option), "can't be combined with --num-speakers")
     if args.min_speakers is not None and args.max_speakers is not None and args.min_speakers > args.max_speakers:
         raise UsageError("--min-speakers", f"{args.min_speakers} is more than --max-speakers {args.max_speakers}")
+
+
+def _validate_live(args):
+    if args.list_devices:  # it lists and exits 0, whatever else is given
+        return
+    _validate_formats(args)
+    value = args.max_speakers
+    if value is not None and not SPEAKERS_MIN <= value <= SPEAKERS_MAX:
+        raise UsageError("--max-speakers", f"must be from {SPEAKERS_MIN} to {SPEAKERS_MAX}, not {value}")
+    if args.no_diarize and args.max_speakers is not None:
+        raise UsageError("--max-speakers", "can't be combined with --no-diarize")
+    if args.device is not None and args.from_file is not None:
+        raise UsageError("--device", "can't be combined with --from-file")
+    if args.duration is not None and not (math.isfinite(args.duration) and args.duration > 0):
+        raise UsageError("--duration", f"must be a number above 0, not {args.duration:g}")
+    if args.name is not None and (not args.name or "/" in args.name or args.name.startswith(".")):
+        raise UsageError("--name", f"{args.name!r} isn't a plain file name: not empty, no '/', no leading '.'")
+    if args.model is not None:
+        from lmt import models  # only here, so `lmt --help` loads no handler module
+
+        models.default_models(models.load_manifest(), args.model)  # UsageError naming --model
 
 
 def _validate_eval(args):
