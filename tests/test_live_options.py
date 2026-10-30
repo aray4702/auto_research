@@ -129,9 +129,9 @@ def warnings_in(err):
     return [line for line in err.splitlines() if line.startswith("lmt: warning:")]
 
 
-# What each option does (G2-7: each option has a test).
+# What each option does (G2-7: each option has a test; G2-7 says G1-6, one test per option, covers lmt live too).
 
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 @pytest.mark.parametrize(("argv", "expected"), [(["--max-speakers", "3"], 3), ([], 20)])
 def test_max_speakers(tmp_path, monkeypatch, stages, argv, expected):
     stand_in(monkeypatch)
@@ -145,7 +145,7 @@ def test_max_speakers(tmp_path, monkeypatch, stages, argv, expected):
     assert transcript(tmp_path)["models"]["diarization"]["name"] == diarize.DIARIZATION
 
 
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 def test_no_diarize(tmp_path, monkeypatch, stages):
     stand_in(monkeypatch, seconds=3.5)
     code, _, err = run("-o", str(tmp_path), "-n", "m", "--duration", "3", "--no-diarize")
@@ -181,7 +181,7 @@ size = 1
     return path
 
 
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 @pytest.mark.parametrize("given", [True, False])
 def test_model(tmp_path, monkeypatch, stages, given):
     monkeypatch.setattr(models, "MANIFEST_PATH", second_asr_manifest(tmp_path))
@@ -199,7 +199,7 @@ def test_model(tmp_path, monkeypatch, stages, given):
     assert transcript(out_dir)["models"]["asr"]["name"] == expected
 
 
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 @pytest.mark.parametrize("spec", ["1", "usb audio"])
 def test_device(tmp_path, monkeypatch, stages, spec):
     fake = stand_in(monkeypatch, channels=2)
@@ -210,7 +210,7 @@ def test_device(tmp_path, monkeypatch, stages, spec):
     assert transcript(tmp_path)["source"]["device"] == "USB Audio Interface"
 
 
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 def test_formats(tmp_path, monkeypatch, stages):
     stand_in(monkeypatch, seconds=2.5)
     txt = tmp_path / "m.txt"
@@ -224,7 +224,7 @@ def test_formats(tmp_path, monkeypatch, stages):
     assert len(transcript(tmp_path)["segments"]) == 2
 
 
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 def test_offline_with_an_empty_cache(tmp_path, monkeypatch, stages):
     monkeypatch.setattr(models, "ensure", ensure_for_real)
     cache = tmp_path / "cache"
@@ -243,8 +243,7 @@ def test_offline_with_an_empty_cache(tmp_path, monkeypatch, stages):
     assert stages.asr_dirs == [] and stages.asrs == []
 
 
-
-@pytest.mark.criterion("G2-7")
+@pytest.mark.criterion("G1-6", "G2-7")
 def test_output_dir_and_name(tmp_path, monkeypatch, stages):
     stand_in(monkeypatch)
     work, out_dir = tmp_path / "work", tmp_path / "out"
@@ -256,6 +255,22 @@ def test_output_dir_and_name(tmp_path, monkeypatch, stages):
     assert files(out_dir) == [f"meeting.{fmt}" for fmt in ("json", "srt", "txt", "vtt", "wav")]
     assert files(work) == []
     assert transcript(out_dir, "meeting")["source"]["file"] == "meeting"
+
+
+@pytest.mark.criterion("G1-6", "G2-7")
+def test_overwrite(tmp_path, monkeypatch, stages):
+    stand_in(monkeypatch)
+    names = [f"m.{fmt}" for fmt in ("json", "srt", "txt", "vtt", "wav")]
+    for name in names:
+        (tmp_path / name).write_text("old\n", encoding="utf-8")
+    code, _, err = run("-o", str(tmp_path), "-n", "m", "--duration", "1.5", "--save-audio", "--overwrite")
+    assert (code, err) == (0, "")
+    assert files(tmp_path) == names
+    assert all((tmp_path / name).read_bytes() != b"old\n" for name in names)
+    assert transcript(tmp_path)["source"]["file"] == "m"
+    assert (tmp_path / "m.txt").read_text(encoding="utf-8") == "[00:00:00] Speaker 1: Word0.\n"
+    with wave.open(str(tmp_path / "m.wav"), "rb") as w:
+        assert (w.getframerate(), w.getnframes()) == (RATE, round(1.5 * RATE))
 
 
 # G2-5 (ii) through the command: no input device.
