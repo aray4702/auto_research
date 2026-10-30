@@ -1,12 +1,14 @@
-"""Tests for the full-install sequence's frame and online phase (4b1), on a fake `lmt`.
+"""Tests for the full-install sequence (4b1 and 4b2), on a fake `lmt`.
 
 Run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
 """
 
 import contextlib
+import errno
 import io
 import json
 import os
+import socket
 import sys
 import tempfile
 import unittest
@@ -24,7 +26,8 @@ import http.server, json, os, signal, sys, time
 from pathlib import Path
 
 modes = os.environ.get("FAKE_LMT_MODE", "").split(",")
-keys = ("HOME", "TMPDIR", "XDG_CACHE_HOME", "LMT_CACHE_DIR", "LMT_DATA_DIR", "HF_TOKEN")
+keys = ("HOME", "TMPDIR", "XDG_CACHE_HOME", "LMT_CACHE_DIR", "LMT_DATA_DIR", "HF_TOKEN",
+        "PYTHONPATH", "LMT_NETGUARD_ALLOW", "LMT_NETGUARD_LOG")
 with open(os.environ["FAKE_LMT_LOG"], "a") as f:
     f.write(json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(), "pid": os.getpid(),
                         "env": {k: os.environ.get(k) for k in keys}}) + "\n")
@@ -35,11 +38,27 @@ if sys.argv[1:] == ["models", "download"]:
     (cache / "model.bin").write_bytes(b"weights")
     sys.exit(1 if "download-fails" in modes else 0)
 
+if sys.argv[1:2] == ["transcribe"] and sys.argv[3:6] == ["-f", "txt,srt,vtt,json", "-o"]:
+    out = Path(sys.argv[6])
+    for ext in ("txt", "srt", "vtt", "json"):
+        (out / f"two_speakers.{ext}").write_text(f"placeholder {ext}\n")
+    if "guard-line" in modes:
+        with open(os.environ["LMT_NETGUARD_LOG"], "a") as f:
+            f.write("connect ('203.0.113.7', 443)\n")
+    if "transcribe-hangs" in modes:
+        time.sleep(60)
+    sys.exit(0)
+
+if sys.argv[1:2] == ["rename"] and len(sys.argv) == 4:
+    sys.exit(0)
+
 if sys.argv[1:] == ["demo", "--sample", "--no-browser"]:
     (data / "derived" / "AMI-ci").mkdir(parents=True, exist_ok=True)
     (data / "derived" / "AMI-ci" / "ES2004a.wav").write_bytes(b"RIFF....WAVE")
     (data / "sample" / "0123456789abcdef").mkdir(parents=True, exist_ok=True)
-    (data / "sample" / "0123456789abcdef" / "ES2004a.json").write_text("{}")
+    # "retranscribe": every run writes a new transcript, as if the second run didn't serve the cache
+    (data / "sample" / "0123456789abcdef" / "ES2004a.json").write_text(
+        str(time.time_ns()) if "retranscribe" in modes else "{}")
     if "write-home" in modes:
         Path(os.environ["HOME"], ".lmtrc").write_text("x")
     if "write-models" in modes:
@@ -83,17 +102,49 @@ class Fake:
         self.lmt.chmod(0o755)
         self.env = {"FAKE_LMT_LOG": str(self.log), "FAKE_LMT_MODE": ",".join(modes),
                     "HF_TOKEN": "fake-token-for-the-test"}
+        self.probe = OSError(errno.ENETUNREACH, "Network is unreachable")  # raised, or else returned
+        self.probed = []  # the addresses the phase's probe connected to
+        self.checked = []  # (check, path) for each stubbed subtitle check
+        self.phase_argv = None
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
 
-    def main(self, *extra):
-        """main() on the fake, quietly: (exit code, its stdout)."""
+    def in_process_phase(self, argv):
+        """The offline phase as a call rather than a process, so its stubs apply: its exit code."""
+        self.phase_argv = argv
+        return cfi.main(argv[argv.index("offline"):])
+
+    def stubs(self):
+        real_connect = socket.create_connection
+
+        def connect(address, timeout=None, *rest):
+            if address != cfi.PROBE:  # http.client's fetches from the demo
+                return real_connect(address, timeout, *rest)
+            self.probed.append((address, timeout))
+            if isinstance(self.probe, BaseException):
+                raise self.probe
+            return self.probe
+
+        def check_srt(path):
+            self.checked.append(("srt", path))
+
+        def check_vtt(path):
+            self.checked.append(("vtt", path))
+
+        stack = contextlib.ExitStack()
+        stack.enter_context(mock.patch.object(cfi.socket, "create_connection", connect))
+        stack.enter_context(mock.patch.object(cfi, "subtitle_checkers", lambda: (check_srt, check_vtt)))
+        return stack
+
+    def main(self, *extra, platform="linux-x86_64", phase=None):
+        """main() on the fake, quietly, with the offline phase run by `phase(argv)` (in process by
+        default): (exit code, its stdout)."""
         out = io.StringIO()
         env = dict(self.env, GITHUB_STEP_SUMMARY=str(self.tmp / "summary.md"))
-        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out):
-            code = cfi.main(["--lmt", str(self.lmt), "--platform", "linux-x86_64", "--work", str(self.work),
-                             *extra])
+        with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(out), self.stubs(), \
+                mock.patch.object(cfi, "run_phase", phase or self.in_process_phase):
+            code = cfi.main(["--lmt", str(self.lmt), "--platform", platform, "--work", str(self.work), *extra])
         return code, out.getvalue()
 
 
@@ -118,20 +169,28 @@ class OnlineOrderTest(FakeTest):
     def test_a_passing_run(self):
         code, out = self.fake.main()
         self.assertEqual(code, 0, out)
-        self.assertEqual([c["argv"] for c in self.fake.calls()],
-                         [["models", "download"], ["demo", "--sample", "--no-browser"]])
+        work = self.fake.work.resolve()
+        self.assertEqual([c["argv"] for c in self.fake.calls()], [
+            ["models", "download"], ["demo", "--sample", "--no-browser"],
+            ["transcribe", str(cfi.FIXTURE), "-f", "txt,srt,vtt,json", "-o", str(work / "out")],
+            ["rename", str(work / "out" / "two_speakers.json"), "S1=José & Ana"],
+            ["demo", "--sample", "--no-browser"]])
         self.assertEqual([line.split()[:2] for line in out.splitlines()],
-                         [["PASS", "1.1"], ["PASS", "1.2"], ["PASS", "1.3"]])
+                         [["PASS", s] for s in ("1.1", "1.2", "1.3", "2.1", "2.2", "2.3", "2.4", "2.5")])
         summary = (self.fake.tmp / "summary.md").read_text()
-        for step in ("PASS 1.1 models download", "PASS 1.2 snapshot <work>/models", "PASS 1.3 the first --sample run"):
+        for step in ("PASS 1.1 models download", "PASS 1.2 snapshot <work>/models", "PASS 1.3 the first --sample run",
+                     "PASS 2.1 the cut is real", "PASS 2.2 offline transcribe", "PASS 2.3 offline rename",
+                     "PASS 2.4 the second --sample run", "PASS 2.5 the guard's log"):
             self.assertIn(step, summary)
 
     def test_a_failed_step_fails_the_rest(self):
         code, out = self.fake_with("download-fails").main()
         self.assertEqual(code, 1)
         self.assertEqual([c["argv"] for c in self.fake.calls()], [["models", "download"]])
+        self.assertIsNone(self.fake.phase_argv)  # the offline phase doesn't start
         self.assertIn("lmt models download exits 1", out)
         self.assertIn("FAIL 1.3 the first --sample run\n  - not reached: step 1.1 failed", out)
+        self.assertIn("FAIL 2.5 the guard's log\n  - not reached: step 1.1 failed", out)
 
 
 class RunDemoTest(FakeTest):
@@ -196,7 +255,9 @@ class DirectoriesTest(FakeTest):
         work = self.fake.work.resolve()
         calls = self.fake.calls()
         seen = set()
-        for call, step in zip(calls, ("models-download", "sample-online")):
+        steps = ("models-download", "sample-online", "transcribe", "rename", "sample-offline")
+        self.assertEqual(len(calls), len(steps))
+        for call, step in zip(calls, steps):
             run = work / "runs" / step
             env = call["env"]
             self.assertEqual([env["HOME"], env["TMPDIR"], env["XDG_CACHE_HOME"]],
@@ -204,8 +265,18 @@ class DirectoriesTest(FakeTest):
             self.assertEqual(os.path.realpath(call["cwd"]), os.path.realpath(run / "cwd"))
             self.assertEqual([env["LMT_CACHE_DIR"], env["LMT_DATA_DIR"]], [str(work / "models"), str(work / "data")])
             seen |= {env["HOME"], env["TMPDIR"], env["XDG_CACHE_HOME"], call["cwd"]}
-        self.assertEqual(len(seen), 8)
-        self.assertEqual([c["env"]["HF_TOKEN"] for c in calls], ["fake-token-for-the-test", None])
+        self.assertEqual(len(seen), 4 * len(steps))
+        self.assertEqual([c["env"]["HF_TOKEN"] for c in calls], ["fake-token-for-the-test", None, None, None, None])
+
+    def test_only_offline_commands_have_the_guard(self):
+        code, out = self.fake.main()
+        self.assertEqual(code, 0, out)
+        guard = [(c["env"]["PYTHONPATH"], c["env"]["LMT_NETGUARD_ALLOW"], c["env"]["LMT_NETGUARD_LOG"])
+                 for c in self.fake.calls()]
+        on = (str(cfi.CHECKOUT / "tests" / "netguard"), "127.0.0.1", str(self.fake.work.resolve() / "netguard.log"))
+        self.assertEqual(guard[2:], [on] * 3)
+        for env in guard[:2]:
+            self.assertNotEqual(env[1:], on[1:])
 
     def test_snapshot_kinds(self):
         root = self.fake.tmp / "snap"
@@ -242,6 +313,193 @@ class OfflineCommandTest(unittest.TestCase):
         self.assertEqual(argv[14], f"PATH={os.environ.get('PATH', '')}")
 
 
+class OfflineStepsTest(FakeTest):
+    """The offline phase's own steps, run in process (Fake.in_process_phase)."""
+
+    def test_order_and_limits(self):
+        with mock.patch.object(cfi, "run_command", wraps=cfi.run_command) as run_command, \
+                mock.patch.object(cfi, "run_demo", wraps=cfi.run_demo) as run_demo:
+            code, out = self.fake.main()
+        self.assertEqual(code, 0, out)
+        self.assertEqual([c.args[0][1] for c in run_command.call_args_list], ["models", "transcribe", "rename"])
+        self.assertEqual([c.args[3:] for c in run_command.call_args_list[1:]], [(15 * 60,), (2 * 60,)])
+        self.assertEqual([c.args[3] for c in run_demo.call_args_list], [30 * 60, 10])
+        self.assertEqual(self.fake.probed, [(("192.0.2.1", 80), 2)])
+        out_dir = self.fake.work.resolve() / "out"
+        self.assertEqual(self.fake.checked, [("srt", out_dir / "two_speakers.srt"), ("vtt", out_dir / "two_speakers.vtt")])
+        self.assertEqual(json.loads((self.fake.work / "offline.json").read_text())["steps"], [
+            {"step": s, "name": n, "problem": None} for s, n, _ in cfi.OFFLINE])
+
+    def test_macos_has_no_probe(self):
+        code, out = self.fake.main(platform="macos-arm64")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fake.probed, [])
+        self.assertEqual([line.split()[1] for line in out.splitlines()][3:], ["2.2", "2.3", "2.4", "2.5"])
+        self.assertNotIn("sudo", self.fake.phase_argv)
+
+    def test_the_probe_connecting_fails(self):
+        self.fake.probe = mock.Mock()  # create_connection returns a socket: there's a route out
+        code, out = self.fake.main()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.1 the cut is real\n  - the namespace has a route out: 192.0.2.1:80 connects", out)
+        self.fake.probe.close.assert_called_once()
+        self.assertIn("FAIL 2.2 offline transcribe\n  - not reached: step 2.1 failed", out)
+
+    def test_the_probe_failing_otherwise_fails(self):
+        self.fake.probe = TimeoutError("timed out")
+        code, out = self.fake.main()
+        self.assertEqual(code, 1)
+        self.assertIn("the namespace has a route out: connecting to 192.0.2.1:80 gives timed out, not ENETUNREACH",
+                      out)
+
+    def test_transcribe_misses_its_limit(self):
+        self.fake_with("transcribe-hangs")
+        with mock.patch.object(cfi, "TRANSCRIBE_LIMIT", 1):
+            code, out = self.fake.main()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.2 offline transcribe\n  - lmt transcribe", out)
+        self.assertIn("didn't finish within the 1 s limit", out)
+
+    def test_a_subtitle_check_fails(self):
+        def check_srt(path):
+            raise AssertionError(f"{path}: no cue")
+
+        with mock.patch.object(Fake, "stubs", lambda fake: mock.patch.object(
+                cfi, "subtitle_checkers", lambda: (check_srt, lambda path: None))):
+            code, out = self.fake.main(platform="macos-arm64")
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.2 offline transcribe\n  - check_srt fails on <work>/out/two_speakers.srt: ", out)
+
+    def test_models_changed_against_the_saved_snapshot(self):
+        def phase(argv):  # <work>/models changes after step 1.2's snapshot, before the phase
+            (self.fake.work / "models" / "after.bin").write_bytes(b"x")
+            return self.fake.in_process_phase(argv)
+
+        code, out = self.fake.main(phase=phase)
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.4 the second --sample run\n  - <work>/models changed: ", out)
+        self.assertIn("after.bin", out)
+
+    def test_data_changed_by_the_second_run(self):
+        code, out = self.fake_with("retranscribe").main()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.4 the second --sample run\n  - <work>/data changed: ", out)
+        self.assertIn("ES2004a.json", out)
+
+    def test_the_second_run_misses_its_url_limit(self):
+        def phase(argv):
+            self.fake.env["FAKE_LMT_MODE"] = "no-url"
+            with mock.patch.dict(os.environ, self.fake.env), mock.patch.object(cfi, "SECOND_URL_LIMIT", 1):
+                return self.fake.in_process_phase(argv)
+
+        code, out = self.fake.main(phase=phase)
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.4 the second --sample run\n  - no URL on stdout within the 1 s limit", out)
+        self.assert_gone(self.fake.calls()[-1]["pid"])
+
+    def test_a_line_in_the_guards_log(self):
+        code, out = self.fake_with("guard-line").main()
+        self.assertEqual(code, 1)
+        self.assertIn("FAIL 2.5 the guard's log\n  - the guard's log has 1 line(s): connect ('203.0.113.7', 443)", out)
+
+
+class OuterCheckTest(FakeTest):
+    """The outer process's check of offline.json against the phase's exit code, and the record from it."""
+
+    def run_with(self, code, steps=None, *, platform="linux-x86_64"):
+        """main() with a stand-in phase that writes `steps` (or no file) and exits `code`: (exit code,
+        stdout, record)."""
+        def phase(argv):
+            self.fake.phase_argv = argv
+            if steps is not None:
+                (self.fake.work / "offline.json").write_text(json.dumps({"steps": steps}))
+            return code
+
+        record = self.fake.tmp / "criteria-install-full.json"
+        exit_code, out = self.fake.main("--criteria-out", str(record), platform=platform, phase=phase)
+        return exit_code, out, json.loads(record.read_text())
+
+    @staticmethod
+    def steps(failed=None, platform="linux-x86_64"):
+        out, reached = [], True
+        for step, name, _ in cfi.offline_steps(platform):
+            problem = None if reached and step != failed else ("boom" if reached else f"not reached: step {failed} failed")
+            reached = reached and step != failed
+            out.append({"step": step, "name": name, "problem": problem})
+        return out
+
+    def offline_checks(self, record):
+        return [(c["check"].split(" ", 1)[1], c["criteria"], c["outcome"]) for c in record["checks"][2:]]
+
+    def test_the_phase_is_offline_command(self):
+        self.run_with(0, self.steps())
+        work = self.fake.work.resolve()
+        self.assertEqual(self.fake.phase_argv, cfi.offline_command(self.fake.lmt.resolve(), "linux-x86_64", work))
+        self.assertTrue((work / "runs" / "offline" / "home").is_dir())
+
+    def test_agreeing(self):
+        code, out, record = self.run_with(1, self.steps(failed="2.3"))
+        self.assertEqual(code, 1)
+        self.assertEqual(self.offline_checks(record), [
+            ("2.1 the cut is real", ["G3-8"], "passed"),
+            ("2.2 offline transcribe", ["G3-8"], "passed"),
+            ("2.3 offline rename", ["G3-8"], "failed"),
+            ("2.4 the second --sample run", ["G3-6", "G3-8"], "failed"),
+            ("2.5 the guard's log", ["G3-6", "G3-8"], "failed"),
+        ])
+        summary = (self.fake.tmp / "summary.md").read_text()
+        self.assertIn("PASS 2.2 offline transcribe", summary)
+        self.assertIn("FAIL 2.3 offline rename\n  - boom", summary)
+
+    def test_agreeing_and_passing(self):
+        code, out, record = self.run_with(0, self.steps())
+        self.assertEqual(code, 0, out)
+        self.assertEqual({c[2] for c in self.offline_checks(record)}, {"passed"})
+
+    def test_missing(self):
+        code, out, record = self.run_with(1)  # as when sudo fails before the phase starts
+        self.assertEqual(code, 1)
+        self.assertEqual([c[2] for c in self.offline_checks(record)], ["failed"] * 5)
+        self.assertIn("FAIL 2.1 the cut is real\n  - no offline.json: the offline phase exits 1", out)
+        self.assertIn("FAIL 2.5 the guard's log\n  - no offline.json: the offline phase exits 1",
+                      (self.fake.tmp / "summary.md").read_text())
+
+    def test_a_stale_file_is_missing(self):
+        (self.fake.work / "offline.json").parent.mkdir(parents=True)
+        (self.fake.work / "offline.json").write_text(json.dumps({"steps": self.steps()}))
+        code, out, record = self.run_with(1)
+        self.assertEqual(code, 1)
+        self.assertIn("no offline.json: the offline phase exits 1", out)
+
+    def test_contradicting(self):
+        for code, steps in ((1, self.steps()), (0, self.steps(failed="2.4"))):
+            with self.subTest(code=code):
+                self.setUp()
+                exit_code, out, record = self.run_with(code, steps)
+                self.assertEqual(exit_code, 1)
+                self.assertEqual([c[2] for c in self.offline_checks(record)], ["failed"] * 5)
+                self.assertIn(f"FAIL 2.1 the cut is real\n  - offline.json contradicts the offline phase's exit code "
+                              f"{code}", out)
+
+    def test_not_the_offline_steps(self):
+        code, out, record = self.run_with(0, self.steps(platform="macos-arm64"))  # no 2.1 on Linux
+        self.assertEqual(code, 1)
+        self.assertEqual([c[2] for c in self.offline_checks(record)], ["failed"] * 5)
+        self.assertIn("offline.json doesn't list the offline steps (the phase exits 0)", out)
+
+    def test_no_2_1_check_on_macos(self):
+        code, out, record = self.run_with(0, self.steps(platform="macos-arm64"), platform="macos-arm64")
+        self.assertEqual(code, 0, out)
+        self.assertEqual([c["check"] for c in record["checks"]], [
+            "check_full_install.py::macos-arm64 1.1 models download",
+            "check_full_install.py::macos-arm64 1.3 the first --sample run",
+            "check_full_install.py::macos-arm64 2.2 offline transcribe",
+            "check_full_install.py::macos-arm64 2.3 offline rename",
+            "check_full_install.py::macos-arm64 2.4 the second --sample run",
+            "check_full_install.py::macos-arm64 2.5 the guard's log",
+        ])
+
+
 class RecordTest(FakeTest):
     def record(self, *modes):
         out = self.fake.tmp / "criteria-install-full.json"
@@ -257,6 +515,16 @@ class RecordTest(FakeTest):
              "outcome": "passed"},
             {"check": "check_full_install.py::linux-x86_64 1.3 the first --sample run", "criteria": ["G3-6"],
              "outcome": "passed"},
+            {"check": "check_full_install.py::linux-x86_64 2.1 the cut is real", "criteria": ["G3-8"],
+             "outcome": "passed"},
+            {"check": "check_full_install.py::linux-x86_64 2.2 offline transcribe", "criteria": ["G3-8"],
+             "outcome": "passed"},
+            {"check": "check_full_install.py::linux-x86_64 2.3 offline rename", "criteria": ["G3-8"],
+             "outcome": "passed"},
+            {"check": "check_full_install.py::linux-x86_64 2.4 the second --sample run", "criteria": ["G3-6", "G3-8"],
+             "outcome": "passed"},
+            {"check": "check_full_install.py::linux-x86_64 2.5 the guard's log", "criteria": ["G3-6", "G3-8"],
+             "outcome": "passed"},
         ])
 
     def test_a_failing_run(self):
@@ -266,6 +534,11 @@ class RecordTest(FakeTest):
         self.assertEqual([(c["check"], c["outcome"]) for c in record["checks"]], [
             ("check_full_install.py::linux-x86_64 1.1 models download", "failed"),
             ("check_full_install.py::linux-x86_64 1.3 the first --sample run", "failed"),
+            ("check_full_install.py::linux-x86_64 2.1 the cut is real", "failed"),
+            ("check_full_install.py::linux-x86_64 2.2 offline transcribe", "failed"),
+            ("check_full_install.py::linux-x86_64 2.3 offline rename", "failed"),
+            ("check_full_install.py::linux-x86_64 2.4 the second --sample run", "failed"),
+            ("check_full_install.py::linux-x86_64 2.5 the guard's log", "failed"),
         ])
 
 
