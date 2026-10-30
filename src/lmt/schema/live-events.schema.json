@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Local Meeting Transcriber live events, version 1.0",
+  "description": "One line of lmt live --jsonl (design/public-api.md, \"Live events, version 1.0\"). A minor version only adds fields or event types, and readers ignore those they don't know, so unknown fields are allowed. start first, stop last and t never falling are guaranteed by lmt, not stated here.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "type",
+        "schema_version",
+        "t",
+        "source",
+        "models"
+      ],
+      "properties": {
+        "type": {
+          "const": "start"
+        },
+        "schema_version": {
+          "type": "string",
+          "pattern": "^1\\.[0-9]+(?![\\s\\S])"
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0
+        },
+        "source": {
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "live": {
+              "const": true
+            },
+            "device": {
+              "type": "string"
+            }
+          }
+        },
+        "models": {
+          "type": "object",
+          "required": [
+            "asr",
+            "diarization"
+          ],
+          "properties": {
+            "asr": {
+              "$ref": "#/$defs/model"
+            },
+            "diarization": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/model"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "type",
+        "t",
+        "segment",
+        "speaker",
+        "label",
+        "words"
+      ],
+      "properties": {
+        "type": {
+          "const": "words"
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0
+        },
+        "segment": {
+          "$ref": "#/$defs/segment_number"
+        },
+        "speaker": {
+          "$ref": "#/$defs/speaker_id"
+        },
+        "label": {
+          "type": "string"
+        },
+        "words": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/word"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "type",
+        "t",
+        "segment",
+        "start",
+        "end",
+        "speaker",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "const": "segment"
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0
+        },
+        "segment": {
+          "$ref": "#/$defs/segment_number"
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speaker": {
+          "$ref": "#/$defs/speaker_id"
+        },
+        "text": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "type",
+        "t",
+        "reason"
+      ],
+      "properties": {
+        "type": {
+          "const": "stop"
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reason": {
+          "enum": [
+            "end-of-input",
+            "duration",
+            "signal"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "model": {
+      "type": "object",
+      "required": [
+        "name",
+        "repository",
+        "revision"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      }
+    },
+    "speaker_id": {
+      "type": "string",
+      "pattern": "^S[1-9][0-9]*(?![\\s\\S])"
+    },
+    "segment_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "word": {
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "text",
+        "probability"
+      ],
+      "properties": {
+        "start": {
+          "type": "number"
+        },
+        "end": {
+          "type": "number"
+        },
+        "text": {
+          "type": "string"
+        },
+        "probability": {
+          "type": "number"
+        }
+      }
+    }
+  }
+}

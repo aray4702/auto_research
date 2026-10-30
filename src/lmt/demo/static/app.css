@@ -1,0 +1,66 @@
+/* lmt demo: the transcript page (design/internal/g3-stage1.md §2a, "The page"). */
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  line-height: 1.4;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+
+main {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+#error {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #b00020;
+  color: #b00020;
+}
+
+audio {
+  width: 100%;
+}
+
+#segments {
+  padding-left: 0;
+  list-style: none;
+}
+
+.segment {
+  display: flex;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.segment:hover {
+  background: #f0f0f0;
+}
+
+button:focus-visible {
+  outline: 3px solid #1a5fb4;
+  outline-offset: 2px;
+}
+
+.segment[aria-current="true"] {
+  background: #fff1b8;
+}
+
+.time {
+  font-variant-numeric: tabular-nums;
+  color: #555555;
+}
+
+.speaker {
+  font-weight: 600;
+  white-space: nowrap;
+}

@@ -85,13 +85,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      # The full history: G3-7's install fetches the tag from this checkout, and a shallow one lacks the parent.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.6"
           enable-cache: true
+      # PortAudio for sounddevice, which Linux's wheel doesn't bundle (G2-5; design/internal/g2-stage1.md §4).
+      - name: PortAudio (libportaudio2)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libportaudio2
       - run: uv sync --locked --all-extras
       # G1-15: every distribution and bundled library on both platforms against toolchain.toml's [licences].
       - name: Licences (linux-x86_64)
@@ -110,13 +115,21 @@ jobs:
       # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
       - env:
           LMT_TIER: ${{ needs.changes.outputs.tier }}
-        run: uv run --frozen pytest --criteria-out=criteria-test.json
-      # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+        run: uv run --frozen pytest --criteria-out=criteria-test-1.json
+      # G3-7 on Linux (design/internal/g3-stage1.md §4a): the README's install, from this checkout, into a
+      # clean scratch. It runs after a failed pytest too, so its checks stay in the record.
+      - name: The one-command install (G3-7, Linux)
+        if: ${{ !cancelled() }}
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_install.py --platform linux-x86_64 --scratch "$RUNNER_TEMP/install" --readme . --tag-checkout --criteria-out criteria-test-3.json
+      # The job's per-criterion record, one file per program (design/internal/criteria.md §3); a cancelled
+      # run uploads none.
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: criteria-test
-          path: criteria-test.json
+          path: criteria-test-*.json
           retention-days: 90
           if-no-files-found: error
 
