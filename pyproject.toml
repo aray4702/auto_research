@@ -12,6 +12,7 @@ dependencies = [
   "torch>=2.5,<2.9",                   # direct, so the CPU index applies on Linux; <2.9 while pyannote.audio 3.x reads audio through torchaudio's I/O
   "torchaudio>=2.5,<2.9",
   "huggingface_hub>=0.25",
+  "jsonschema>=4.26",                  # lmt.transcript.load validates at run time (G3)
 ]
 
 [project.optional-dependencies]
@@ -22,7 +23,7 @@ lmt = "lmt.cli:run"
 
 [dependency-groups]
 # The eval extra, so the agents' `uv run --frozen pytest` has it; stage 2's test libraries.
-dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "jsonschema", "srt", "webvtt-py"]
+dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "srt", "webvtt-py"]
 
 [build-system]
 requires = ["hatchling"]
