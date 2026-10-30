@@ -38,7 +38,7 @@
           "start": 0.0,
           "end": 0.56,
           "text": "also",
-          "probability": 0.949
+          "probability": 0.943
         },
         {
           "start": 0.56,
@@ -56,13 +56,13 @@
           "start": 1.6,
           "end": 2.28,
           "text": "contrivance",
-          "probability": 0.957
+          "probability": 0.961
         },
         {
           "start": 2.28,
           "end": 3.0,
           "text": "whereby",
-          "probability": 0.987
+          "probability": 0.989
         }
       ]
     },
@@ -82,7 +82,7 @@
           "start": 3.42,
           "end": 3.84,
           "text": "-making",
-          "probability": 0.957
+          "probability": 0.963
         },
         {
           "start": 3.84,
@@ -92,12 +92,12 @@
         },
         {
           "start": 4.06,
-          "end": 4.28,
+          "end": 4.26,
           "text": "be",
           "probability": 0.999
         },
         {
-          "start": 4.28,
+          "start": 4.26,
           "end": 4.86,
           "text": "suspended",
           "probability": 0.998
@@ -112,21 +112,21 @@
     },
     {
       "start": 5.296,
-      "end": 8.74,
+      "end": 8.66,
       "speaker": "S1",
       "text": "not stopped during the picnic season",
       "words": [
         {
           "start": 5.64,
-          "end": 6.02,
+          "end": 6.04,
           "text": "not",
           "probability": 0.999
         },
         {
-          "start": 6.02,
+          "start": 6.04,
           "end": 6.54,
           "text": "stopped",
-          "probability": 0.968
+          "probability": 0.969
         },
         {
           "start": 6.54,
@@ -138,19 +138,19 @@
           "start": 7.06,
           "end": 7.2,
           "text": "the",
-          "probability": 0.99
+          "probability": 0.991
         },
         {
           "start": 7.2,
           "end": 7.48,
           "text": "picnic",
-          "probability": 0.99
+          "probability": 0.992
         },
         {
           "start": 7.48,
-          "end": 8.74,
+          "end": 8.66,
           "text": "season",
-          "probability": 0.991
+          "probability": 0.989
         }
       ]
     },
@@ -161,16 +161,16 @@
       "text": "harangue the",
       "words": [
         {
-          "start": 8.74,
+          "start": 8.66,
           "end": 10.38,
           "text": "harangue",
-          "probability": 0.771
+          "probability": 0.739
         },
         {
           "start": 10.38,
           "end": 12.0,
           "text": "the",
-          "probability": 0.982
+          "probability": 0.981
         }
       ]
     },
@@ -190,7 +190,7 @@
           "start": 12.72,
           "end": 13.12,
           "text": "product",
-          "probability": 0.992
+          "probability": 0.991
         },
         {
           "start": 13.12,
@@ -202,7 +202,7 @@
           "start": 13.36,
           "end": 13.54,
           "text": "a",
-          "probability": 0.992
+          "probability": 0.991
         },
         {
           "start": 13.54,
@@ -220,7 +220,7 @@
     },
     {
       "start": 15.34,
-      "end": 20.46,
+      "end": 20.42,
       "speaker": "S2",
       "text": "he began a confused complaint against the wizard who had vanished behind the curtain on the left",
       "words": [
@@ -228,7 +228,7 @@
           "start": 15.34,
           "end": 15.72,
           "text": "he",
-          "probability": 0.966
+          "probability": 0.967
         },
         {
           "start": 15.72,
@@ -252,7 +252,7 @@
           "start": 16.58,
           "end": 17.0,
           "text": "complaint",
-          "probability": 0.999
+          "probability": 0.998
         },
         {
           "start": 17.0,
@@ -280,24 +280,24 @@
         },
         {
           "start": 18.14,
-          "end": 18.3,
+          "end": 18.28,
           "text": "had",
           "probability": 0.999
         },
         {
-          "start": 18.3,
+          "start": 18.28,
           "end": 18.64,
           "text": "vanished",
           "probability": 0.994
         },
         {
           "start": 18.64,
-          "end": 18.86,
+          "end": 18.88,
           "text": "behind",
           "probability": 0.996
         },
         {
-          "start": 18.86,
+          "start": 18.88,
           "end": 19.1,
           "text": "the",
           "probability": 0.993
@@ -306,7 +306,7 @@
           "start": 19.1,
           "end": 19.36,
           "text": "curtain",
-          "probability": 0.996
+          "probability": 0.997
         },
         {
           "start": 19.36,
@@ -322,29 +322,29 @@
         },
         {
           "start": 19.66,
-          "end": 20.46,
+          "end": 20.42,
           "text": "left",
           "probability": 0.999
         }
       ]
     },
     {
-      "start": 20.46,
+      "start": 20.42,
       "end": 25.22,
       "speaker": "S2",
       "text": "give not so earnest a mind to these mummeries child a",
       "words": [
         {
-          "start": 20.46,
+          "start": 20.42,
           "end": 21.4,
           "text": "give",
-          "probability": 0.66
+          "probability": 0.76
         },
         {
           "start": 21.4,
           "end": 21.72,
           "text": "not",
-          "probability": 0.997
+          "probability": 0.998
         },
         {
           "start": 21.72,
@@ -356,37 +356,37 @@
           "start": 21.96,
           "end": 22.34,
           "text": "earnest",
-          "probability": 0.994
+          "probability": 0.992
         },
         {
           "start": 22.34,
           "end": 22.6,
           "text": "a",
-          "probability": 0.998
+          "probability": 0.997
         },
         {
           "start": 22.6,
           "end": 22.84,
           "text": "mind",
-          "probability": 0.985
+          "probability": 0.988
         },
         {
           "start": 22.84,
           "end": 22.98,
           "text": "to",
-          "probability": 0.998
+          "probability": 0.997
         },
         {
           "start": 22.98,
           "end": 23.26,
           "text": "these",
-          "probability": 0.987
+          "probability": 0.988
         },
         {
           "start": 23.26,
           "end": 23.8,
           "text": "mummeries",
-          "probability": 0.939
+          "probability": 0.945
         },
         {
           "start": 23.8,
@@ -398,7 +398,7 @@
           "start": 24.26,
           "end": 25.22,
           "text": "a",
-          "probability": 0.95
+          "probability": 0.941
         }
       ]
     },
@@ -412,31 +412,31 @@
           "start": 25.22,
           "end": 25.58,
           "text": "golden",
-          "probability": 0.966
+          "probability": 0.965
         },
         {
           "start": 25.58,
-          "end": 26.18,
+          "end": 26.16,
           "text": "fortune",
           "probability": 0.998
         },
         {
-          "start": 26.18,
+          "start": 26.16,
           "end": 26.38,
           "text": "and",
-          "probability": 0.937
+          "probability": 0.927
         },
         {
           "start": 26.38,
           "end": 26.54,
           "text": "a",
-          "probability": 0.991
+          "probability": 0.993
         },
         {
           "start": 26.54,
           "end": 26.84,
           "text": "happy",
-          "probability": 0.998
+          "probability": 0.997
         },
         {
           "start": 26.84,
@@ -456,25 +456,25 @@
           "start": 27.44,
           "end": 28.74,
           "text": "he",
-          "probability": 0.977
+          "probability": 0.98
         },
         {
           "start": 28.74,
           "end": 28.9,
           "text": "was",
-          "probability": 0.997
+          "probability": 0.998
         },
         {
           "start": 28.9,
           "end": 29.16,
           "text": "like",
-          "probability": 0.997
+          "probability": 0.998
         },
         {
           "start": 29.16,
           "end": 29.36,
           "text": "unto",
-          "probability": 0.997
+          "probability": 0.998
         },
         {
           "start": 29.36,
@@ -498,7 +498,7 @@
           "start": 30.12,
           "end": 30.26,
           "text": "a",
-          "probability": 0.998
+          "probability": 0.997
         },
         {
           "start": 30.26,
@@ -516,7 +516,7 @@
           "start": 31.06,
           "end": 31.2,
           "text": "yet",
-          "probability": 0.999
+          "probability": 1.0
         },
         {
           "start": 31.2,
@@ -538,9 +538,9 @@
         },
         {
           "start": 31.86,
-          "end": 32.3,
+          "end": 32.28,
           "text": "father.",
-          "probability": 0.996
+          "probability": 0.995
         }
       ]
     },
@@ -551,10 +551,10 @@
       "text": "Angor.",
       "words": [
         {
-          "start": 33.52,
-          "end": 34.08,
+          "start": 33.5,
+          "end": 34.06,
           "text": "Angor.",
-          "probability": 0.934
+          "probability": 0.949
         }
       ]
     },
@@ -565,10 +565,10 @@
       "text": "Pain.",
       "words": [
         {
-          "start": 34.5,
+          "start": 34.52,
           "end": 34.78,
           "text": "Pain.",
-          "probability": 0.901
+          "probability": 0.896
         }
       ]
     },
@@ -580,12 +580,12 @@
       "words": [
         {
           "start": 35.86,
-          "end": 36.26,
+          "end": 36.28,
           "text": "Painful",
-          "probability": 0.997
+          "probability": 0.998
         },
         {
-          "start": 36.26,
+          "start": 36.28,
           "end": 36.52,
           "text": "to",
           "probability": 0.999
@@ -602,36 +602,36 @@
       "start": 38.675,
       "end": 39.738,
       "speaker": "S1",
-      "text": "Hay fever.",
+      "text": "Hey, fever.",
       "words": [
         {
-          "start": 38.5,
-          "end": 39.06,
-          "text": "Hay",
-          "probability": 0.577
+          "start": 38.4,
+          "end": 38.96,
+          "text": "Hey,",
+          "probability": 0.41
         },
         {
-          "start": 39.06,
-          "end": 39.62,
+          "start": 39.64,
+          "end": 39.641,
           "text": "fever.",
-          "probability": 0.755
+          "probability": 0.999
         }
       ]
     },
     {
-      "start": 40.6,
+      "start": 40.58,
       "end": 44.53,
       "speaker": "S1",
       "text": "A heart trouble caused by falling in love with a grass widow.",
       "words": [
         {
-          "start": 40.6,
-          "end": 40.88,
+          "start": 40.58,
+          "end": 40.9,
           "text": "A",
           "probability": 0.999
         },
         {
-          "start": 40.88,
+          "start": 40.9,
           "end": 41.2,
           "text": "heart",
           "probability": 1.0
@@ -640,7 +640,7 @@
           "start": 41.2,
           "end": 41.66,
           "text": "trouble",
-          "probability": 0.996
+          "probability": 0.997
         },
         {
           "start": 41.66,
@@ -692,7 +692,7 @@
         },
         {
           "start": 43.9,
-          "end": 44.42,
+          "end": 44.4,
           "text": "widow.",
           "probability": 0.999
         }
@@ -708,7 +708,7 @@
           "start": 45.7,
           "end": 46.26,
           "text": "Heaven.",
-          "probability": 0.998
+          "probability": 0.997
         }
       ]
     },
@@ -722,7 +722,7 @@
           "start": 47.1,
           "end": 47.16,
           "text": "A",
-          "probability": 0.989
+          "probability": 0.992
         },
         {
           "start": 47.16,
@@ -756,9 +756,9 @@
         },
         {
           "start": 48.46,
-          "end": 48.76,
+          "end": 48.74,
           "text": "to.",
-          "probability": 0.983
+          "probability": 0.977
         }
       ]
     },
@@ -775,7 +775,7 @@
           "probability": 0.999
         },
         {
-          "start": 50.9,
+          "start": 50.88,
           "end": 50.94,
           "text": "there",
           "probability": 1.0
@@ -800,15 +800,15 @@
         },
         {
           "start": 51.58,
-          "end": 52.1,
+          "end": 52.12,
           "text": "page",
-          "probability": 0.989
+          "probability": 0.992
         },
         {
-          "start": 52.1,
+          "start": 52.12,
           "end": 52.48,
           "text": "who",
-          "probability": 0.952
+          "probability": 0.939
         },
         {
           "start": 52.48,
@@ -837,19 +837,19 @@
       ]
     },
     {
-      "start": 54.38,
+      "start": 54.36,
       "end": 56.579,
       "speaker": "S2",
       "text": "This was so sweet a lady, sir,",
       "words": [
         {
-          "start": 54.38,
-          "end": 54.94,
+          "start": 54.36,
+          "end": 54.92,
           "text": "This",
           "probability": 0.999
         },
         {
-          "start": 54.94,
+          "start": 54.92,
           "end": 55.12,
           "text": "was",
           "probability": 1.0
@@ -864,7 +864,7 @@
           "start": 55.4,
           "end": 55.64,
           "text": "sweet",
-          "probability": 0.846
+          "probability": 0.737
         },
         {
           "start": 55.64,
@@ -879,7 +879,7 @@
           "probability": 0.999
         },
         {
-          "start": 56.18,
+          "start": 56.16,
           "end": 56.38,
           "text": "sir,",
           "probability": 0.998
@@ -902,7 +902,7 @@
           "start": 57.06,
           "end": 57.2,
           "text": "in",
-          "probability": 0.999
+          "probability": 1.0
         },
         {
           "start": 57.2,
@@ -912,15 +912,15 @@
         },
         {
           "start": 57.44,
-          "end": 57.74,
+          "end": 57.72,
           "text": "manner",
           "probability": 1.0
         },
         {
-          "start": 57.74,
+          "start": 57.72,
           "end": 57.9,
           "text": "I",
-          "probability": 0.994
+          "probability": 0.993
         },
         {
           "start": 57.9,
@@ -958,19 +958,19 @@
           "start": 60.0,
           "end": 60.32,
           "text": "But",
-          "probability": 0.574
+          "probability": 0.609
         },
         {
           "start": 60.32,
           "end": 60.46,
           "text": "then",
-          "probability": 0.997
+          "probability": 0.996
         },
         {
           "start": 60.46,
           "end": 60.6,
           "text": "the",
-          "probability": 0.999
+          "probability": 1.0
         },
         {
           "start": 60.6,
@@ -998,15 +998,15 @@
         },
         {
           "start": 61.46,
-          "end": 61.76,
+          "end": 61.74,
           "text": "quickly",
           "probability": 1.0
         },
         {
-          "start": 61.76,
+          "start": 61.74,
           "end": 61.96,
           "text": "as",
-          "probability": 0.999
+          "probability": 1.0
         },
         {
           "start": 61.96,
@@ -1016,7 +1016,7 @@
         },
         {
           "start": 62.1,
-          "end": 62.68,
+          "end": 62.36,
           "text": "came.",
           "probability": 1.0
         }
@@ -1032,13 +1032,13 @@
           "start": 63.88,
           "end": 64.32,
           "text": "Sister",
-          "probability": 0.908
+          "probability": 0.922
         },
         {
           "start": 64.32,
           "end": 64.76,
           "text": "Nell,",
-          "probability": 0.989
+          "probability": 0.991
         },
         {
           "start": 64.84,
@@ -1062,7 +1062,7 @@
           "start": 65.48,
           "end": 65.82,
           "text": "these",
-          "probability": 0.999
+          "probability": 1.0
         },
         {
           "start": 65.82,
