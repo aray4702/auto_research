@@ -114,7 +114,7 @@ def build_parser():
 
     e = commands.add_parser("eval", help="Score the product on the evaluation sets (needs lmt[eval]).",
                             description="Scores the product on the evaluation sets. Needs the eval extra.")
-    e.add_argument("--set", choices=("ci", "full"), help="The set to score.")
+    e.add_argument("--set", choices=("ci", "full", "live"), help="The set to score.")
     e.add_argument("--out", metavar="DIR", default="results", help="Where the results files go "
                    "(default: results/).")
     e.add_argument("--update-readme", action="store_true",
