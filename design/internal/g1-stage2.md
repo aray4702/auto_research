@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #391 | P7c's finding on PR #400: a product run writes outside its outputs. New item P13 sets `ORT_DISABLE_TELEMETRY=1` in `asr.py` (onnxruntime 1.31.1's 1DS telemetry, which keeps a device id and an event database and posts to Microsoft's collector) and points `MPLCONFIGDIR` at a directory of the process's own under `TMPDIR`, removed at exit, in `diarize.load` (pyannote.audio's tasks import `matplotlib.pyplot`). P7c waits for it. G1-13 and P7c's test are unchanged |
 | 2026-10-29 | architect, #387 | The four export goldens aren't one transcript: `transcript.json` is `test_export.py`'s two-segment `small()`, and `transcript.{txt,srt,vtt}` are `test_export_formats.py`'s five-segment one. P6a's `words` test and P9's golden test now take their JSON from `export.render(test_export_formats.small(), "json")` at test time, in `tmp_path`. No fixture is added or changed, and both items keep their file lists. P9's other golden test checks `transcript.json` against itself. G1-4 is unchanged |
 | 2026-10-29 | architect, #349 | Reviewer's findings on #386: a pull request runs tier 1 at most (933f962), so P6b's and P7c's PRs show the Developer's local `pytest -m models` result, P6b's with the four ffmpeg commands and their exit codes (G1-4's "the PR shows"); the ffmpeg step and `isolated` true are first confirmed on `main`'s `test-models`, a failure there is `sev:1`, and P10 marks G1-4 and G1-13 only after it. In `g3-stage1.md`, item 2a needs P7b too, and items 1 and 4b need P6a |
 | 2026-10-29 | architect, #349 | The Owner's "Break down L and XL items into S items" (2026-10-29): P6 (#349) splits into P6a (the subtitle checks, on the export goldens and a fake ffmpeg) and P6b (G1-4's test, with the real ffmpeg in `test-models`); P7 (#350) into P7a (the guard), P7b (`isolation.py`) and P7c (G1-13's test). Each has its own files, test, Needs and tier. `isolation.py` gains `wrap`, so P7b can test the namespace without the models. G1-4 and G1-13 are unchanged |
@@ -31,12 +32,13 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | **P6b** | G1-4's test on both clips' product runs, with the real ffmpeg | P5, P6a | `tests/test_g1_4.py` (new), `.github/workflows/product.yml` (`test-models` only) | 3 |
 | **P7a** | The network guard (G1-13's `socket.connect` block, and G3's) | — | `tests/netguard/sitecustomize.py` (new), `tests/test_netguard.py` (new) | 2 |
 | **P7b** | `unshare --net` and the tree snapshot (G1-13's isolation and file compare) | — | `tests/isolation.py` (new), `tests/test_isolation.py` (new) | 2 |
-| **P7c** | G1-13's test on the two-speaker clip | P5, P7a, P7b | `tests/test_g1_13.py` (new) | 2 |
+| **P7c** | G1-13's test on the two-speaker clip | P5, P7a, P7b, P13 | `tests/test_g1_13.py` (new) | 2 |
 | **P8** | `lmt eval --set full` and `--update-readme`, on fakes (G1-6's last two options), and the README table's RTF note | P2a | `src/lmt/eval/runner.py`, `src/lmt/eval/cli.py`, `src/lmt/eval/readme.py`, `tests/test_eval_full.py` (new), `tests/test_readme_table.py` | 3 |
 | **P9** | `lmt.transcript.load`, `jsonschema` at run time, and the code for #286 as `g1-slice.md` decides it | — | `src/lmt/transcript.py`, `src/lmt/schema/transcript.schema.json`, `schema/transcript.schema.json`, `src/lmt/export/__init__.py`, `pyproject.toml`, `uv.lock`, `tests/test_transcript.py`, `tests/test_export.py` | 3 |
 | **P10** | The registry: `complete = true` for each criterion whose checks have passed on `main` | the items it marks | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 |
 | **P11** | onnxruntime's log down to errors, so a run's stderr is the product's own (P4's finding on #364) | — | `src/lmt/asr.py`, `tests/test_asr.py` | 3 |
 | **P12** | Turns-first segments, so the product's DER follows diarization (#372's finding on G1-8c) | — | `src/lmt/align.py`, `tests/test_align.py` | 3 |
+| **P13** | No library writes outside the outputs: onnxruntime's telemetry off, and matplotlib's cache in a directory removed at exit (P7c's finding on #400) | — | `src/lmt/asr.py`, `src/lmt/diarize.py`, `tests/test_library_writes.py` (new), `tests/test_diarize.py` | 3 |
 
 **Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. P6b uses P6a's helpers, and P7c uses P7a's guard and P7b's `isolation.py`, so each waits for them. The one pair that may run at the same time and share a file is P2b and P6b, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
 
@@ -50,6 +52,8 @@ This is what a Developer needs to build each item below in one run. It finishes 
 6. **P9** whenever a run is free: no G1 criterion waits on it, but G3's stage 1 does.
 
 **P12 goes ahead of every other open item** (#372's finding, 2026-10-29). P2b's reading (#343) is blocked by it, and G1-5 and G1-8c with it. It shares no file with any other item.
+
+**P13 goes next, ahead of the rest** (#391's finding, 2026-10-29). P7c's PR (#400) is blocked by it, and G1-13 and stage 2's close with it. Its files are P11's `asr.py`, already merged, and `diarize.py`, which no open item edits.
 
 **What the deadline can carry.** It's 09:46 PT on 2026-10-29. Every item is one Developer run, and most are tier 2 or 3, so roughly an hour of CI each, plus review and the Owner's merge where the path is protected. All eleven fit by the end of 2026-10-30 if #123's two-speaker clip merges by the evening of 2026-10-29 (#110 has merged). The criteria at risk are: G1-3, G1-4 and G1-13, behind #123; and G1-5 and G1-8c, if G1-8c's first reading misses a bound. Next most exposed is G1-6, which waits for P8 behind P2a.
 
@@ -326,7 +330,7 @@ def run_isolated(argv, *, env, cwd) -> Isolated     # CompletedProcess fields, p
 
 **Test of P7c.** A pull request runs tier 1 at most, so the PR's CI doesn't run this test. The PR shows the Developer's local `uv run --frozen pytest -m models` result, with `tests/test_g1_13.py` passing: the guard's log empty, the snapshot's only difference the four outputs, and the bytes equal. On the Mac, `wrap` can't isolate (no `unshare` or `setpriv`), so `isolated` is false there, and the PR says so. It fails without the change: on `main` there is no `tests/test_g1_13.py`.
 
-**First confirmed on `main`, after the merge:** the test in `main`'s `test-models` (tier 2, for `tests/`), with `isolated` true, which is G1-13's `sudo unshare --net` check. If that run fails, it is `sev:1` (a broken `main`): revert first, as the next Developer item, then fix the cause. P10 marks G1-13 only after `main`'s `test-models` has passed with this test and `isolated` true. **If a library writes a file** (a config or cache under `home`, say) **or opens a socket,** that is a product finding. The Developer reports the path or address on the item for the Architect. The test doesn't allow it.
+**First confirmed on `main`, after the merge:** the test in `main`'s `test-models` (tier 2, for `tests/`), with `isolated` true, which is G1-13's `sudo unshare --net` check. If that run fails, it is `sev:1` (a broken `main`): revert first, as the next Developer item, then fix the cause. P10 marks G1-13 only after `main`'s `test-models` has passed with this test and `isolated` true. **If a library writes a file** (a config or cache under `home`, say) **or opens a socket,** that is a product finding. The Developer reports the path or address on the item for the Architect. The test doesn't allow it. The first such finding (#391) is P13's, and P7c's PR merges only after P13.
 
 ## P8. `lmt eval --set full` and `--update-readme`
 
@@ -457,6 +461,50 @@ Words are rounded first, by `_rounded`, as now (`g1-slice.md` S4, "Times, rounde
 - The PR body gives one local `uv run --frozen lmt eval --set ci` at the PR's head, with `dirty: false`. AMI-ci's product DER must be below 0.250 after rounding (P2b's rule), with AMI-ci's product WER ≤ 0.250 and LS-ci's ≤ 0.050 (LS-ci's should be unchanged at 0.006912). If any of them misses, the Developer reports the figures on the item and holds it for the Architect (`needs-decision:architect`), with no bound, scoring, fixture or subset changed.
 - After P12 merges, #343's PR #368 refreshes from `main`, and its `eval-ci` job takes G1-8c's reading in CI. Nothing in P2b's design changes.
 
+## P13. No library writes outside the outputs
+
+**The finding** (#391, PR #400's local `pytest -m models` on the Mac). G1-13's test (P7c) finds a product run writing outside its outputs, under the fresh `HOME` and `TMPDIR`:
+- `home/.matplotlib/fontlist-v3.11.0.json`. `diarize.load` imports `pyannote.audio.pipelines`, whose `__init__` imports `voice_activity_detection`, which imports `pyannote.audio.tasks`, and `tasks/segmentation/mixins.py` imports `matplotlib.pyplot` at module level (pyannote-audio 3.4.0). `pyplot` loads `font_manager`, which writes its font list under `MPLCONFIGDIR`, or `~/.matplotlib` on macOS and `$XDG_CACHE_HOME/matplotlib` on Linux without it. Importing a submodule runs the package's `__init__`, so `lmt` can't avoid the import.
+- `home/Library/Application Support/Microsoft/DeveloperTools/.onnxruntime/deviceid`, `onnxruntime.db`, `-shm` and `-wal`. onnxruntime 1.31.1, which faster-whisper uses for the Silero VAD, ships Microsoft's 1DS telemetry on both platforms: `core/platform/telemetry_1ds.cc`, a SQLite event store, and the collector `https://mobile.events.data.microsoft.com/OneCollector/1.0/`, all strings in the pinned macOS and manylinux wheels. On Linux its directory is `$XDG_CACHE_HOME/Microsoft/DeveloperTools/.onnxruntime`. Both wheels hold the switch `ORT_DISABLE_TELEMETRY`. So this is more than a stray file. It breaks G1-13's "No package sends telemetry". The upload comes from native code, outside Python's `socket`, so P7a's guard can't see it. On CI, `unshare --net` blocks it. The file check is what found it.
+- `tmp/.ses`, not yet traced. The 1DS library keeps a session file, so it is most likely the same source. P13's test shows whether it goes with the switch.
+
+**G1-13's words** are: "After the run, the only new files under them [`HOME`, `TMPDIR`, `XDG_CACHE_HOME` and the working directory] and the output directory are the requested outputs, and nothing in `LMT_CACHE_DIR` has changed. No package sends telemetry." So a library's state can't go to `LMT_CACHE_DIR`, or to any lasting place under those four directories. A directory that exists only while the run does, and is gone after it, meets the words. Turning telemetry off meets the last sentence. Hiding or deleting telemetry's files would not.
+
+### The change
+
+**`asr.py`, onnxruntime's telemetry off.** At module level, beside the imports: `os.environ["ORT_DISABLE_TELEMETRY"] = "1"  # before onnxruntime is imported (Q8)`. This is the same form as `models.py`'s `HF_HUB_DISABLE_TELEMETRY`. `asr` is imported before any thread starts, since `diarize` imports it at the top, and `quiet_onnxruntime` is the process's first import of onnxruntime. `os.environ`'s assignment calls `putenv`, so onnxruntime's native code reads the switch when it starts its telemetry. The value is set unconditionally: a user's environment doesn't turn the product's telemetry back on.
+
+**`diarize.py`, matplotlib's cache in a scratch directory.** `scratch_matplotlib() -> Path` comes first in `load`, before the config is read:
+- On the first call in a process, it makes `tempfile.mkdtemp(prefix="lmt-matplotlib-")`, which goes under `TMPDIR`, and sets `os.environ["MPLCONFIGDIR"]` to it unconditionally. It registers `atexit.register(shutil.rmtree, path, ignore_errors=True)` and keeps the path in a module global, `_scratch`.
+- A later call returns the same path and makes nothing.
+- matplotlib reads `MPLCONFIGDIR` the first time it needs its directory, which is the `pyplot` import, inside `load`. Nothing in a product run imports matplotlib before that.
+
+`atexit` runs on a normal exit, on `sys.exit`, and after `KeyboardInterrupt` (`cli.main` returns 130, and `run` calls `sys.exit`). So every run that ends through `cli.main` removes the directory: success, an `LmtError` and an internal error alike. A process killed by a signal leaves it in `TMPDIR`, the system's place for temporary files. That's accepted, since G1-13 measures a run that ends. `--no-diarize` never calls `load`, so it makes nothing. Each `lmt eval` worker is its own process, so it makes and removes its own directory.
+
+matplotlib rebuilds its font list in each process that diarizes, because the cache never lasts. That costs some start-up time, more on macOS, which has more system fonts. The PR reports it (below). No bound applies to it here: Q7's RTF is measured in stage 3, and this is the price of G1-13's words.
+
+**Nothing else changes:** no setting of the models, the pipeline, the outputs or the CLI. The four outputs stay byte-identical, so G1-1 to G1-4 and #400's comparison of the outputs are unaffected.
+
+**If either source still writes** with the change in place, the Developer handles it in this item, in this order. If any onnxruntime file still appears, `quiet_onnxruntime` also calls `onnxruntime.disable_telemetry_events()` straight after the import, and the `fake` fixture's `onnxruntime` namespace (P11) gains that function. If `tmp/.ses` or an onnxruntime file still remains after that, or a file from another library appears, the Developer reports its path on the item and holds it for the Architect (`needs-decision:architect`). The test doesn't change, and no file is deleted after the fact.
+
+### Tests
+
+**`tests/test_library_writes.py`** (new, the `test` job on both platforms, no model, tagged `G1-13`). Each case runs a fresh process, `[sys.executable, "-c", <code>]`. Its `env` holds `PATH`, `LANG=C.UTF-8`, and `HOME`, `TMPDIR` and `XDG_CACHE_HOME` set to empty directories `home`, `tmp` and `xdg` under `tmp_path`. Its `cwd` is an empty `work`. Nothing else is set: no `MPLCONFIGDIR` and no `ORT_DISABLE_TELEMETRY`.
+- **Nothing is left, from either library.** The child runs the product's paths for both libraries. It calls `diarize.scratch_matplotlib()`, then `import pyannote.audio.pipelines`, and prints `matplotlib.get_cachedir()`. Then it calls `asr.quiet_onnxruntime()` and `faster_whisper.vad.get_speech_timestamps(numpy.zeros(16_000, numpy.float32))`, P11's VAD path, which starts onnxruntime's environment and runs a session. The child exits 0. The printed directory is under `tmp`. After the exit, `isolation.snapshot(home, tmp, xdg, work)` is `{}`. On failure, the test shows the snapshot's paths. It fails on `main` on both platforms: on macOS with the four files above, and on Linux with matplotlib's and onnxruntime's directories under `xdg`.
+- **The scratch directory is the process's own, and goes at exit.** The child calls `diarize.scratch_matplotlib()` twice and prints both paths, `os.environ["MPLCONFIGDIR"]`, and whether the path is a directory. The two paths and the variable are equal, the path is a directory under `tmp`, and after the exit it is gone and `tmp` is empty.
+- **The switch is set.** The child does `import lmt.asr` and prints `os.environ.get("ORT_DISABLE_TELEMETRY")`, which is `1`.
+
+**`tests/test_diarize.py`:**
+- **`load` calls it first.** With `diarize.scratch_matplotlib` monkeypatched to raise a sentinel exception, `diarize.load({})` raises the sentinel, not `KeyError`.
+- **The `fake` fixture** starts with `monkeypatch.delenv("MPLCONFIGDIR", raising=False)` and `monkeypatch.setattr(diarize, "_scratch", None)`. So the in-process `load` tests leave no `MPLCONFIGDIR` behind in pytest's environment. The directory they make goes at pytest's exit.
+
+**How the PR shows the failure.** The `test` job runs on a pull request, so the Developer pushes the PR's first commit with the tests alone, and `diarize.scratch_matplotlib` as a stub that returns `Path(tempfile.gettempdir())` and sets nothing. The first commit's `test` job is red on both platforms, with the snapshot's paths in the failure. The next commit has the change, and the same job is green on both. The PR body links both runs, with each commit, and quotes the red runs' paths. If the fallback above was needed, a third commit adds it, and the PR links that run too.
+
+**Test of the item:**
+- Those tests in the `test` job on both platforms, red and then green as above.
+- The Developer's local `uv run --frozen pytest -m models --durations=0`, with G1-1's to G1-4's tests passing unchanged. The PR gives `two_speakers_run`'s setup time beside #391's figure, 282 s on the Mac, for the font list's cost.
+- After P13 merges, #400 merges `main` and shows its local `uv run --frozen pytest -m models -rA tests/test_g1_13.py` passing, with the snapshot's only difference the four outputs. Only then does #400 merge, and `main`'s `test-models` confirms it with `isolated` true (P7c).
+
 ## Risks
 
 - **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move. It missed AMI-ci's DER (0.426, #343), and P12 is the fix.
@@ -465,3 +513,4 @@ Words are rounded first, by `_rounded`, as now (`g1-slice.md` S4, "Times, rounde
 - **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7c), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
 - **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
 - **Other libraries' output on stderr.** onnxruntime's was the first (P11). Any other library line that reaches stderr is a product finding too, fixed in the stage that loads the library. The test that found it doesn't change.
+- **Native connections are invisible to the guard.** P7a's guard wraps Python's `socket`, and onnxruntime's telemetry posts from native code (P13). On CI, `unshare --net` covers that. On the Mac, which can't isolate, the Owner's Wi-Fi-off run is the check. A library that keeps no file and posts from native code would be caught only there, and by `unshare` on CI. P13 turns off the one such sender found so far.
