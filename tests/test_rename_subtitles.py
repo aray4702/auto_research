@@ -15,12 +15,15 @@ import webvtt
 from subtitle_checks import check_srt, check_vtt
 from test_rename import FIXTURE, NAME1, NAME2, outputs, rename
 
-from lmt.export.cues import LINE, LINES, cues
+from lmt.export.cues import cues
 from lmt.transcript import load
 
 LABELS = {"S1": NAME1, "S2": NAME2}
 BARE_AMPERSAND = re.compile(r"&(?![A-Za-z]+;|#[0-9]+;|#x[0-9A-Fa-f]+;)")
 VOICE_TAG = re.compile(r"<v ([^>]*)>")
+# G3-2's own numbers, not the exporter's: every cue has at most two lines of at most 42 characters (code points).
+LINE = 42
+LINES = 2
 
 
 @pytest.fixture
