@@ -19,6 +19,7 @@ dependencies = [
   "numpy==2.5.4; python_full_version >= '3.12'",
   "huggingface_hub==2.3.0",
   "jsonschema>=4.26",                  # lmt.transcript.load validates at run time (G3)
+  "sounddevice>=0.5.6",                # lmt live's microphone (G2 4a, #209); imported only by lmt.live.mic
 ]
 
 [project.optional-dependencies]
