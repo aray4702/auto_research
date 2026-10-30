@@ -304,6 +304,13 @@ class RunTest(unittest.TestCase):
                 outcomes = self.outcomes(out)
                 self.assertEqual(outcomes, ["FAIL" if str(i + 1) == step else "PASS" for i in range(7)], out)
 
+    def test_pyannote_metrics_from_pyannote_audio_passes_the_no_eval_extra_step(self):
+        self.assertEqual(cin.EVAL_EXTRA, ("jiwer",))
+        with_metrics = {"FAKE_VERSIONS": json.dumps(VERSIONS | {"pyannote.metrics": "3.2.1"})}
+        code, out = self.fake.main(env=with_metrics)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.outcomes(out), ["PASS"] * 7)
+
     def test_the_record_has_seven_g3_7_checks(self):
         path = self.fake.tmp / "criteria-test-3.json"
         code, _ = self.fake.main("--criteria-out", str(path), env={"LMT_TIER": "1"})
