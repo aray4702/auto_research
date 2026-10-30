@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.1",
+  "lmt_version": "0.1.0",
+  "source": {"file": "run2", "duration": 4.0, "live": true},
+  "models": {
+    "asr": {"name": "distil-large-v3", "repository": "Systran/faster-distil-whisper-large-v3", "revision": "c3058b475261292e64a0412df1d2681c06260fab"},
+    "diarization": {"name": "speaker-diarization-3.1", "repository": "pyannote/speaker-diarization-3.1", "revision": "84fd25912480287da0247647c3d2b4853cb3ee5d"}
+  },
+  "speakers": [{"id": "S1", "label": "Speaker 1"}],
+  "segments": [
+    {
+      "start": 0.5,
+      "end": 3.1,
+      "speaker": "S1",
+      "text": "okay so let's start the meeting",
+      "words": [
+        {"start": 0.5, "end": 0.8, "text": "okay", "probability": 0.9},
+        {"start": 0.9, "end": 1.0, "text": "so", "probability": 0.9},
+        {"start": 1.1, "end": 1.4, "text": "let's", "probability": 0.9},
+        {"start": 1.4, "end": 1.9, "text": "start", "probability": 0.9},
+        {"start": 2.5, "end": 2.6, "text": "the", "probability": 0.9},
+        {"start": 2.6, "end": 3.1, "text": "meeting", "probability": 0.9}
+      ]
+    }
+  ]
+}
