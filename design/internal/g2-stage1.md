@@ -7,6 +7,7 @@
 | 2026-10-29 | architect, #208 | The Owner's "Break down L and XL items into S items" (2026-10-29): the seven items become 29 S items (5a–5d, 1a–1e, 2a–2c, 4a–4d, 3a1–3a4, 3b1–3b5, 3c1–3c4), each with its own files, test, Needs and tier. "What stage 1 assumes from G1's stage 2" becomes what G1.2 merged, so each item's Needs are its real blockers. The live join stays words-first (`align.assign_speaker` and `breaks`), per P12. Model tests are shown by the Developer's local run, since a PR runs tier 1 at most. No G2 criterion, bound or fixture changes |
 | 2026-10-29 | architect, #208 | The Reviewer's finding on #405: `default_models` stays offline-only, so `lmt transcribe`, `eval --set ci/full`, `demo` and G3's cache key never ensure the live model. 1d adds `download_defaults`, which only `lmt models download`/`list` and 5b's `run_live` call, plus a `tests/test_pipeline.py` case; 5b now needs 1d. Notes: #164's overlap with 3b1, and #400's helper for 3b5 |
 | 2026-10-29 | architect, #434 | 2c's first measurement (#468) missed 90 % on time only because the RTTM's turns include pauses that diarization leaves unlabelled; the offline system that passes G1-3 misses it too. 2c now takes its 90 % purity over each speaker's labelled time, and adds a 60 % coverage floor (the Reviewer's finding on #468). The 90 % doesn't move. G2-3, on words in 3a4, doesn't change |
+| 2026-10-30 | architect, #433 | 1e's first measurement missed G2-6c's 2.0 s at U = 1.0 s (ASR's p95 2.100 s, 2.220 s on a second machine). The provisional U becomes 0.8 s (12,800 samples), the architecture's first remedy: p95 1.520 s, and G2-2's WER 2.27 %. 1e also makes that change, with the two unit tests' helpers pinned to U = 1.0 s, so it is tier 3. No bound moves |
 | 2026-10-30 | architect, #437 | 3a3's held decision: `run_lockstep` and `run_threaded` take keyword-only `source_info` and `models`, the two dicts `EventWriter.start` needs, and write `start` with them; 3b3's command passes them. "Through `source.lockstep`" becomes `lmt.live.source.lockstep(source, asr, diarizer)`, the module function |
 
 This is the detail a Developer needs to build each of G2 stage 1's items in one run. It works inside `spec/acceptance.md` G2, `design/architecture.md` ("Live mode (G2)", "CI"), `design/public-api.md` (`lmt live`, live events 1.0, `lmt eval --set live`, `results/live.json`, transcript JSON 1.1), the Owner's answers 1a–8a on #82, `design/internal/g1-stage1.md`, `g1-slice.md` and `g1-stage2.md`. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
@@ -25,7 +26,7 @@ The coordinator's five items became seven (1, 2, 3a, 3b, 3c, 4 and 5, the § num
 | **1b** | Streaming ASR: LocalAgreement-2 over the rolling buffer, without the pause rule (§1, steps 1–3 and 5–7) | — | `src/lmt/live/__init__.py` (empty), `src/lmt/live/asr.py`, `tests/test_live_asr.py` | 3 | `tests/test_live_asr.py` (`test`) |
 | **1c** | Streaming ASR's pause rule, on Silero VAD's gaps (§1, step 4) | 1b | `src/lmt/live/asr.py`, `tests/test_live_asr.py` (its helper passes `speech`), `tests/test_live_asr_pause.py` (new) | 3 | `tests/test_live_asr_pause.py` (`test`; its one `models` case locally) |
 | **1d** | The live default model in the manifest, and `download_defaults` for `lmt models` (§1, "The live default model") | — | `src/lmt/models.toml`, `src/lmt/models.py`, `tests/test_models_live.py` (new), `tests/test_pipeline.py` (one case) | 3 | `tests/test_models_live.py`, `tests/test_pipeline.py` (`test`) |
-| **1e** | G2-2, and ASR's half of G2-6c, on the models in lockstep (§1) | 1a, 1c, 1d, 5a | `tests/test_live_asr_models.py` (new) | 2 | `tests/test_live_asr_models.py` (`test-models`; local run in the PR) |
+| **1e** | G2-2, and ASR's half of G2-6c, on the models in lockstep; the provisional U of 0.8 s (§1) | 1a, 1c, 1d, 5a | `tests/test_live_asr_models.py` (new), `src/lmt/live/asr.py` (`AsrConfig.update` only), `tests/test_live_asr.py`, `tests/test_live_asr_pause.py` | 3 | `tests/test_live_asr_models.py` (`test-models`; local run in the PR) |
 | **2a** | Online diarization's clustering: matching, centroids, accumulation, finalization, `replay` and `NullDiarizer` (§2, steps 3–6) | — | `src/lmt/live/__init__.py` (empty), `src/lmt/live/diarize.py`, `tests/test_live_diarize.py` | 3 | `tests/test_live_diarize.py` (`test`) |
 | **2b** | Online diarization's steps: segmentation, overlap-aware embeddings, the schedule and catch-up, `record`, `flush` (§2, steps 1–2) | 2a | `src/lmt/live/diarize.py`, `tests/test_live_diarize_online.py` (new) | 3 | `tests/test_live_diarize_online.py` (`test`) |
 | **2c** | G2-3's speaker rule on time, on the models in lockstep (§2) | 1a, 2b | `tests/test_live_diarize_models.py` (new) | 2 | `tests/test_live_diarize_models.py` (`test-models`; local run in the PR) |
@@ -52,6 +53,16 @@ The coordinator's five items became seven (1, 2, 3a, 3b, 3c, 4 and 5, the § num
 **Model tests in a PR.** A pull request runs tier 1 at most (`.github/scripts/tiers.py`, `PULL_REQUEST_MAX_TIER = 1`), so it never runs `test-models`. Each item whose test is marked `models` (1c's one case, 1e, 2c, 3a4, 3b5, 3c4) shows in its PR the Developer's local `uv run --frozen pytest -m models -rP <its test files>` result, with the figures the test prints. `main`'s `test-models` first confirms it after the merge. A failure there is `sev:1`: revert first, as the next Developer item, then fix the cause.
 
 **A first measurement that misses a bound** (G2-2's 10.0 %, G2-3's 90 %, G2-6c's 2.0 s, or 2c's 90 % purity and 60 % coverage on time) goes to the Architect on the item, with the figures. The bound doesn't move. What may change is a provisional setting (U, L, the diarization thresholds), by the Architect in this file, or the live default model in stage 2. G2-6c's bound changes only by the Architect's proposal to the Owner, as the spec says.
+
+**1e's first measurement** (#433) missed G2-6c at U = 1.0 s. In lockstep with `distil-large-v3`, ASR's p95 stream delay was 2.100 s on the Developer's machine (140 of 146 offline words matched) and 2.220 s on a second (137 matched, 9 words over 2.0 s). A word that ends just before an update boundary waits a third update, as the architecture's delay budget warned. Its first remedy is a shorter U, not a looser bound. On the second machine, with `dataclasses.replace(DEFAULT_ASR_CONFIG, update=…)` and nothing else changed:
+
+| U | ASR's p95 on `two_speakers.wav` (≤ 2.0 s) | Matched | Words over 2.0 s | G2-2's WER on `clip.wav` (≤ 10.0 %) |
+| --- | --- | --- | --- | --- |
+| 1.0 s | 2.220 s | 137 of 146 | 9 | 3.41 % |
+| 0.8 s | 1.520 s | 137 of 146 | 1 | 2.27 % |
+| 0.5 s | 1.120 s | 138 of 146 | 0 | 9.09 % |
+
+So the provisional U is **0.8 s** (12,800 samples, eight blocks). It leaves margin on both bounds, where 0.5 s leaves 0.9 points on G2-2, less than the 1.7 points the WER moved between the two machines at 1.0 s. The budget becomes max(2U, L + S) = max(1.6, 1.5) = 1.6 s. Lockstep runs take about 1.2 times as long (541 s against 466 s on the two-speaker clip). Stage 2's sweep still pins U; its pinned value must keep G2-6c passing, which rules 1.0 s out unless the remedy there is a model that agrees sooner. **1e** makes the change: `AsrConfig.update` defaults to 12,800; `tests/test_live_asr.py`'s and `tests/test_live_asr_pause.py`'s `make` helpers default to `AsrConfig(update=U)` (U = 16,000, as their scripted hypotheses assume), the pause test's `AsrConfig(pause=9601)` becomes `AsrConfig(update=U, pause=9601)`, and `ConfigTest` expects `update=12800`. Then all their cases pass unchanged.
 
 **The old items:**
 
@@ -132,14 +143,14 @@ G1's stage 2 has merged decode, ASR, diarization with P12's turns-first segments
 
 ## Shared conventions
 
-- **Positions are counted in samples** at 16 kHz, as integers, and turned into seconds only for output. A block is 1,600 samples (0.1 s), the update interval U 16,000 (1.0 s), the diarization step S 8,000, its window W 80,000 and its latency L 16,000. So every boundary falls on a block boundary, and floating-point error can't move one.
+- **Positions are counted in samples** at 16 kHz, as integers, and turned into seconds only for output. A block is 1,600 samples (0.1 s), the update interval U 12,800 (0.8 s), the diarization step S 8,000, its window W 80,000 and its latency L 16,000. So every boundary falls on a block boundary, and floating-point error can't move one.
 - **Times written out** (word times, event `t`, segment times) are rounded to the millisecond once, when the word is committed or the event is written, as G1 rounds once (architecture, "One rendering path").
 - **A stage** is an object with `feed(samples) -> Update` and `flush() -> Update`. `feed` takes any number of samples: one block in lockstep, or every block that has queued up in real time. It runs at most one update per call for ASR, and the steps the catch-up rule gives for diarization (2b). Stages never start threads. The session decides when to call them.
 - **Settings** are a frozen dataclass in each stage's module, `AsrConfig` and `DiarConfig`, with the provisional values below as defaults, and a module-level `DEFAULT_ASR_CONFIG` or `DEFAULT_DIAR_CONFIG` that the command reads through the module when it builds the stages (`live.asr.DEFAULT_ASR_CONFIG`, never a name bound at import), so a replacement reaches it. Only `lmt.live.tuning` (3c3) replaces those, for stage 2's sweep.
 
 ## 1. Streaming ASR, the file source and lockstep
 
-**Split.** **1a** is `source.py` and its test. **1b** is `asr.py` without the pause rule: an update is steps 1–3 and 5–7, with `n = len(A)` and the cut at the last committed word's end. **1c** adds step 4 and the `speech` argument, and changes 1b's test helper to pass an all-speech `speech`, so 1b's cases keep their meaning. **1d** is the live default model. **1e** is the model test. 1b and 1c touch no model: the engine is a fake, and so is `speech`, except in 1c's one `models` case.
+**Split.** **1a** is `source.py` and its test. **1b** is `asr.py` without the pause rule: an update is steps 1–3 and 5–7, with `n = len(A)` and the cut at the last committed word's end. **1c** adds step 4 and the `speech` argument, and changes 1b's test helper to pass an all-speech `speech`, so 1b's cases keep their meaning. **1d** is the live default model. **1e** is the model test, and the provisional U of 0.8 s (below). 1b and 1c touch no model: the engine is a fake, and so is `speech`, except in 1c's one `models` case.
 
 ### `src/lmt/live/source.py`
 
@@ -168,7 +179,7 @@ def lockstep(source, *stages) -> Iterator[tuple[int, list]]
 ```python
 @dataclass(frozen=True)
 class AsrConfig:
-    update: int = 16000           # U, samples (1.0 s, provisional; stage 2 sweeps 0.5 and 1.0 s)
+    update: int = 12800           # U, samples (0.8 s, provisional; stage 2 sweeps 0.5 and 1.0 s)
     max_buffer: int = 240000      # 15 s
     pause: int = 8000             # 0.5 s of non-speech commits the buffer
     prompt_chars: int = 200
@@ -651,7 +662,7 @@ Pooled over the 17 matched words, sorted: 0.7, 0.8, 0.9, 1.0, 1.0, 1.1, 1.2, 1.2
 
 ## CI cost
 
-**The 29 S items** are 23 at tier 3 and 6 at tier 2 (the model tests). A pull request runs tier 1 at most, about 12 minutes (architecture, "CI": 10, plus 2 for G3-7's install), so their PRs come to about 29 × 4 × 12 ≈ 1,400 minutes at the architecture's 4 runs a PR. Each merge then runs its own tier on `main`: about 23 × 39 + 6 × 26 ≈ 1,050 minutes before G2's model tests land, more as they do (below). That is about 2,450 minutes for G2's stage 1, against about 1,100 for the seven items when a PR ran its full tier. More, smaller PRs cost more runs, but each is cheaper, and the model runs happen once per merge rather than per PR push. With G1's and G3's runs in the same month, the 3,000-minute signal (`system/sizing.md`, "CI") can be reached. That is a signal, not a cap, on a public repository's free runners; #91 is where the builder tracks it.
+**The 29 S items** are 24 at tier 3 and 5 at tier 2 (the model tests, but 1e, which changes `asr.py`). A pull request runs tier 1 at most, about 12 minutes (architecture, "CI": 10, plus 2 for G3-7's install), so their PRs come to about 29 × 4 × 12 ≈ 1,400 minutes at the architecture's 4 runs a PR. Each merge then runs its own tier on `main`: about 24 × 39 + 5 × 26 ≈ 1,050 minutes before G2's model tests land, more as they do (below). That is about 2,450 minutes for G2's stage 1, against about 1,100 for the seven items when a PR ran its full tier. More, smaller PRs cost more runs, but each is cheaper, and the model runs happen once per merge rather than per PR push. With G1's and G3's runs in the same month, the 3,000-minute signal (`system/sizing.md`, "CI") can be reached. That is a signal, not a cap, on a public repository's free runners; #91 is where the builder tracks it.
 
 **G2's model tests,** once all have landed, add to `test-models`:
 
