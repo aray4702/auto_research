@@ -156,6 +156,15 @@ class MayStartTest(unittest.TestCase):
         runs.append(start("b", "reviewer", NOW))
         self.assertFalse(usage.may_start(CAPS, runs, "coordinator", NOW)[0])
 
+    def test_a_role_named_in_per_role_has_its_own_limit(self):
+        caps = {**CAPS, "concurrency": {"max_runs": 4, "max_runs_per_role": 2, "per_role": {"developer": 3}}}
+        two = [start("a", "developer", NOW), start("b", "developer", NOW)]
+        self.assertTrue(usage.may_start(caps, two, "developer", NOW)[0], "a third developer may start")
+        three = two + [start("c", "developer", NOW)]
+        self.assertIn("3 developer runs are already active", usage.may_start(caps, three, "developer", NOW)[1])
+        reviewers = [start("r1", "reviewer", NOW), start("r2", "reviewer", NOW)]
+        self.assertIn("2 reviewer runs are already active", usage.may_start(caps, reviewers, "reviewer", NOW)[1])
+
     def test_runs_per_day_count_the_owners_day(self):
         caps = {k: v for k, v in CAPS.items() if k != "override"}
         cap = caps["roles"]["architect"]["max_runs_per_day"]

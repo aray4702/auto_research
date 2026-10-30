@@ -12,7 +12,7 @@ You resolve the one item you were started for, or the PR you were sent back to (
 
 - **Scope:** one item, with its test. The test fails without your change.
 - **Local gate:** it passed locally before you opened the PR, and the PR is open early.
-- **Model tests, locally:** the pinned models are in this Mac's model cache, verified, so `uv run --frozen pytest -m models` runs the tests CI's `test-models` runs, with no token or network, in about 2 minutes instead of 10. Run it before you push a change those tests cover, and give its result as evidence.
+- **Model tests, locally:** the pinned models are in this Mac's model cache, verified, so `uv run --frozen pytest -m models` runs the tests CI's `test-models` runs, with no token or network, in about 2 minutes instead of 10. Run it before you push a change those tests cover, and give its result as evidence. A pull request's CI no longer runs `test-models` or `eval-ci`; `main` runs them after the merge, so this local run is the PR's only model check.
 - **Body:** `Resolves #<item>`, what changed, and the evidence: commands and their results.
 - **Where it may go:** inside the approved design and spec. If the item needs them changed, stop and escalate to the Architect.
 - **Feedback:** answer each review point on the PR, by a change or a reason.

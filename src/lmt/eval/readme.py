@@ -16,6 +16,11 @@ START, END = "<!-- results:start -->", "<!-- results:end -->"
 PLACEHOLDER = ("No full-set results yet. The Owner's run of `lmt eval --set full` fills this table "
                "(G1 stage 3).")
 NULL = "—"
+# The three RTFs' timing bases (design/internal/g1-stage2.md, "The runs"), stated where readers see them.
+RTF_NOTE = ("RTF is wall-clock time over audio duration. For the product, it runs from process start to exit, "
+            "model loading included. Whisper alone and pyannote alone come from that same run: each is its own "
+            "stage's model loading and inference, without start-up, decoding or export, and, with diarization "
+            "on, while the other stage runs beside it. So the three RTFs aren't like for like.")
 
 
 def render(results: dict, source: str = "results/full.json") -> str:
@@ -41,6 +46,7 @@ def render(results: dict, source: str = "results/full.json") -> str:
     for f in figures:
         lines.append(f"| {f['dataset']} | {f['system']} | {_percent(f['wer'])} | {_percent(f['der'])} | "
                      f"{NULL if f['rtf'] is None else format(f['rtf'], '.2f')} |")
+    lines += ["", RTF_NOTE]
     return "\n".join(lines)
 
 

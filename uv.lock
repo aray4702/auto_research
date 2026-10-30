@@ -808,6 +808,7 @@ source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },
     { name = "huggingface-hub" },
+    { name = "jsonschema" },
     { name = "pyannote-audio" },
     { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
@@ -825,7 +826,6 @@ eval = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "jsonschema" },
     { name = "local-meeting-transcriber", extra = ["eval"] },
     { name = "pytest" },
     { name = "ruff" },
@@ -838,6 +838,7 @@ requires-dist = [
     { name = "faster-whisper", specifier = ">=1.1" },
     { name = "huggingface-hub", specifier = ">=0.25" },
     { name = "jiwer", marker = "extra == 'eval'", specifier = ">=3.1" },
+    { name = "jsonschema", specifier = ">=4.26" },
     { name = "more-itertools", marker = "extra == 'eval'" },
     { name = "pyannote-audio", specifier = ">=3.3,<4" },
     { name = "pyannote-metrics", marker = "extra == 'eval'", specifier = ">=3.2,<4" },
@@ -851,7 +852,6 @@ provides-extras = ["eval"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "jsonschema" },
     { name = "local-meeting-transcriber", extras = ["eval"] },
     { name = "pytest" },
     { name = "ruff" },

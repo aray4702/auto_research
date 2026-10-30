@@ -172,8 +172,10 @@ class UsageErrorTest(unittest.TestCase):
         cli.validate(args)
         self.assertEqual(args.formats, ["vtt", "txt"])
 
+    @pytest.mark.criterion("G1-4")
     def test_default_formats(self):
         args = cli.build_parser().parse_args(["transcribe", "a.wav"])
+        self.assertEqual(args.formats, "txt,srt,vtt,json")
         cli.validate(args)
         self.assertEqual(args.formats, ["txt", "srt", "vtt", "json"])
 
@@ -207,14 +209,26 @@ class UsageErrorTest(unittest.TestCase):
         self.assertUsageError(["eval", "--check-readme", "--update-readme"], "--update-readme")
 
 
-class HandlerTest(unittest.TestCase):
-    def test_stubs_exit_1_with_one_line(self):
-        for argv, command in ((["eval", "--set", "full", "--update-readme"], "eval"),):
-            with self.subTest(argv=argv):
-                code, out, err = run(*argv)
-                self.assertEqual((code, out), (1, ""))
-                self.assertEqual(err, f"lmt: error: {command}: not built yet (G1 stage 2)\n")
+def every_parser(parser):
+    """`parser` and each parser under it, at any depth."""
+    yield parser
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                yield from every_parser(sub)
 
+
+class EnglishOnlyTest(unittest.TestCase):
+    @pytest.mark.criterion("G1-7")
+    def test_no_language_option(self):
+        found = {option for parser in every_parser(cli.build_parser()) for action in parser._actions
+                 for option in action.option_strings}
+        self.assertIn("--num-speakers", found)  # guards the walk: it reached transcribe's parser
+        self.assertIn("--bytes", found)  # and one two levels down
+        self.assertEqual([o for o in found if "lang" in o.lower()], [])
+
+
+class HandlerTest(unittest.TestCase):
     def test_valid_speakers_reach_the_handler(self):
         with mock.patch("lmt.pipeline.cli_transcribe", return_value=None) as handler:
             code, _, err = run("transcribe", "a.wav", "--min-speakers", "2", "--max-speakers", "2")

@@ -560,7 +560,7 @@ utterances = {IDS[:2]!r}
 
 def ami_ci(derived, *, meetings='["ES2004a"]', crop=f"crop = {CROP}\n"):
     return (f'\n[[dataset]]\nname = "AMI-ci"\nset = "ci"\nkind = "ami"\nmeetings = {meetings}\n'
-            f'audio = "ami-ES2004a"\nwords = "ami-annotations-1.6.2"\nrttm = "ami-rttm-ES2004a"\n{crop}'
+            f'audio = ["ami-ES2004a"]\nwords = "ami-annotations-1.6.2"\nrttm = ["ami-rttm-ES2004a"]\n{crop}'
             f'derived_sha256 = "{derived}"\n')
 
 
@@ -750,13 +750,15 @@ class TestDatasetManifests:
         (LS_CI.replace(IDS[1], "61-70968-0009"), "61-70968-0009.flac isn't a member of librispeech-test-clean"),
         (LS_CI.replace(IDS[1], "61_70968"), "'61_70968' isn't a LibriSpeech utterance id"),
         (LS_CI.replace('"librispeech-test-clean"', '"elsewhere"'), "source 'elsewhere' isn't in sources.toml"),
-        (LS_CI.replace('"librispeech"', '"other"'), "kind must be one of librispeech, ami"),
+        (LS_CI.replace('"librispeech"', '"other"'), "kind must be one of librispeech, ami, concat"),
         (LS_CI + LS_CI, "name 'LS-ci' is repeated"),
-        (ami_ci("0" * 64, meetings='["ES2004a", "ES2004b"]'), "an ami dataset has one meeting"),
+        (ami_ci("0" * 64, meetings='["ES2004a", "ES2004b"]'), "audio and rttm must be lists parallel to meetings"),
         (ami_ci("0" * 64, crop=""), "crop and derived_sha256 go together"),
         (ami_ci("0" * 64, meetings='["ES2004c"]'), "has no ES2004c.<speaker>.words.xml member"),
-        (ami_ci("0" * 64).replace('audio = "ami-ES2004a"', 'audio = "ami-annotations-1.6.2"'),
+        (ami_ci("0" * 64).replace('audio = ["ami-ES2004a"]', 'audio = ["ami-annotations-1.6.2"]'),
          "ami-annotations-1.6.2 must be a single file"),
+        (ami_ci("0" * 64).replace('audio = ["ami-ES2004a"]', 'audio = "ami-ES2004a"'),
+         "audio is missing or has the wrong type"),
     ])
     def test_a_bad_dataset_is_refused(self, tmp_path, monkeypatch, datasets_toml, problem):
         with pytest.raises(ValueError, match=re.escape(problem)):
@@ -895,6 +897,138 @@ class TestPlaceReferences:
         assert [t for _, _, t in words] == ["before", "first", "inside"]
         assert [(round(t.start, 6), round(t.end, 6), t.speaker) for t in turns] == [
             (10.0, 10.6, "A"), (10.8, 11.5, "B")]
+
+
+WORDS_B = {"words/ES2004b.B.words.xml": """<?xml version="1.0" encoding="ISO-8859-1" standalone="yes"?>
+<nite:root nite:id="ES2004b.B.words" xmlns:nite="http://nite.sourceforge.net/">
+   <w nite:id="ES2004b.B.words0" starttime="0.10" endtime="0.30">hello</w>
+   <w nite:id="ES2004b.B.words1" starttime="0.60" endtime="0.90">there</w>
+</nite:root>
+"""}
+RTTM_B = "SPEAKER ES2004b 1 0.100 0.800 <NA> <NA> FEE007 <NA> <NA>\n"
+WAV_B_URL = AMI_WAV_URL.replace("ES2004a", "ES2004b")
+RTTM_B_URL = RTTM_URL.replace("ES2004a", "ES2004b")
+
+
+def joined_toml(derived, *, set="hour", cut=1.5, of="AMI full", pieces=("ami-ES2004a", "ami-ES2004b"), start=0):
+    slices = "".join(f'  {{source = "{p}", start = {start}, end = 1.0}},\n' for p in pieces)
+    return (f'\n[[dataset]]\nname = "one-hour"\nset = "{set}"\nkind = "concat"\nof = "{of}"\ngap = 0.0\n'
+            f'cut = {cut}\nderived_sha256 = "{derived}"\nconcat = [\n{slices}]\n')
+
+
+class Full:
+    """AMI full in small: ES2004a and ES2004b, 1 s each, and the one-hour recording of them in its own set."""
+
+    AMI_FULL = ('\n[[dataset]]\nname = "AMI full"\nset = "full"\nkind = "ami"\nmeetings = ["ES2004a", "ES2004b"]\n'
+                'audio = ["ami-ES2004a", "ami-ES2004b"]\nwords = "ami-annotations-1.6.2"\n'
+                'rttm = ["ami-rttm-ES2004a", "ami-rttm-ES2004b"]\n')
+
+    def __init__(self, tmp_path, monkeypatch, *, cut=1.5, derived=None, datasets_toml=None):
+        self.a, self.b = meeting_samples(), (np.arange(16000) % 700 + 3000).astype(np.int16)
+        self.joined = wav(np.concatenate([self.a, self.b])[:round(cut * 16000)])
+        files = {AMI_WAV_URL: wav(self.a), WAV_B_URL: wav(self.b), AMI_ZIP_URL: zip_of(WORDS | WORDS_B),
+                 RTTM_URL: RTTM.encode(), RTTM_B_URL: RTTM_B.encode()}
+        words = {name: sha256(data.encode()) for name, data in (WORDS | WORDS_B).items()}
+        dir = tmp_path / "manifests"
+        dir.mkdir(parents=True, exist_ok=True)
+        (dir / "sources.toml").write_text(
+            "schema_version = 1\n"
+            + source_toml("ami-ES2004a", AMI_WAV_URL, files[AMI_WAV_URL])
+            + source_toml("ami-ES2004b", WAV_B_URL, files[WAV_B_URL])
+            + source_toml("ami-annotations-1.6.2", AMI_ZIP_URL, files[AMI_ZIP_URL], keep=False, members=words)
+            + source_toml("ami-rttm-ES2004a", RTTM_URL, files[RTTM_URL])
+            + source_toml("ami-rttm-ES2004b", RTTM_B_URL, files[RTTM_B_URL]))
+        (dir / "sets.toml").write_text("schema_version = 1\n" + (
+            datasets_toml if datasets_toml is not None
+            else self.AMI_FULL + joined_toml(derived or sha256(self.joined), cut=cut)))
+        monkeypatch.setattr(datasets, "MANIFEST_DIR", dir)
+        self.server = serve(monkeypatch, files)
+        self.dir = dir
+
+
+class TestAmiFull:
+    """Several meetings in one ami dataset (design/internal/g1-stage1.md §5b, decision 4)."""
+
+    def test_each_meeting_is_one_item_with_its_own_audio_words_and_turns(self, cache, tmp_path, monkeypatch):
+        Full(tmp_path, monkeypatch)
+        a, b = datasets.fetch("full")
+        assert (a.id, a.audio, a.duration) == ("ES2004a", cache / "sources/ami-ES2004a/ES2004a.Mix-Headset.wav", 1.0)
+        assert a.ref_text == "um Okay so well right crossing yes"
+        assert [t.speaker for t in a.ref_turns] == ["MEE006", "FEE005", "MEE006"]
+        assert (b.id, b.audio, b.duration) == ("ES2004b", cache / "sources/ami-ES2004b/ES2004b.Mix-Headset.wav", 1.0)
+        assert (b.ref_text, b.ref_turns) == ("hello there", (datasets.Turn(0.1, 0.9, "FEE007"),))
+
+    @pytest.mark.parametrize("old, new, problem", [
+        ('audio = ["ami-ES2004a", "ami-ES2004b"]', 'audio = ["ami-ES2004a"]',
+         "audio and rttm must be lists parallel to meetings"),
+        ('rttm = ["ami-rttm-ES2004a", "ami-rttm-ES2004b"]\n',
+         f'rttm = ["ami-rttm-ES2004a", "ami-rttm-ES2004b"]\ncrop = 0.5\nderived_sha256 = "{"0" * 64}"\n',
+         "crop is allowed only with one meeting"),
+    ])
+    def test_a_bad_list_or_a_crop_of_several_meetings_is_refused(self, tmp_path, monkeypatch, old, new, problem):
+        full = Full(tmp_path, monkeypatch, datasets_toml=Full.AMI_FULL.replace(old, new))
+        with pytest.raises(ValueError, match=re.escape(problem)):
+            datasets.load_manifests(full.dir)
+
+
+class TestJoinedDataset:
+    """The one-hour recording's recipe, a concat dataset (design/internal/g1-stage1.md §5b, decision 5)."""
+
+    def test_the_slices_are_joined_and_cut_and_the_references_placed_and_cropped(self, cache, tmp_path, monkeypatch):
+        full = Full(tmp_path, monkeypatch)
+        (item,) = datasets.fetch("hour")
+        assert (item.dataset, item.id, item.duration) == ("one-hour", "one-hour", 1.5)
+        assert item.audio == cache / "derived" / "one-hour" / "one-hour.wav"
+        assert item.audio.read_bytes() == full.joined
+        # ES2004b's words and turn move by its offset, 1.0 s; "there" (1.6–1.9 s) and the turn's end are past the cut.
+        assert item.ref_text == "um Okay so well right crossing yes hello"
+        assert [(round(t.start, 6), round(t.end, 6), t.speaker) for t in item.ref_turns] == [
+            (0.0, 0.3, "MEE006"), (0.4, 0.7, "FEE005"), (0.5, 0.7, "MEE006"), (1.1, 1.5, "FEE007")]
+
+    def test_a_piece_that_starts_after_the_cut_is_never_read(self, cache, tmp_path, monkeypatch):
+        full = Full(tmp_path, monkeypatch, cut=0.75)
+        (item,) = datasets.fetch("hour")
+        assert item.audio.read_bytes() == full.joined
+        assert item.ref_text == "um Okay so well right crossing yes"
+        assert sorted(full.server.requests) == sorted([AMI_WAV_URL, AMI_ZIP_URL, RTTM_URL])
+
+    def test_a_joined_wav_that_doesnt_match_exits_3_naming_its_hash_and_writes_nothing(
+            self, cache, tmp_path, monkeypatch, capsys):
+        full = Full(tmp_path, monkeypatch, derived="c" * 64)
+        assert datasets.main(["fetch", "hour"]) == 3
+        path = cache / "derived" / "one-hour" / "one-hour.wav"
+        assert capsys.readouterr().err.splitlines() == [
+            f"lmt: error: {path}: the joined WAV's SHA-256, {sha256(full.joined)}, doesn't match sets.toml"]
+        assert not any(name.startswith("derived/") for name in cached_files(cache))
+
+    def test_a_changed_joined_wav_is_rebuilt(self, cache, tmp_path, monkeypatch):
+        full = Full(tmp_path, monkeypatch)
+        (item,) = datasets.fetch("hour")
+        item.audio.write_bytes(b"changed")
+        datasets.fetch("hour")
+        assert item.audio.read_bytes() == full.joined
+
+    @pytest.mark.parametrize("joined, problem", [
+        (joined_toml("0" * 64, of="AMI-ci"), "of must name an ami dataset above it, not 'AMI-ci'"),
+        (joined_toml("0" * 64, pieces=("ami-ES2004b", "ami-ES2004a")),
+         "concat must be one slice of each of AMI full's meetings' audio, in its order"),
+        (joined_toml("0" * 64, pieces=("ami-ES2004a",)),
+         "concat must be one slice of each of AMI full's meetings' audio, in its order"),
+        (joined_toml("0" * 64, start=0.5), "each slice starts at 0"),
+        (joined_toml("0" * 64, cut=0), "cut must be positive"),
+        (joined_toml("0" * 64).replace("gap = 0.0", "gap = -1"), "gap must be at least 0"),
+        (joined_toml("0" * 64).replace(f'derived_sha256 = "{"0" * 64}"\n', ""),
+         "derived_sha256 is missing or has the wrong type"),
+    ])
+    def test_a_bad_joined_dataset_is_refused(self, tmp_path, monkeypatch, joined, problem):
+        full = Full(tmp_path, monkeypatch, datasets_toml=Full.AMI_FULL + joined)
+        with pytest.raises(ValueError, match=re.escape(problem)):
+            datasets.load_manifests(full.dir)
+
+    def test_of_must_come_above_it(self, tmp_path, monkeypatch):
+        full = Full(tmp_path, monkeypatch, datasets_toml=joined_toml("0" * 64) + Full.AMI_FULL)
+        with pytest.raises(ValueError, match="of must name an ami dataset above it, not 'AMI full'"):
+            datasets.load_manifests(full.dir)
 
 
 class TestPin:
