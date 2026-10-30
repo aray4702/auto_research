@@ -9,7 +9,7 @@ Local Meeting Transcriber is planned to turn a meeting recording into an accurat
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
 
 ```sh
-uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
+uv tool install git+https://github.com/aray4702/auto_research@v0.1.0
 ```
 
 The speaker models are gated on Hugging Face. Once, before the first download: make a free account, accept the conditions on the pages of [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1), [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) and [pyannote/wespeaker-voxceleb-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM), create a read token, and set it as `HF_TOKEN` for `lmt models download`. After that, nothing needs the network.
