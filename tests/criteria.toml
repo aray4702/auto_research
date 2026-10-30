@@ -64,6 +64,25 @@ complete = true
 [G1-11]
 complete = true
 
+# G1-8, G1-9, G1-10, G1-12 and G1-14: .github/scripts/check_results.py reads the Mac's results/full.json against
+# the spec's bounds in the test job, and records a missed bound without failing CI (criteria.md §2, #508). With
+# it: G1-10's disk half is tests/test_models.py's two disk tests; G1-12's CI half is tests/test_eval_ci.py's
+# comparison and test_models.py's manifest test (g1-stage2.md P10); G1-14's drift is tests/test_readme_table.py.
+[G1-8]
+complete = true
+
+[G1-9]
+complete = true
+
+[G1-10]
+complete = true
+
+[G1-12]
+complete = true
+
+[G1-14]
+complete = true
+
 [G1-4m]
 ci = false
 owner = "The two-speaker clip's SRT and WebVTT show their cues at the right times, with the speaker's label, in QuickTime Player and in VLC"
