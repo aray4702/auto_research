@@ -65,9 +65,15 @@ class FakePipeline:
 
 @pytest.fixture
 def fake(monkeypatch, tmp_path):
-    """Three model directories, with the pipeline and Model.from_pretrained replaced by fakes."""
+    """Three model directories, with the pipeline and Model.from_pretrained replaced by fakes. load's
+    MPLCONFIGDIR and scratch directory are this test's: the variable is undone after it, and the directory
+    goes at pytest's exit."""
     import pyannote.audio
     import pyannote.audio.pipelines
+
+    monkeypatch.setenv("MPLCONFIGDIR", "")  # so teardown restores the variable, even where it was unset
+    monkeypatch.delenv("MPLCONFIGDIR", raising=False)
+    monkeypatch.setattr(diarize, "_scratch", None)
 
     dirs = {name: tmp_path / name for name in (diarize.DIARIZATION, diarize.SEGMENTATION, diarize.EMBEDDING)}
     for d in dirs.values():
@@ -98,6 +104,18 @@ def test_configure_torch():
     assert torch.get_num_threads() == diarize.THREADS
     assert torch.are_deterministic_algorithms_enabled()
     assert torch.initial_seed() == diarize.SEED
+
+
+def test_load_moves_matplotlibs_cache_first(monkeypatch):
+    class Sentinel(Exception):
+        pass
+
+    def scratch_matplotlib():
+        raise Sentinel
+
+    monkeypatch.setattr(diarize, "scratch_matplotlib", scratch_matplotlib)
+    with pytest.raises(Sentinel):
+        diarize.load({})  # before the config is read, which would raise KeyError
 
 
 def test_load_passes_the_loaded_models_not_names(fake):
