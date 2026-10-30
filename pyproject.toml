@@ -5,7 +5,7 @@ description = "Offline, speaker-labelled meeting transcription that runs entirel
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.11,<3.14"
+requires-python = ">=3.11,<3.12"
 dependencies = [
   # The eight pinned to uv.lock's versions, without local labels (G3 §4a; tests/test_packaging.py checks them).
   "faster-whisper==1.2.1",
@@ -13,10 +13,8 @@ dependencies = [
   "pyannote.audio==3.4.0",             # answer 8a
   "torch==2.8.0",                      # direct, so the CPU index applies on Linux (2.8.0+cpu); 2.8 while pyannote.audio 3.x reads audio through torchaudio's I/O
   "torchaudio==2.8.0",
-  "av==18.1.0; python_full_version < '3.12'",     # the lock's versions differ by Python, not by platform
-  "av==19.0.2; python_full_version >= '3.12'",
-  "numpy==2.4.6; python_full_version < '3.12'",
-  "numpy==2.5.4; python_full_version >= '3.12'",
+  "av==18.1.0",
+  "numpy==2.4.6",
   "huggingface_hub==2.3.0",
   "jsonschema>=4.26",                  # lmt.transcript.load validates at run time (G3)
   "sounddevice>=0.5.6",                # lmt live's microphone (G2 4a, #209); imported only by lmt.live.mic
