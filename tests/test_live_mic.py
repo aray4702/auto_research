@@ -146,10 +146,11 @@ def test_importing_mic_does_not_load_sounddevice():
 def test_the_stand_ins_stream_delivers_its_blocks_from_its_own_thread():
     data = np.arange(2600, dtype=np.float32).reshape(1300, 2)
     fake = FakeSoundDevice([device("Mic", 2)], data=data, blocksize=512, overflow={1})
-    got = []
+    got, buffers = [], []
 
     def callback(indata, frames, time_info, status):
-        got.append((indata, frames, bool(status), threading.current_thread().name))
+        got.append((indata.copy(), frames, bool(status), threading.current_thread().name))
+        buffers.append(indata)
 
     assert not fake.opened
     with fake.InputStream(device=0, samplerate=48000, channels=2, dtype="float32", callback=callback) as stream:
@@ -159,6 +160,7 @@ def test_the_stand_ins_stream_delivers_its_blocks_from_its_own_thread():
     assert [g[2] for g in got] == [False, True, False]
     assert all(name != threading.current_thread().name for *_, name in got)
     np.testing.assert_array_equal(np.concatenate([g[0] for g in got]), data)
+    assert all(np.shares_memory(b, buffers[0]) for b in buffers)  # one buffer, reused, as PortAudio does
 
 
 def test_the_stand_ins_stream_stops_when_asked():

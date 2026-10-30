@@ -107,9 +107,8 @@ class MicSource:
         resampler = audio.Resampler(self.device.rate, self.device.channels)
         silence = _SilenceCheck(self.device, self._warn)
         pending = np.zeros(0, np.float32)
-        stream = backend.InputStream(device=self.device.index, samplerate=self.device.rate,
-                                     channels=self.device.channels, dtype="float32", callback=self._callback)
-        with stream:
+        stream = self._open(backend)
+        try:
             while not self._stopped.is_set():
                 chunk = self._queue.get()
                 if chunk is None:  # stop()'s wake-up
@@ -122,6 +121,9 @@ class MicSource:
                     if self._at_limit():
                         self.reason = "duration"
                         return
+        finally:
+            stream.stop()
+            stream.close()
         # Stopped, and the stream is closed: what the callback queued before then, and the resampler's tail.
         while True:
             try:
@@ -139,6 +141,24 @@ class MicSource:
                 self.reason = "duration"
                 return
         self.reason = "signal"
+
+    def _open(self, backend):
+        """Open and start the stream. A device PortAudio can't open or start (busy, unplugged since `resolve`,
+        its rate unsupported) is an InputError (3) naming it, with PortAudio's message."""
+        try:
+            stream = backend.InputStream(device=self.device.index, samplerate=self.device.rate,
+                                         channels=self.device.channels, dtype="float32", callback=self._callback)
+        except backend.PortAudioError as e:
+            raise self._cant_open(e) from None
+        try:
+            stream.start()
+        except backend.PortAudioError as e:
+            stream.close()
+            raise self._cant_open(e) from None
+        return stream
+
+    def _cant_open(self, error):
+        return InputError("--device", f"can't open input device '{self.device.name}' ({error})")
 
     def _take(self, pending, n):
         n = min(n, len(pending))
