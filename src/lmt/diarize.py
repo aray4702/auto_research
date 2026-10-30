@@ -5,6 +5,7 @@ never by name, and run on the CPU with fixed threads and seed.
 
 import contextlib
 import logging
+import tempfile
 import warnings
 from collections.abc import Mapping
 from pathlib import Path
@@ -24,6 +25,12 @@ SEGMENTATION = "segmentation-3.0"
 EMBEDDING = "wespeaker-voxceleb-resnet34-LM"
 
 LOGGERS = ("lightning", "pytorch_lightning", "pyannote")
+
+_scratch: Path | None = None
+
+
+def scratch_matplotlib() -> Path:
+    return Path(tempfile.gettempdir())  # a stub, for the tests' red run (design/internal/g1-stage2.md, P13)
 
 
 @contextlib.contextmanager
