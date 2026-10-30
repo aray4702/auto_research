@@ -438,7 +438,7 @@ class OuterCheckTest(FakeTest):
         self.assertTrue((work / "runs" / "offline" / "home").is_dir())
 
     def test_agreeing(self):
-        code, out, record = self.run_with(1, self.steps(failed="2.3"))
+        code, _, record = self.run_with(1, self.steps(failed="2.3"))
         self.assertEqual(code, 1)
         self.assertEqual(self.offline_checks(record), [
             ("2.1 the cut is real", ["G3-8"], "passed"),
@@ -467,7 +467,7 @@ class OuterCheckTest(FakeTest):
     def test_a_stale_file_is_missing(self):
         (self.fake.work / "offline.json").parent.mkdir(parents=True)
         (self.fake.work / "offline.json").write_text(json.dumps({"steps": self.steps()}))
-        code, out, record = self.run_with(1)
+        code, out, _ = self.run_with(1)
         self.assertEqual(code, 1)
         self.assertIn("no offline.json: the offline phase exits 1", out)
 
