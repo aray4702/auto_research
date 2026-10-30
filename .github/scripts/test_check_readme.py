@@ -40,6 +40,7 @@ uv run lmt --help
 ## Checks
 
 The gate is the one required check. Its [site](https://example.com/x) is external. The tests: `uv run --frozen pytest`.
+The harness: `uv run --frozen lmt eval --set ci`.
 
 ```sh
 python3 -I system/gate/generic.py --base origin/main
@@ -51,7 +52,8 @@ FAKE_GATE = "import os, sys\nsys.exit(1 if os.path.exists('FAIL_GATE') else 0)\n
 # Stands in for uv, so the Build block's install needs no network; FAIL_UV in the clone makes it fail.
 FAKE_UV = "#!/bin/sh\n[ ! -e FAIL_UV ]\n"
 TOOLCHAIN = '[uv]\nversion = "0.9.1"\n'
-PRODUCT_YML = "jobs:\n  test:\n    steps:\n      - run: uv run --frozen pytest\n"
+PRODUCT_YML = ("jobs:\n  test:\n    steps:\n      - run: uv run --frozen pytest\n"
+               "  eval-ci:\n    steps:\n      - run: uv run --frozen lmt eval --set ci\n")
 
 _saved_env = {}
 _fake_bin = tempfile.TemporaryDirectory()
