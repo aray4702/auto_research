@@ -3,9 +3,11 @@
 Every failure is an InputError naming the file (exit 3). FFmpeg's own log stays off (`av.logging` at its
 default), so a bad input gives stderr only the one `lmt: error:` line. FFmpeg decodes a WAV whose data is
 cut short without an error, so decode checks a WAV's `data` chunk first (design/internal/g1-stage2.md, P1).
+`Resampler` takes pushed float32 blocks through the same settings, `RESAMPLE` (design/internal/g2-stage1.md, 4b).
 """
 
 import struct
+from fractions import Fraction
 from pathlib import Path
 
 import av
@@ -14,6 +16,37 @@ import numpy
 from lmt.errors import InputError
 
 SAMPLE_RATE = 16_000
+RESAMPLE = {"format": "flt", "layout": "mono", "rate": SAMPLE_RATE}
+
+
+class Resampler:
+    """Float32 `(frames, channels)` blocks at `in_rate`, pushed one at a time, to 16 kHz mono float32."""
+
+    def __init__(self, in_rate: int, channels: int):
+        self.in_rate = in_rate
+        self.channels = channels
+        self._layout = {1: "mono", 2: "stereo"}.get(channels, f"{channels}c")
+        self._resampler = av.AudioResampler(**RESAMPLE)
+        self._pts = 0
+
+    def push(self, samples: numpy.ndarray) -> numpy.ndarray:
+        samples = numpy.asarray(samples, dtype=numpy.float32).reshape(-1, self.channels)
+        if len(samples) == 0:
+            return numpy.zeros(0, numpy.float32)
+        frame = av.AudioFrame.from_ndarray(numpy.ascontiguousarray(samples.T), format="fltp", layout=self._layout)
+        frame.sample_rate = self.in_rate
+        frame.time_base = Fraction(1, self.in_rate)
+        frame.pts = self._pts
+        self._pts += len(samples)
+        return self._join(self._resampler.resample(frame))
+
+    def flush(self) -> numpy.ndarray:
+        return self._join(self._resampler.resample(None))
+
+    @staticmethod
+    def _join(frames):
+        pieces = [f.to_ndarray().reshape(-1) for f in frames]
+        return numpy.concatenate(pieces).astype(numpy.float32, copy=False) if pieces else numpy.zeros(0, numpy.float32)
 
 
 def decode(path: str | Path) -> numpy.ndarray:
@@ -36,7 +69,7 @@ def decode(path: str | Path) -> numpy.ndarray:
     try:
         if not container.streams.audio:
             raise InputError(str(path), "no audio track")
-        resampler = av.AudioResampler(format="flt", layout="mono", rate=SAMPLE_RATE)
+        resampler = av.AudioResampler(**RESAMPLE)
         pieces = []
         for frame in container.decode(container.streams.audio[0]):
             pieces.extend(f.to_ndarray().reshape(-1) for f in resampler.resample(frame))
