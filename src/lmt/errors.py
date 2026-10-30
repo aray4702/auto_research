@@ -17,10 +17,10 @@ class LmtError(Exception):
 
 
 class NotBuilt(LmtError):
-    """A command whose item hasn't landed yet. It goes when G1 stage 2 closes."""
+    """A command whose item hasn't landed yet. It goes when the stage it names closes."""
 
-    def __init__(self, command: str):
-        super().__init__(command, "not built yet (G1 stage 2)")
+    def __init__(self, command: str, stage: str = "G1 stage 2"):
+        super().__init__(command, f"not built yet ({stage})")
 
 
 class UsageError(LmtError):

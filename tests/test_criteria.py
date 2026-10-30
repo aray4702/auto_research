@@ -69,9 +69,9 @@ def test_deselected():
 UNTAGGED = "def test_untagged():\n    pass\n"
 
 
-def job_steps(job):
-    """The steps of one job in product.yml, as text, one per step."""
-    text = PRODUCT_YML.read_text()
+def job_steps(job, text=None):
+    """The steps of one job in product.yml (or in `text`), as text, one per step."""
+    text = PRODUCT_YML.read_text() if text is None else text
     body = re.search(rf"^  {job}:\n(.*?)(?=^  \S|\Z)", text, re.MULTILINE | re.DOTALL).group(1)
     steps = body.split("\n    steps:\n", 1)[1]
     return re.split(r"\n(?=      - )", steps.strip("\n"))
@@ -180,21 +180,70 @@ class RegistryTest(unittest.TestCase):
         self.assertLessEqual(set(self.registry["jobs"]), product_jobs)
 
 
+# Two writers and a glob, as the `test` job's pytest and check_install.py (design/internal/g3-stage1.md §4a).
+NUMBERED = """\
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: uv run --frozen pytest --criteria-out=criteria-test-1.json
+      - if: ${{ !cancelled() }}
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_install.py --criteria-out criteria-test-3.json
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-test
+          path: criteria-test-*.json
+          retention-days: 90
+          if-no-files-found: error
+"""
+
+
 class UploadTest(unittest.TestCase):
     """Each job in the registry's `jobs` writes its record and uploads it last (§3)."""
+
+    def assert_uploads_its_record_last(self, job, steps):
+        upload = steps[-1]
+        self.assertRegex(upload, r"uses: actions/upload-artifact@[0-9a-f]{40} ")
+        self.assertIn("if: ${{ !cancelled() }}", upload)
+        writers = [(s, m.group(1)) for s in steps
+                   if (m := re.search(rf"--criteria-out[= ]criteria-{job}(-\d+)?\.json\b", s))]
+        self.assertTrue(writers)
+        numbers = [n for _, n in writers]
+        # One file, criteria-<job>.json (written by one step, or by steps of exclusive tiers); or a numbered
+        # file per writer, each its own number, uploaded by a glob.
+        if numbers[0] is None:
+            self.assertEqual(numbers, [None] * len(numbers))
+            path = f"path: criteria-{job}.json"
+        else:
+            self.assertNotIn(None, numbers)
+            self.assertEqual(len(set(numbers)), len(numbers), numbers)
+            self.assertGreater(len(numbers), 1)
+            path = f"path: criteria-{job}-*.json"
+        for line in (f"name: criteria-{job}", path, "retention-days: 90", "if-no-files-found: error"):
+            self.assertIn(line, upload)
+        for step, _ in writers:
+            self.assertIn("LMT_TIER: ${{ needs.changes.outputs.tier }}", step)
 
     def test_each_job_uploads_its_record_last(self):
         jobs = tomllib.loads((ROOT / "tests" / "criteria.toml").read_text())["jobs"]
         for job in jobs:
             with self.subTest(job=job):
-                steps = job_steps(job)
-                upload = steps[-1]
-                self.assertRegex(upload, r"uses: actions/upload-artifact@[0-9a-f]{40} ")
-                self.assertIn("if: ${{ !cancelled() }}", upload)
-                for line in (f"name: criteria-{job}", f"path: criteria-{job}.json", "retention-days: 90",
-                             "if-no-files-found: error"):
-                    self.assertIn(line, upload)
-                writers = [s for s in steps if re.search(rf"--criteria-out[= ]criteria-{job}\.json\b", s)]
-                self.assertTrue(writers)
-                for step in writers:
-                    self.assertIn("LMT_TIER: ${{ needs.changes.outputs.tier }}", step)
+                self.assert_uploads_its_record_last(job, job_steps(job))
+
+    def test_numbered_writers_upload_a_glob(self):
+        self.assert_uploads_its_record_last("test", job_steps("test", NUMBERED))
+
+    def test_numbered_writers_with_a_single_file_upload_fail(self):
+        single = NUMBERED.replace("path: criteria-test-*.json", "path: criteria-test-1.json")
+        with self.assertRaises(AssertionError):
+            self.assert_uploads_its_record_last("test", job_steps("test", single))
+
+    def test_numbered_writers_sharing_a_number_fail(self):
+        shared = NUMBERED.replace("criteria-test-3.json", "criteria-test-1.json")
+        with self.assertRaises(AssertionError):
+            self.assert_uploads_its_record_last("test", job_steps("test", shared))

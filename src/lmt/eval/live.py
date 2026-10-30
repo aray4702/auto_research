@@ -1,6 +1,7 @@
 """`lmt eval --set live`'s measures: matching committed words to the reference, their delays, nearest-rank
 percentiles and reading a run's event log (design/internal/g2-stage1.md §5, item 5a), as spec/acceptance.md
-G2 "Terms" defines them; and the runs of `lmt live` they're measured on (item 5b).
+G2 "Terms" defines them; the runs of `lmt live` they're measured on (item 5b); the figure that pools
+the runs (item 5c); and `lmt eval --set live`, which writes it to `results/live.json` (item 5d).
 
 jiwer is imported inside `match_words`, as `score` imports it, so this module imports without the `eval` extra.
 """
@@ -9,15 +10,17 @@ import json
 import math
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import NamedTuple
 
 from lmt import models, transcript
 from lmt.errors import InputError
+from lmt.eval import datasets, report, score
 from lmt.transcript import Word
 
 
@@ -146,3 +149,49 @@ def run_live(wav: Path, work_dir: Path, *, runs=3, command_prefix=None) -> list[
                             "-o", str(work_dir), "--overwrite"]
         logs.append(run_once(command, Path(work_dir), stem))
     return logs
+
+
+def figure(item: score.Item, ref_words, logs: Sequence[RunLog]) -> dict:
+    """The runs pooled, in public-api.md's key order: G1's figure for the runs as that many items, then the
+    delays over every matched word of every run, `matched_words`, and each run's p95 delay and
+    `behind_seconds`. A delay with no matched word is None."""
+    refs = [RefWord(*w) for w in ref_words]
+    hyps = []
+    pooled = []
+    runs = []
+    for log in logs:
+        hyp = score.hypothesis_from_transcript(log.transcript)
+        hyps.append(replace(hyp, wall_seconds=log.wall_seconds))
+        words, behind = read_events(log.lines)
+        run_delays = delays(match_words(refs, words))
+        pooled += run_delays
+        runs.append({"p95_delay_seconds": _delay(run_delays, 0.95), "behind_seconds": round(behind, 3)})
+    return {
+        **score._figure(item.dataset, "product-live", [item] * len(logs), hyps),
+        "p50_delay_seconds": _delay(pooled, 0.5),
+        "p95_delay_seconds": _delay(pooled, 0.95),
+        "max_delay_seconds": _delay(pooled, 1.0),
+        "matched_words": len(pooled),
+        "runs": runs,
+    }
+
+
+def cli_eval_live(args) -> int:
+    """`lmt eval --set live`: AMI-ci's three runs, in a temporary directory under `--out` that's removed after,
+    pooled into <out>/live.json with the first run's models. Prints the file's path, as `--set ci` does."""
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    item, ref_words = datasets.live_reference()
+    with tempfile.TemporaryDirectory(dir=out_dir, prefix=".lmt-eval-live-") as work_dir:
+        logs = run_live(item.audio, Path(work_dir))
+    results = report.build("live", [figure(item, ref_words, logs)], logs[0].transcript["models"],
+                           determinism=None, out_dir=out_dir)
+    path = out_dir / "live.json"
+    report.write(path, results)
+    print(path)
+    return 0
+
+
+def _delay(values: Sequence[float], q: float) -> float | None:
+    """The q-th nearest-rank percentile rounded to 3 decimal places (q = 1 is the max), or None for no values."""
+    return round(percentile(values, q), 3) if values else None

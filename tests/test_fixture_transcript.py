@@ -1,10 +1,15 @@
-"""The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c)."""
+"""The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c), and
+the transcript fixture kept equal to Linux's product run in its machine-independent fields, which does (0d)."""
 
 import json
+import os
+import shutil
+import sys
 import unittest
 from pathlib import Path
 from typing import NamedTuple
 
+import pytest
 from fixtures.markup import IMG, SCRIPT, markup_transcript
 from fixtures.segments import MIN_CURRENT, current_span, play_targets
 
@@ -12,6 +17,23 @@ from lmt import schema
 from lmt.transcript import load
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "two_speakers.transcript.json"
+
+# The fields that don't vary from one machine to the next (#409, option 1). Word texts, times and probabilities
+# do (PR #494), so they aren't compared.
+TOP_LEVEL = ("schema_version", "lmt_version", "source", "models", "speakers")
+
+
+def first_difference(expected: dict, actual: dict) -> str | None:
+    """The first machine-independent field in which two transcripts differ, or None if they agree in all."""
+    for key in TOP_LEVEL:
+        if expected.get(key) != actual.get(key):
+            return key
+    if len(expected["segments"]) != len(actual["segments"]):
+        return "len(segments)"
+    for i, (e, a) in enumerate(zip(expected["segments"], actual["segments"], strict=True)):
+        if e["speaker"] != a["speaker"]:
+            return f"segments[{i}].speaker"
+    return None
 
 
 class Seg(NamedTuple):
@@ -36,6 +58,54 @@ class TranscriptFixtureTest(unittest.TestCase):
         for i in targets:
             with self.subTest(segment=i):
                 self.assertGreaterEqual(round(current_span(self.t.segments, i), 3), MIN_CURRENT)
+
+
+@pytest.mark.models
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="the fixture is the product run's on Linux (spec G3, Terms)"
+)
+def test_the_fixture_matches_the_product_run(two_speakers_run):
+    assert two_speakers_run.returncode == 0, two_speakers_run.stderr
+    produced = two_speakers_run.out_dir / "two_speakers.json"
+    expected = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    if (field := first_difference(expected, json.loads(produced.read_text(encoding="utf-8")))) is not None:
+        # The run's file goes to the job's artifact, for the builder to commit unchanged (0d).
+        if out := os.environ.get("LMT_FIXTURE_OUT"):
+            Path(out).mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(produced, Path(out) / FIXTURE.name)
+        pytest.fail(f"{FIXTURE.name} differs from this run's two_speakers.json in {field}")
+
+
+class FirstDifferenceTest(unittest.TestCase):
+    def setUp(self):
+        self.doc = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        self.other = json.loads(FIXTURE.read_text(encoding="utf-8"))
+
+    def test_agrees_when_only_texts_times_and_probabilities_differ(self):
+        for seg in self.other["segments"]:
+            seg["start"] += 0.5
+            seg["end"] += 0.5
+            seg["text"] = "else"
+            for word in seg["words"]:
+                word["start"] += 0.58
+                word["end"] += 0.58
+                word["text"] = "else"
+                word["probability"] = 0.5
+        self.assertNotEqual(self.other, self.doc)
+        self.assertIsNone(first_difference(self.doc, self.other))
+
+    def test_names_a_differing_speaker(self):
+        self.other["segments"][3]["speaker"] = "S2" if self.doc["segments"][3]["speaker"] == "S1" else "S1"
+        self.assertEqual(first_difference(self.doc, self.other), "segments[3].speaker")
+
+    def test_names_a_differing_segment_count(self):
+        del self.other["segments"][-1]
+        self.assertEqual(first_difference(self.doc, self.other), "len(segments)")
+
+    def test_names_a_differing_lmt_version(self):
+        self.other["lmt_version"] = "9.9.9"
+        self.other["segments"][0]["speaker"] = "S2"
+        self.assertEqual(first_difference(self.doc, self.other), "lmt_version")
 
 
 class PlayTargetsTest(unittest.TestCase):
