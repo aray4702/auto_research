@@ -11,6 +11,7 @@ from lmt.transcript import Word
 
 BLOCK = 1600
 U = 16000
+CONFIG = AsrConfig(update=U)  # the scripted hypotheses assume U = 1.0 s, not the default
 
 
 class FakeEngine:
@@ -29,7 +30,7 @@ class FakeEngine:
         return [Word(s - start / 16000, e - start / 16000, text, 0.5) for s, e, text in hyp]
 
 
-def make(engine, config=asr.DEFAULT_ASR_CONFIG):
+def make(engine, config=CONFIG):
     """All speech, so no gap: the pause rule (1c) never applies here."""
     return StreamingASR(engine, config, speech=lambda b: [(0, len(b))])
 
@@ -267,7 +268,7 @@ class PromptTest(unittest.TestCase):
 
 class ConfigTest(unittest.TestCase):
     def test_the_provisional_defaults(self):
-        self.assertEqual(asr.DEFAULT_ASR_CONFIG, AsrConfig(update=16000, max_buffer=240000, pause=8000,
+        self.assertEqual(asr.DEFAULT_ASR_CONFIG, AsrConfig(update=12800, max_buffer=240000, pause=8000,
                                                            prompt_chars=200))
 
 
