@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #164 review | Reviewer's findings on #404. G1's stage 2 hasn't all merged: P7c (#391) and P13 (#402) are open. A diarizing run writes outside its outputs until P13, so 5a needs P13 for G3-6 and G3-8, and 5a alone waits on stage 2. "What stage 1 takes" is restated at 563ee54. Each item now names its criterion tags (`criteria.md` §1), and each new check writes its record (§3): the `browser` job its own (3d); `check_install.py` `criteria-test-3.json` in the `test` job, whose upload becomes a glob (4a3, 4a4); `check_install.py` and `check_full_install.py` one record per runner in `install-full` (4a3, 4b1, 4b2, 5a). 5a now needs 4a4, which changes the upload test first. A new item, **6**, sets `complete = true` for G3-1 to G3-8 once their checks pass on `main`, as G1's P10 does. 26 S items. G3's criteria are unchanged |
 | 2026-10-29 | architect, #164 | The Owner's "Break down L and XL items into S items": the eight items become 25 S items (0a–0d, 1a–1c, 2a1–2a4, 2b1–2b2, 3a–3d, 4a1–4a4, 4b1–4b2, 5a–5b), each with its own files, test, Needs and tier. Needs are now what is really unmerged: G1's stage 2 is on `main`, so "What stage 1 takes from G1's stage 2" states what `main` has. Since `PULL_REQUEST_MAX_TIER = 1`, a PR runs tier 1 only: model and browser tests are the Developer's local run, first confirmed on `main`, and the two items that add a job's first Linux check (0d, 3d) get a `workflow_dispatch` gate run on their branch before merging. The Linux-only fixture comparison skips on macOS. G3-2's `ffmpeg` checks run in `test-models`, the job with `ffmpeg`. 4b's offline phase reads the models snapshot from a file. G3's criteria are unchanged |
 | 2026-10-29 | architect, #349 | G1's P6 split into P6a and P6b, and P7 into P7a to P7c (`g1-stage2.md`). The guard and its test are P7a's, and `tests/isolation.py` is P7b's: item 2a, which takes its snapshot, needs P7a and P7b, and item 4b, which keeps its own, needs P7a. `tests/subtitle_checks.py` is P6a's, so items 1 and 4b, which call it, need P6a |
 | 2026-10-29 | architect, #289 | G1's stage 2 (`g1-stage2.md`): the network guard and its test are built by G1's P7, with `LMT_NETGUARD_ALLOW`, so item 0 no longer lists them, items 2a and 4b need P7, and every G3 use sets `LMT_NETGUARD_ALLOW=127.0.0.1` |
@@ -13,37 +14,39 @@ This is the detail a Developer or the builder needs to build each of G3 stage 1'
 
 ## Items, files and order
 
-The design's eight items (0, 1, 2a, 2b, 3, 4a, 4b, 5) were each about 1.5 hours. Each is now split into S items: one Developer (or builder) run and one PR, up to about 45 minutes. The sections below keep their numbers, and each says which S item builds which part.
+The design's eight items (0, 1, 2a, 2b, 3, 4a, 4b, 5) were each about 1.5 hours. Each is now split into S items: one Developer (or builder) run and one PR, up to about 45 minutes. A 26th, **6**, marks the registry. The sections below keep their numbers, and each says which S item builds which part.
+- **Every test that checks part of a criterion's "How it's checked" column carries its `criterion` marker, in the same PR** (`design/internal/criteria.md` §1). The table's last column names the tags. A test it doesn't name stays untagged: helpers' and fixtures' own tests, the stubs', and checks of what the spec puts in another job (G3-6 is checked in `install-full`, not by 2b's fakes). A check that isn't pytest writes its own record (§3).
 - **`cli.py` puts a change in tier 3,** and both `rename` and `demo` need subcommands in it. So 0a wires both commands to stub modules at once, as G1's item 1a did. The rename and demo items then never touch `cli.py`: they run at tier 2, and in parallel.
-- **A file that several items build is built in a chain,** never by two open items at once: `rename.py` (0a → 1a → 1b), `demo/server.py` (0a → 2a2 → 2a3 → 2a4), `test_fixture_transcript.py` (0c → 0d), `test_demo_server.py` (2a3 → 3c), `check_full_install.py` (4b1 → 4b2), and `pyproject.toml` with `uv.lock` (4a1 → 3a).
+- **A file that several items build is built in a chain,** never by two open items at once: `rename.py` (0a → 1a → 1b), `demo/server.py` (0a → 2a2 → 2a3 → 2a4), `test_fixture_transcript.py` (0c → 0d), `test_demo_server.py` (2a3 → 3c), `check_full_install.py` (4b1 → 4b2), `pyproject.toml` with `uv.lock` (4a1 → 3a), `tests/test_criteria.py` (4a4 → 5a), and `tests/criteria.toml` with `.github/scripts/test_criteria.py` (3d and 5a → 6).
 
 | Item | What | Needs (unmerged) | Files it creates or changes | Tier | Its test |
 | --- | --- | --- | --- | --- | --- |
-| **0a** | `lmt rename` and `lmt demo` wired to stubs, with `validate`'s new rules (§0, "`cli.py`") | — | `src/lmt/cli.py`, `src/lmt/errors.py` (`NotBuilt`'s stage), `src/lmt/rename.py` (stub), `src/lmt/demo/__init__.py`, `src/lmt/demo/server.py` (stub), `src/lmt/demo/sample.py` (stub), `tests/test_cli.py`, `.github/scripts/test_tiers.py` | 3 | `test_cli.py`: G1-6's table test with `rename` and `demo`; `--help` for both; each new `validate` rule exits 2 with one line; each stub exits 1 with one line. `test_tiers.py`'s two new cases. `test` job |
-| **0b** | The import-graph test (§0, "`tests/test_import_graph.py`") | 0a | `tests/test_import_graph.py` | 2 | Its three checks. `test` job |
-| **0c** | The transcript and markup fixtures, with the checks that need no model (§0, "The transcript fixture", "The markup fixture") | — | `tests/fixtures/two_speakers.transcript.json`, `tests/fixtures/markup.py`, `tests/test_fixture_transcript.py` | 2 | The fixture loads, names `two_speakers.wav`, has two speakers, and its first, middle and last segments each last ≥ 1.6 s; `markup_transcript` passes the schema with the two strings. `test` job |
-| **0d** | The fixture kept equal to Linux's product run (spec G3 "Terms") | 0c | `tests/test_fixture_transcript.py` (the `models` test), `tests/fixtures/two_speakers.transcript.json` (Linux's bytes, if they differ), `.github/workflows/product.yml` (`test-models` block) | 3 | The comparison passing in `test-models` in a `workflow_dispatch` gate run on the PR's branch, after the fixture is taken from that job's artifact if it first differed |
-| **1a** | `rename.py`'s parts: `parse_pair`, `check_name`, `resolve`, `relabel`, `speaker_table` (§1) | 0a | `src/lmt/rename.py` (`cli_rename` still raises `NotBuilt`), `tests/test_rename_core.py` | 2 | `check_name` and the schema's pattern agree both ways; each `resolve` case; the echo of control characters; the table. `test` job |
-| **1b** | `cli_rename`: G3-1, G3-3 and G1-6 for `rename` (§1) | 1a, 0c | `src/lmt/rename.py`, `tests/test_rename.py` | 2 | §1's G3-1, G3-3 and G1-6 tests, on the fixture. `test` job |
-| **1c** | G3-2 with the rename names, and G3-1's model test (§1) | 1b | `tests/test_rename_subtitles.py`, `tests/test_rename_models.py` | 2 | G3-2's parse checks in the `test` job; its `ffmpeg` checks (U+2028 and U+2029 included) and G3-1's model test marked `models`. The PR shows the local `pytest -m models` result; first confirmed on `main`'s `test-models` |
-| **2a1** | The page: `src/lmt/demo/static/` (§2a, "The page") | 0a | `src/lmt/demo/static/index.html`, `app.js`, `app.css`, `favicon.svg`, `tests/test_demo_page.py` | 2 | The page's source checks and its DOM contract. `test` job |
-| **2a2** | Loading a demo: `Demo`, `wav_bytes`, `load` (§2a) | 0a, 0c | `src/lmt/demo/server.py` (`cli_demo` still raises `NotBuilt`), `tests/test_demo_load.py` | 2 | The WAV against `decode`; the audio's default and `--audio`; the errors' subjects; the duration warning. `test` job |
-| **2a3** | The handler: `make_server` and `Handler` (§2a, "The handler") | 2a1, 2a2 | `src/lmt/demo/server.py`, `tests/test_demo_server.py` | 2 | In process: routes, ranges, HEAD, refusals, headers, the live re-read, the port in use, the address. `test` job |
-| **2a4** | The command: `cli_demo` and `DemoProcess` (§2a) | 2a3 | `src/lmt/demo/server.py`, `tests/demo_process.py`, `tests/test_demo_process.py` | 2 | In a subprocess: start and stop, the browser opener, loopback only, the errors' exit codes, and G1-13's checks with the guard and the snapshot. `test` job |
-| **2b1** | `--sample`'s cache: `prepare`, `cache_key` (§2b) | 0a, 0c | `src/lmt/demo/sample.py`, `tests/test_demo_sample.py` | 2 | §2b's first six tests, on fakes. `test` job |
-| **2b2** | `lmt demo --sample` end to end, on fakes (§2b) | 2a4, 2b1 | `tests/test_demo_sample_process.py`, `tests/fixtures/sample_fakes/sitecustomize.py` | 2 | §2b's last test. `test` job |
-| **3a** | Selenium in the lock, the driver, and the page's list (§3) | 2a4; after 4a1 (the lock) | `pyproject.toml` (Selenium, the `browser` marker), `uv.lock`, `toolchain.toml` (`[licences]` entries, if any), `tests/browser/conftest.py`, `tests/browser/test_page.py` | 3 | The inventory posted for both platforms; the PR shows the local `uv run --frozen pytest -m browser` result |
-| **3b** | Playing from a clicked or keyed segment (G3-5) (§3) | 3a | `tests/browser/test_play.py` | 2 | The local `pytest -m browser` result |
-| **3c** | The track after a rename (G3-2's Chrome parse), the markup fixture, and the relabel helper (§3) | 3a, 1b | `tests/browser/test_track.py`, `tests/test_demo_server.py` (the helper) | 2 | The local `pytest -m browser` and `pytest` results |
-| **3d** | The screenshot script and the `browser` job (§3) | 3b, 3c | `tests/browser/screenshot.py`, `tests/browser/test_screenshot.py`, `.github/workflows/product.yml` (`browser` block) | 3 | The `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, with every G3-5 check, G3-2's Chrome comparison and the screenshot artifact |
-| **4a1** | The pins (§4a) | — | `pyproject.toml` (pins), `uv.lock`, `tests/test_packaging.py` | 3 | `test_packaging.py`; the lock's eight versions unchanged. `test` job |
-| **4a2** | `## Install` and its README check (§4a) | — | `README.md`, `.github/scripts/check_readme.py`, `.github/scripts/test_check_readme.py` | 1 | `check_install`'s unit tests and `--print-install`; `check_readme.py --root .` passing. `readme` job |
-| **4a3** | `check_install.py` (§4a) | 4a2 | `.github/scripts/check_install.py`, `.github/scripts/test_check_install.py` | 1 | Its unit tests. `readme` job |
-| **4a4** | The `test` job's install (G3-7 on Linux) (§4a) | 0a, 2a1, 4a1, 4a3 | `.github/workflows/product.yml` (`test` block) | 3 | The install step passing in the PR's `test` job, with its time |
-| **4b1** | `check_full_install.py`: its frame and the online phase (§4b) | — | `.github/scripts/check_full_install.py`, `.github/scripts/test_check_full_install.py` | 1 | Its unit tests on a fake `lmt`. `readme` job |
-| **4b2** | `check_full_install.py`: the offline phase (§4b) | 4b1 | `.github/scripts/check_full_install.py`, `.github/scripts/test_check_full_install.py` | 1 | Its unit tests on a fake `lmt`. `readme` job |
-| **5a** | Builder: `install-full` (§5) | 1b, 2a4, 2b1, 4a1, 4a3, 4b2 | `.github/workflows/install-full.yml`, `.github/workflows/product.yml` (`install-full` block) | 3 | `install-full` passing on both runners in a `workflow_dispatch` gate run on the PR's branch |
+| **0a** | `lmt rename` and `lmt demo` wired to stubs, with `validate`'s new rules (§0, "`cli.py`") | — | `src/lmt/cli.py`, `src/lmt/errors.py` (`NotBuilt`'s stage), `src/lmt/rename.py` (stub), `src/lmt/demo/__init__.py`, `src/lmt/demo/server.py` (stub), `src/lmt/demo/sample.py` (stub), `tests/test_cli.py`, `.github/scripts/test_tiers.py` | 3 | `test_cli.py`: G1-6's table test with `rename` and `demo`; `--help` for both; each new `validate` rule exits 2 with one line; each stub exits 1 with one line. `test_tiers.py`'s two new cases. `test` job. **Tags:** the table and help tests keep `G1-6` and gain `G3-3`; `rename`'s `validate` test `G1-6`, `G3-3`; `demo`'s `G1-6`, and the `TRANSCRIPT`-with-`--sample` one `G3-4` too. The stub tests are untagged |
+| **0b** | The import-graph test (§0, "`tests/test_import_graph.py`") | 0a | `tests/test_import_graph.py` | 2 | Its three checks. `test` job. Untagged |
+| **0c** | The transcript and markup fixtures, with the checks that need no model (§0, "The transcript fixture", "The markup fixture") | — | `tests/fixtures/two_speakers.transcript.json`, `tests/fixtures/markup.py`, `tests/test_fixture_transcript.py` | 2 | The fixture loads, names `two_speakers.wav`, has two speakers, and its first, middle and last segments each last ≥ 1.6 s; `markup_transcript` passes the schema with the two strings. `test` job. Untagged (fixtures' own tests) |
+| **0d** | The fixture kept equal to Linux's product run (spec G3 "Terms") | 0c | `tests/test_fixture_transcript.py` (the `models` test), `tests/fixtures/two_speakers.transcript.json` (Linux's bytes, if they differ), `.github/workflows/product.yml` (`test-models` block) | 3 | The comparison passing in `test-models` in a `workflow_dispatch` gate run on the PR's branch, after the fixture is taken from that job's artifact if it first differed. Untagged (spec G3 "Terms", not a criterion) |
+| **1a** | `rename.py`'s parts: `parse_pair`, `check_name`, `resolve`, `relabel`, `speaker_table` (§1) | 0a | `src/lmt/rename.py` (`cli_rename` still raises `NotBuilt`), `tests/test_rename_core.py` | 2 | `check_name` and the schema's pattern agree both ways; each `resolve` case; the echo of control characters; the table. `test` job. Untagged (helpers' tests; 1b checks them through the command) |
+| **1b** | `cli_rename`: G3-1, G3-3 and G1-6 for `rename` (§1) | 1a, 0c | `src/lmt/rename.py`, `tests/test_rename.py` | 2 | §1's G3-1, G3-3 and G1-6 tests, on the fixture. `test` job. **Tags:** the G3-1 tests `G3-1`; the G3-3 cases `G3-3`; the option tests `G1-6`, `G3-3` |
+| **1c** | G3-2 with the rename names, and G3-1's model test (§1) | 1b | `tests/test_rename_subtitles.py`, `tests/test_rename_models.py` | 2 | G3-2's parse checks in the `test` job; its `ffmpeg` checks (U+2028 and U+2029 included) and G3-1's model test marked `models`. The PR shows the local `pytest -m models` result; first confirmed on `main`'s `test-models`. **Tags:** G3-2's checks, both jobs', `G3-2`; the model test `G3-1`; the U+2028/U+2029 test untagged (no criterion names it) |
+| **2a1** | The page: `src/lmt/demo/static/` (§2a, "The page") | 0a | `src/lmt/demo/static/index.html`, `app.js`, `app.css`, `favicon.svg`, `tests/test_demo_page.py` | 2 | The page's source checks and its DOM contract. `test` job. Untagged (internal; G3-5 is the browser's) |
+| **2a2** | Loading a demo: `Demo`, `wav_bytes`, `load` (§2a) | 0a, 0c | `src/lmt/demo/server.py` (`cli_demo` still raises `NotBuilt`), `tests/test_demo_load.py` | 2 | The WAV against `decode`; the audio's default and `--audio`; the errors' subjects; the duration warning. `test` job. Untagged (2a4 checks the errors through the command) |
+| **2a3** | The handler: `make_server` and `Handler` (§2a, "The handler") | 2a1, 2a2 | `src/lmt/demo/server.py`, `tests/test_demo_server.py` | 2 | In process: routes, ranges, HEAD, refusals, headers, the live re-read, the port in use, the address. `test` job. **Tags:** `G3-4` |
+| **2a4** | The command: `cli_demo` and `DemoProcess` (§2a) | 2a3 | `src/lmt/demo/server.py`, `tests/demo_process.py`, `tests/test_demo_process.py` | 2 | In a subprocess: start and stop, the browser opener, loopback only, the errors' exit codes, and G1-13's checks with the guard and the snapshot. `test` job. **Tags:** `G3-4`; the tests of `--audio`, `--port` and `--no-browser` `G1-6` too |
+| **2b1** | `--sample`'s cache: `prepare`, `cache_key` (§2b) | 0a, 0c | `src/lmt/demo/sample.py`, `tests/test_demo_sample.py` | 2 | §2b's first six tests, on fakes. `test` job. **Tags:** the two `offline=True` tests, through `cli.main`, `G1-6` (`--offline`); the rest untagged (G3-6 is `install-full`'s) |
+| **2b2** | `lmt demo --sample` end to end, on fakes (§2b) | 2a4, 2b1 | `tests/test_demo_sample_process.py`, `tests/fixtures/sample_fakes/sitecustomize.py` | 2 | §2b's last test. `test` job. **Tags:** `G1-6` (`--sample`); its `TRANSCRIPT`-with-`--sample` check `G3-4` too |
+| **3a** | Selenium in the lock, the driver, and the page's list (§3) | 2a4; after 4a1 (the lock) | `pyproject.toml` (Selenium, the `browser` marker), `uv.lock`, `toolchain.toml` (`[licences]` entries, if any), `tests/browser/conftest.py`, `tests/browser/test_page.py` | 3 | The inventory posted for both platforms; the PR shows the local `uv run --frozen pytest -m browser` result. **Tags:** `G3-5` |
+| **3b** | Playing from a clicked or keyed segment (G3-5) (§3) | 3a | `tests/browser/test_play.py` | 2 | The local `pytest -m browser` result. **Tags:** `G3-5` |
+| **3c** | The track after a rename (G3-2's Chrome parse), the markup fixture, and the relabel helper (§3) | 3a, 1b | `tests/browser/test_track.py`, `tests/test_demo_server.py` (the helper) | 2 | The local `pytest -m browser` and `pytest` results. **Tags:** the track test `G3-2`, `G3-5`; the markup test `G3-5` |
+| **3d** | The screenshot script and the `browser` job, with its record (§3) | 3b, 3c | `tests/browser/screenshot.py`, `tests/browser/test_screenshot.py`, `.github/workflows/product.yml` (`browser` block), `tests/criteria.toml` (`jobs`), `.github/scripts/test_criteria.py` (the real registry's `jobs`) | 3 | The `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, with every G3-5 check, G3-2's Chrome comparison, the screenshot artifact and the `criteria-browser` record. `test_screenshot.py` untagged (G3-9 is stage 2's) |
+| **4a1** | The pins (§4a) | — | `pyproject.toml` (pins), `uv.lock`, `tests/test_packaging.py` | 3 | `test_packaging.py`; the lock's eight versions unchanged. `test` job. Untagged (G3-7's check is the install, 4a4) |
+| **4a2** | `## Install` and its README check (§4a) | — | `README.md`, `.github/scripts/check_readme.py`, `.github/scripts/test_check_readme.py` | 1 | `check_install`'s unit tests and `--print-install`; `check_readme.py --root .` passing. `readme` job. **Tags:** `check_install`'s row in `CHECKS` carries `G3-7`, so the `readme` record has it |
+| **4a3** | `check_install.py`, with `--criteria-out` (§4a) | 4a2 | `.github/scripts/check_install.py`, `.github/scripts/test_check_install.py` | 1 | Its unit tests, the record's included. `readme` job |
+| **4a4** | The `test` job's install (G3-7 on Linux), and its record (§4a) | 0a, 2a1, 4a1, 4a3 | `.github/workflows/product.yml` (`test` block), `tests/test_criteria.py` (`UploadTest`) | 3 | The install step passing in the PR's `test` job, with its time; `UploadTest` accepting the job's two records, `criteria-test-1.json` and `criteria-test-3.json` |
+| **4b1** | `check_full_install.py`: its frame, the online phase and `--criteria-out` (§4b) | — | `.github/scripts/check_full_install.py`, `.github/scripts/test_check_full_install.py` | 1 | Its unit tests on a fake `lmt`, the record's included. `readme` job |
+| **4b2** | `check_full_install.py`: the offline phase (§4b) | 4b1 | `.github/scripts/check_full_install.py`, `.github/scripts/test_check_full_install.py` | 1 | Its unit tests on a fake `lmt`, the offline steps' records included. `readme` job |
+| **5a** | Builder: `install-full`, with its records (§5) | 1b, 2a4, 2b1, 4a1, 4a3, 4a4, 4b2; **G1's P13 (#402)** | `.github/workflows/install-full.yml`, `.github/workflows/product.yml` (`install-full` block), `tests/criteria.toml` (`jobs`), `.github/scripts/test_criteria.py` (the real registry's `jobs`), `tests/test_criteria.py` (`UploadTest`) | 3 | `install-full` passing on both runners in a `workflow_dispatch` gate run on the PR's branch, with both runners' `criteria-install-full-*` artifacts; `UploadTest` |
 | **5b** | Builder: `release.yml` and `release_notes.py` (§5) | 5a | `.github/workflows/release.yml`, `.github/scripts/release_notes.py`, `.github/scripts/test_release_notes.py` | 3 | `test_release_notes.py`; after merging, a `dry_run` on `main` recorded on the item |
+| **6** | The registry: `complete = true` for G3-1 to G3-8, once their checks have passed on `main` (§6) | 1c, 2b2, 3d, 5a, each passed on `main` | `tests/criteria.toml`, `.github/scripts/test_criteria.py` | 2 | `tests/test_criteria.py` and `.github/scripts/test_criteria.py`; `criteria.py` on `main`'s latest records gives `pass` for each criterion marked, shown in the PR |
 
 **Order.** An item can start once everything it needs has merged:
 1. **Now:** 0a, 0c, 4a1, 4a2 and 4b1.
@@ -52,13 +55,16 @@ The design's eight items (0, 1, 2a, 2b, 3, 4a, 4b, 5) were each about 1.5 hours.
 4. 1c (1b); 2a4 (2a3).
 5. 2b2 (2a4, 2b1); 3a (2a4, and after 4a1).
 6. 3b (3a); 3c (3a, 1b).
-7. 3d (3b, 3c); 5a (1b, 2a4, 2b1, 4a1, 4a3, 4b2).
+7. 3d (3b, 3c); 5a (1b, 2a4, 2b1, 4a1, 4a3, 4a4, 4b2, and G1's P13, #402).
 8. 5b (5a).
+9. 6 (1c, 2b2, 3d, 5a), once each one's checks have passed on `main`.
+
+**G1's stage 2 blocks 5a alone.** Two of its items are still open: P7c (#391, PR #400), G1-13's test, which no G3 item uses, and P13 (#402, PR #403). Until P13 merges, a run that diarizes writes matplotlib's font cache and onnxruntime's telemetry files under `HOME` and `XDG_CACHE_HOME` (`g1-stage2.md`, "P13"). 4b's two `--sample` runs then fail their "four fresh directories are still empty" checks, which are G3-6's "neither run writes anything outside `LMT_DATA_DIR`", and G3-8's offline `transcribe` writes there too. 4b1 and 4b2 run on a fake `lmt`, so only 5a's real run needs P13. No other G3 item checks a diarizing run's writes: 2a4's snapshot is of `lmt demo` on a transcript, which loads no model.
 
 The path to G3-5 is the longest: 0a, 2a1, 2a3, 2a4, 3a, 3b, 3d, seven merges in a row.
 
 **Parallel-safe,** by the files in the table:
-- **No two items that can be open at once share a file,** except `product.yml`: 0d, 4a4, 3d and 5a each change their own job's block (`test-models`, `test`, `browser`, `install-full`). Git merges different blocks, so they may run in parallel. If two of them conflict, the second updates its branch from `main`.
+- **No two items that can be open at once share a file,** except `product.yml`: 0d, 4a4, 3d and 5a each change their own job's block (`test-models`, `test`, `browser`, `install-full`). Git merges different blocks, so they may run in parallel. If two of them conflict, the second updates its branch from `main`. 3d and 5a also each add their job to the registry's `jobs` line, in `tests/criteria.toml` and in `.github/scripts/test_criteria.py`'s real-registry test. That is one line in each, so the second to merge updates its branch from `main` and keeps both jobs.
 - **3a and 4a1** both change `pyproject.toml` and `uv.lock`, and a lock can't be merged by hand. So 3a starts only after 4a1 has merged, since 4a1 is on G3-7's path. If they ever overlap, the second updates its branch from `main` and runs `uv lock` again; it never merges `uv.lock`'s text.
 
 **Every item's local checks:** `uv run --frozen ruff check`, `uv run --frozen pytest`, and `python3 -I system/gate/generic.py --base origin/main`. An item with a `models` test adds `uv run --frozen pytest -m models`, and one with a `browser` test adds `uv run --frozen pytest -m browser`.
@@ -74,17 +80,17 @@ The path to G3-5 is the longest: 0a, 2a1, 2a3, 2a4, 3a, 3b, 3d, seven merges in 
 
 | What | Count | Minutes |
 | --- | --- | --- |
-| PR runs, tier 1 | 25 PRs × 4 × ≈ 11 | ≈ 1,100 |
+| PR runs, tier 1 | 26 PRs × 4 × ≈ 11 | ≈ 1,140 |
 | `main` runs, tier 3 (0a, 0d, 3a, 3d, 4a1, 4a4, 5a, 5b) | 8 × ≈ 38 | ≈ 300 |
-| `main` runs, tier 2 (0b, 0c, 1a–1c, 2a1–2a4, 2b1, 2b2, 3b, 3c) | 13 × ≈ 26 | ≈ 340 |
+| `main` runs, tier 2 (0b, 0c, 1a–1c, 2a1–2a4, 2b1, 2b2, 3b, 3c, 6) | 14 × ≈ 26 | ≈ 360 |
 | `main` runs, tier 1 (4a2, 4a3, 4b1, 4b2) | 4 × ≈ 12 | ≈ 50 |
 | `workflow_dispatch` runs (0d, 3d, 5a) | 3 × ≈ 38, plus `install-full`'s ≈ 30 | ≈ 150 |
 
-That is about 1,950 minutes, against about 1,100 for the eight items: 25 PRs carry more fixed time than eight, and most of the total is the architecture's 4 runs per PR. The Coordinator plans against the 3,000-minute signal with these figures.
+That is about 2,000 minutes, against about 1,100 for the eight items: 26 PRs carry more fixed time than eight, and most of the total is the architecture's 4 runs per PR. The Coordinator plans against the 3,000-minute signal with these figures.
 
 ## What stage 1 takes from G1's stage 2
 
-G1's stage 2 has merged: decode, diarization, alignment, the exporters, `transcript.load`, the subtitle checks, the network guard and the file snapshot. So none of these blocks a G3 item any more. This table gives what `main` has (at 87bc0af), which the items call. Where `main` differs from what this design first assumed, the difference is written here, and the items follow `main`.
+Most of G1's stage 2 has merged: decode, diarization, alignment, the exporters, `transcript.load`, the subtitle checks, the network guard and the file snapshot. None of these blocks a G3 item any more. Two of its items are still open, P7c (#391) and P13 (#402), and only 5a waits on stage 2, for P13 ("Order", above). This table gives what `main` has (at 563ee54), which the items call. Where `main` differs from what this design first assumed, the difference is written here, and the items follow `main`.
 
 | Interface | Used by | On `main` |
 | --- | --- | --- |
@@ -104,6 +110,8 @@ G1's stage 2 has merged: decode, diarization, alignment, the exporters, `transcr
 | **The CLI table test** (G1-6) | 0a | `tests/test_cli.py`'s `documented_options()` skips every `public-api.md` heading that `LATER_GOAL` matches (`(G2)` or `(G3, …)`): "skipped until the item that adds the command removes its goal here". `test_parser_matches_public_api` asserts the exact set of commands. So 0a wires the two commands itself, as below. |
 | **`NotBuilt`** (`lmt.errors`) | 0a | `NotBuilt(command)`'s message is `"not built yet (G1 stage 2)"`, and its docstring says it goes when G1's stage 2 closes. `export.render` still raises it for an unknown format. |
 | **The tier exceptions** (#107) | 0a | `tiers.py`'s `TIER3_EXCEPT` already has `"src/lmt/rename.py"` and `"src/lmt/demo/"`, and `test_tiers.py` has `rename.py` → 2, `demo/page.html` → 2 and `cli.py` → 3. |
+| **The per-criterion record** (`criteria.md`) | every item; 3d, 4a3, 4a4, 4b1, 4b2, 5a, 6 | The `criterion` marker and `--criteria-out` (`tests/conftest.py`). `criteria.py`'s `write_record(path, checks, complete)` takes the job from the file's name, `criteria-<job>[-<n>].json`; `check_readme.py` loads `criteria.py` by path to call it. The registry's `jobs` is `["readme", "test", "test-models", "eval-ci"]`, and the `test` job uploads the single file `criteria-test.json`. `tests/test_criteria.py`'s `UploadTest` requires, for each job in `jobs`, a last step uploading `criteria-<job>` from `criteria-<job>.json`, and `LMT_TIER` on each step that writes it. `.github/scripts/test_criteria.py`'s `test_real_registry_loads` lists `jobs` and the complete criteria. The merge joins one run's files for a job by `(job, run_id, run_attempt)`. |
+| **P13** (#402, open) | 5a | Not on `main`: no `ORT_DISABLE_TELEMETRY`, no `MPLCONFIGDIR` handling. A diarizing run writes under `HOME` and `XDG_CACHE_HOME` until it merges. |
 
 ## 0. CLI wiring, fixtures and the tier exceptions
 
@@ -506,12 +514,18 @@ browser:
     - astral-sh/setup-uv (pinned SHA), version: <toolchain.toml [uv] version>, enable-cache: true
     - run: uv sync --locked --all-extras
     - run: google-chrome --version && "$CHROMEWEBDRIVER/chromedriver" --version
-    - run: uv run --frozen pytest -m browser
+    - env:
+        LMT_TIER: ${{ needs.changes.outputs.tier }}
+      run: uv run --frozen pytest -m browser --criteria-out=criteria-browser.json
     - run: uv run --frozen python tests/browser/screenshot.py --transcript tests/fixtures/two_speakers.transcript.json --out "$RUNNER_TEMP/demo.png"
     - actions/upload-artifact (pinned SHA), name: demo-screenshot, path: ${{ runner.temp }}/demo.png
+    # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+    - if: ${{ !cancelled() }}
+      actions/upload-artifact (pinned SHA), name: criteria-browser, path: criteria-browser.json,
+        retention-days: 90, if-no-files-found: error
 ```
 
-The artifact lets the Reviewer look at the page without running it. No model is needed, so the job runs at tier 2 (architecture, "CI"): on `main` after each tier-2 or tier-3 merge, and in every `workflow_dispatch` run. A PR, at tier 1, doesn't run it.
+The artifact lets the Reviewer look at the page without running it. **The record:** the pytest step writes `criteria-browser.json` with 3a to 3c's `G3-5` and `G3-2` tags, and its upload is the job's last step, as `UploadTest` requires. 3d adds `"browser"` to `tests/criteria.toml`'s `jobs` and to `.github/scripts/test_criteria.py`'s `test_real_registry_loads`. #300 says `against_base.py` refuses a change to that file; if it isn't fixed by then, the PR says so for the Reviewer, as G1's P10 does. No model is needed, so the job runs at tier 2 (architecture, "CI"): on `main` after each tier-2 or tier-3 merge, and in every `workflow_dispatch` run. A PR, at tier 1, doesn't run it.
 
 **Test of 3d:** the local `pytest -m browser` result, with `test_screenshot.py` passing, in the PR. Then, before merging, a `workflow_dispatch` gate run on the PR's branch ("How an item's test runs"), in which the `browser` job passes with every G3-5 check and G3-2's Chrome comparison, on the runner's headless Chrome with no sound device. The builder posts that run's result and its `demo-screenshot` artifact on the item, for the Reviewer.
 
@@ -568,7 +582,7 @@ Standard library only. The `test` job runs it (4a4), and so do 5a's `install-ful
 
 ```
 python3 -I .github/scripts/check_install.py --platform {linux-x86_64,macos-arm64} --scratch DIR
-                                            (--readme ROOT [--tag-checkout] | --wheel PATH)
+                                            (--readme ROOT [--tag-checkout] | --wheel PATH) [--criteria-out PATH]
 ```
 
 1. **The command:**
@@ -583,29 +597,38 @@ python3 -I .github/scripts/check_install.py --platform {linux-x86_64,macos-arm64
 
 Each step prints `PASS` or `FAIL` and a line to `GITHUB_STEP_SUMMARY`. It exits 1 if any step fails.
 
-`test_check_install.py` (`unittest`, standard library only) tests the string rewrite, the tag step on a temporary git repository, the label stripping (`2.8.0+cpu` → `2.8.0`), the lock lookup per platform, and the steps' `PASS`/`FAIL` report and exit code with the install and the tool's Python replaced by fakes. The install itself is tested by 4a4's job step.
+**Its record** (`criteria.md` §3, "A check that isn't pytest"). With `--criteria-out PATH`, after its last step it writes one check per step through `criteria.py`'s `write_record`, loaded by path as `check_readme.py` loads it, with `complete=True`. Each check is named `check_install.py::<platform> <step>` (`check_install.py::linux-x86_64 pins`), so the two runners' checks stay apart when the merge joins them, and carries `["G3-7"]`. A step that passed is `passed` and one that failed is `failed`. A step not reached because an earlier one failed (no install, so no version) is `failed` too, since G3-7 needs every step. The job comes from the file's name: `criteria-test-3.json` in the `test` job (4a4), and `criteria-install-full-<n>.json` in `install-full` (5a). `release.yml` doesn't pass the option, since its run isn't a gate job.
+
+`test_check_install.py` (`unittest`, standard library only) tests the string rewrite, the tag step on a temporary git repository, the label stripping (`2.8.0+cpu` → `2.8.0`), the lock lookup per platform, and the steps' `PASS`/`FAIL` report and exit code with the install and the tool's Python replaced by fakes. It also reads the record that run writes: seven checks, each with `G3-7` and the platform in its name, `complete: true`, the job `test` for `criteria-test-3.json`, and `failed` for the steps after a failed install. The install itself is tested by 4a4's job step.
 
 **Test of 4a3:** `test_check_install.py`, in the `readme` job's `unittest discover`.
 
 ### The `test` job (4a4)
 
-After its existing steps:
+After its pytest step, and before its upload:
 
 ```yaml
 - name: The one-command install (G3-7, Linux)
-  run: python3 -I .github/scripts/check_install.py --platform linux-x86_64 --scratch "$RUNNER_TEMP/install" --readme . --tag-checkout
+  if: ${{ !cancelled() }}
+  env:
+    LMT_TIER: ${{ needs.changes.outputs.tier }}
+  run: python3 -I .github/scripts/check_install.py --platform linux-x86_64 --scratch "$RUNNER_TEMP/install" --readme . --tag-checkout --criteria-out criteria-test-3.json
 ```
 
 Step 6 needs `lmt.rename`, `lmt.demo.server`, `lmt.demo.sample` (0a's stubs are enough) and `static/index.html` (2a1), so 4a4 needs 0a and 2a1.
 
-**Test of 4a4:** the `test` job's install step passing in the PR, which runs tier 1 and so runs it. Its time (about 2 minutes, as the architecture estimates) and torch's installed version are in the step summary. No agent run can read a summary yet (#218), so they inform the builder's CI figures and don't decide the test.
+**The job's record becomes two files** (`criteria.md` §3: "A job whose checks span several programs writes one record per program"). The pytest step's `--criteria-out=criteria-test.json` becomes `criteria-test-1.json`, the install step writes `criteria-test-3.json`, and the upload, still named `criteria-test` and still last, takes `path: criteria-test-*.json`. The `-2` is left for `check_results.py`, which §3 already numbers so (G1's stage 3). The install step runs `if: ${{ !cancelled() }}`, so a pytest failure doesn't drop G3-7's checks from the record. If the step ran only after a passing pytest, a pytest failure would leave the install's checks out of that run's record, and the merge would drop them as a deleted test (§4).
+
+**`UploadTest`** (`tests/test_criteria.py`) learns this form. A job's writers are the steps with `--criteria-out[= ]criteria-<job>(-\d+)?\.json`. With one writer, the upload's path is `criteria-<job>.json`, as today. With several, each writes `criteria-<job>-<n>.json` with a distinct `n`, and the upload's path is `criteria-<job>-*.json`. Every writer still sets `LMT_TIER`. A case on a small `product.yml` text with two writers and a glob passes, and one whose upload names a single file fails.
+
+**Test of 4a4:** the `test` job's install step passing in the PR, which runs tier 1 and so runs it; `UploadTest` and 4a3's record test, in the PR's jobs. The artifact's two files are #240's to read: no agent run can read an artifact yet (#218). Its time (about 2 minutes, as the architecture estimates) and torch's installed version are in the step summary. No agent run can read a summary yet (#218), so they inform the builder's CI figures and don't decide the test.
 
 ## 4b. The full-install sequence (`.github/scripts/check_full_install.py`)
 
 The steps of G3-6 and G3-8 against an installed `lmt`, so that 5a's workflow only calls it. It runs from a checkout with `uv run --frozen`, after the install.
 
 ```
-uv run --frozen python .github/scripts/check_full_install.py --lmt <scratch>/bin/lmt --platform {linux-x86_64,macos-arm64} --work DIR
+uv run --frozen python .github/scripts/check_full_install.py --lmt <scratch>/bin/lmt --platform {linux-x86_64,macos-arm64} --work DIR [--criteria-out PATH]
 ```
 
 **Its S items,** both tier 1 and both on a fake `lmt`, so neither waits for 2b or 4a; only 5a's real run does:
@@ -642,9 +665,23 @@ uv run --frozen python .github/scripts/check_full_install.py --lmt <scratch>/bin
 
 Each step prints `PASS` or `FAIL`, and the outer process writes every step to the step summary, the offline phase's from its file. Exit 1 on any failure.
 
+**Its record** (`criteria.md` §3). With `--criteria-out PATH`, the outer process, after its last check, writes one check per step through `criteria.py`'s `write_record`, loaded by path, with `complete=True`. The offline phase's steps come from `offline.json`. When the file is missing or contradicts the exit code, each offline step is `failed`. Each check is named `check_full_install.py::<platform> <step>` and carries:
+
+| Step | Criteria |
+| --- | --- |
+| 1.1 `models download` | `G3-8` |
+| 1.3 the first `--sample` run | `G3-6` |
+| 2.1 the cut is real (Linux) | `G3-8` |
+| 2.2 offline `transcribe`, with `check_srt` and `check_vtt` | `G3-8` |
+| 2.3 offline `rename` | `G3-8` |
+| 2.4 the second `--sample` run | `G3-6`, `G3-8` |
+| 2.5 the guard's log | `G3-6`, `G3-8` |
+
+1.2, the snapshot, checks nothing and isn't listed. On macOS, 2.1 doesn't run and isn't listed either: the spec cuts the network with a namespace on Linux only, and the guard is macOS's check. A `skipped` check would leave G3-8 `waiting` for good (§4). Steps not reached because an earlier one failed are `failed`. 4b1 writes the online steps (`main` runs that phase alone); 4b2 adds the offline ones.
+
 `test_check_full_install.py` (`unittest`, standard library only) uses a fake `lmt`, a small Python script that records its arguments, writes placeholder outputs, and for `demo` prints a URL and serves a fixed page and a short `RIFF` body until SIGTERM. It calls the steps in process, with `subtitle_checkers` replaced by a stub. The real run is 5a's first `workflow_dispatch`.
-- **4b1's cases:** the online order; `run_demo`'s limits (a fake that never prints its URL, one that ignores SIGTERM) and an exit code other than 0; a file written outside `LMT_DATA_DIR`, or into `<work>/models` after its snapshot; `<work>/snapshots/models.json` written after step 1.2; each command's fresh directories and `HF_TOKEN` passed to `models download` alone; and `offline_command()`'s argv for both platforms, built without running `sudo`.
-- **4b2's cases:** the offline steps' order and limits; the Linux probe of step 1, stubbed both ways (refused with `ENETUNREACH`, which passes, and connected, which fails with "the namespace has a route out"; the Reviewer's note on #170); `<work>/models` changed against `snapshots/models.json`; `<work>/data` changed by the second run; a line in the guard's log; and the outer process's check, with `offline.json` missing, contradicting the exit code, and agreeing with it.
+- **4b1's cases:** the online order; `run_demo`'s limits (a fake that never prints its URL, one that ignores SIGTERM) and an exit code other than 0; a file written outside `LMT_DATA_DIR`, or into `<work>/models` after its snapshot; `<work>/snapshots/models.json` written after step 1.2; each command's fresh directories and `HF_TOKEN` passed to `models download` alone; and `offline_command()`'s argv for both platforms, built without running `sudo`; the record from a passing and a failing online run (names, criteria, outcomes, `complete: true`, the job from the file's name).
+- **4b2's cases:** the offline steps' order and limits; the Linux probe of step 1, stubbed both ways (refused with `ENETUNREACH`, which passes, and connected, which fails with "the namespace has a route out"; the Reviewer's note on #170); `<work>/models` changed against `snapshots/models.json`; `<work>/data` changed by the second run; a line in the guard's log; and the outer process's check, with `offline.json` missing, contradicting the exit code, and agreeing with it; the record's offline checks in each of those three cases, and no 2.1 check on macOS.
 
 **Test of 4b1 and of 4b2:** each one's cases, in the `readme` job's `unittest discover` (tier 1). Locally, `python3 -I -m unittest discover -s .github/scripts -t .github/scripts`, if the run is allowed it, else the PR's `readme` job.
 
@@ -653,7 +690,7 @@ Each step prints `PASS` or `FAIL`, and the outer process writes every step to th
 `.github/workflows/` is the builder's. This is what the product side gives it, and what it needs to do.
 
 **Its S items:**
-- **5a:** `install-full.yml` and `product.yml`'s `install-full` job. It needs 4a3 and 4b2 to run, and 0a, 1b, 2a4, 2b1 and 4a1 to pass (the imports, `rename`, `demo`, `--sample` and the pins).
+- **5a:** `install-full.yml` and `product.yml`'s `install-full` job, with their records. It needs 4a3 and 4b2 to run, 4a4 for `UploadTest`'s numbered records, and 0a, 1b, 2a4, 2b1 and 4a1 to pass (the imports, `rename`, `demo`, `--sample` and the pins). It also needs G1's P13 (#402) to pass: until then, `--sample`'s transcription writes under the run's fresh `HOME` and `XDG_CACHE_HOME`, and G3-6's checks fail ("Order").
 - **5b:** `release.yml`, with `release_notes.py` and `test_release_notes.py`. It calls 5a's reusable workflow, so it needs 5a.
 
 ### From the product side
@@ -668,13 +705,18 @@ Each step prints `PASS` or `FAIL`, and the outer process writes every step to th
 A reusable workflow (`workflow_call`, secret `HF_TOKEN`), with one job on a matrix of `ubuntu-24.04` and `macos-15`, `timeout-minutes: 45`, and `permissions: contents: read`. Its steps, in a clean environment (spec, G3 "Terms"): no `actions/cache`, and no `enable-cache` on setup-uv.
 1. Install uv at the pinned version, with `astral-sh/setup-uv` (pinned SHA), its version passed in as an input. A first job reads it from `toolchain.toml` in a sparse checkout and outputs it.
 2. Check out into `$RUNNER_TEMP/src`, with `persist-credentials: false`. Nothing there is synced before the install, so the checkout is only the git source the README's URL is redirected to. This is the Architect's reading of "no checkout before the install".
-3. `check_install.py --platform <platform> --scratch "$RUNNER_TEMP/install" --readme "$RUNNER_TEMP/src" --tag-checkout`.
+3. `check_install.py --platform <platform> --scratch "$RUNNER_TEMP/install" --readme "$RUNNER_TEMP/src" --tag-checkout --criteria-out "$GITHUB_WORKSPACE/criteria-install-full-<i>.json"`.
 4. In `$RUNNER_TEMP/src`: `uv sync --locked --all-extras`, then install `ffmpeg` as `test-models`'s "The ffmpeg CLI (G1-4)" step does on Linux, and with Homebrew on macOS if the image lacks it.
-5. `check_full_install.py --lmt "$RUNNER_TEMP/install/bin/lmt" --platform <platform> --work "$RUNNER_TEMP/work"`, with `HF_TOKEN` in this step's environment only.
+5. `check_full_install.py --lmt "$RUNNER_TEMP/install/bin/lmt" --platform <platform> --work "$RUNNER_TEMP/work" --criteria-out "$GITHUB_WORKSPACE/criteria-install-full-<j>.json"`, with `HF_TOKEN` in this step's environment only, and `if: ${{ !cancelled() }}`, so a failed install still records G3-6's and G3-8's checks as failed rather than dropping them.
+6. **The record,** last, `if: ${{ !cancelled() }}`: `actions/upload-artifact` (pinned SHA) with `name: criteria-install-full-<platform>`, `path: criteria-install-full-*.json`, `retention-days: 90` and `if-no-files-found: error`.
 
-`product.yml` gains an `install-full` job that `uses: ./.github/workflows/install-full.yml` when `github.event_name == 'workflow_dispatch'`, passing `HF_TOKEN`. A run of the gate by `schedule` doesn't run it (#83, answer 10a: by hand and at release). A job skipped by its `if` passes, as for the tiers.
+**The records** (`criteria.md` §3). Each runner writes two files: `<i>`, `<j>` are 1 and 2 on `ubuntu-24.04`, and 3 and 4 on `macos-15`, set in the matrix, so no two files of a run share a name. Each runner uploads its own artifact, since one run's artifact names must differ. The merge joins all four files of the run into one `install-full` record by `(job, run_id, run_attempt)`, as it joins one job's files, and the platform in each check's name keeps the runners' checks apart. Each step that writes a record sets `LMT_TIER` from a `tier` input of the reusable workflow. `product.yml`'s job passes `needs.changes.outputs.tier`, and `release.yml` passes nothing, so its records give `tier: null`.
 
-**Test of 5a:** before merging, a `workflow_dispatch` gate run on the PR's branch in which `install-full` passes on both runners, with each step's summary posted on the item.
+`product.yml` gains an `install-full` job, `needs: changes`, that `uses: ./.github/workflows/install-full.yml` when `github.event_name == 'workflow_dispatch'`, passing `HF_TOKEN` and the tier. A run of the gate by `schedule` doesn't run it (#83, answer 10a: by hand and at release). A job skipped by its `if` passes, as for the tiers. 5a adds `"install-full"` to `tests/criteria.toml`'s `jobs` and to `.github/scripts/test_criteria.py`'s `test_real_registry_loads` (#300, as in 3d). A run on `main` without `workflow_dispatch` uploads no `install-full` record, so the merge keeps the latest dispatched run's (§4), and gives `null` until there is one.
+
+**`UploadTest`** learns a job that `uses:` a reusable workflow: it reads that file's job steps instead, with the upload's name `criteria-install-full-${{ matrix.platform }}` (or the matrix key 5a names) and its `path` glob, and `LMT_TIER: ${{ inputs.tier }}` on each writer.
+
+**Test of 5a:** before merging, a `workflow_dispatch` gate run on the PR's branch in which `install-full` passes on both runners, with each step's summary posted on the item, and both `criteria-install-full-*` artifacts uploaded. `UploadTest`, in the PR's `test` job.
 
 ### `release.yml` (5b)
 
@@ -698,3 +740,25 @@ A reusable workflow (`workflow_call`, secret `HF_TOKEN`), with one job on a matr
 **Test of 5b:**
 - **Before merging:** `test_release_notes.py`, in the `readme` job.
 - **After merging:** GitHub dispatches only workflows that are on the default branch. So the builder records a `dry_run` of `release.yml` on `main` on the item, with its artifact's three files and notes. No draft is created before the release.
+
+## 6. The registry
+
+As G1's P10 does (`g1-stage2.md`, "P10"): `tests/criteria.toml` gains a block with `complete = true` for each of G3-1 to G3-8 whose tagged checks have all passed on `main`, each with a comment naming its tests, as `[G1-1]` and `[G1-2]` have. Until then, G3's criteria show `partial` with every check passing (`criteria.md` §2).
+
+| Criterion | Complete when | Its checks |
+| --- | --- | --- |
+| G3-1 | 1b and 1c, with `main`'s `test-models` passing `tests/test_rename_models.py` | `tests/test_rename.py`, `tests/test_rename_models.py` |
+| G3-2 | 1c and 3c, with `main`'s `test-models` passing 1c's `ffmpeg` checks and its `browser` job passing `tests/browser/test_track.py` (3d) | `tests/test_rename_subtitles.py`, `tests/browser/test_track.py` |
+| G3-3 | 0a and 1b | `tests/test_cli.py`, `tests/test_rename.py` |
+| G3-4 | 2a3, 2a4 and 2b2 | `tests/test_demo_server.py`, `tests/test_demo_process.py`, `tests/test_demo_sample_process.py`, `tests/test_cli.py` |
+| G3-5 | 3a to 3d, with `main`'s `browser` job passing | `tests/browser/test_page.py`, `test_play.py`, `test_track.py` |
+| G3-6 | 4b1, 4b2 and 5a, with a `workflow_dispatch` run on `main` whose `install-full` passes on both runners | `check_full_install.py`'s record |
+| G3-7 | 4a2, 4a4 and 5a, with `main`'s `test` job and that dispatched run's `install-full` passing | `check_readme.py`'s `check_install` row, `check_install.py`'s records |
+| G3-8 | 4b1, 4b2 and 5a, with that dispatched run | `check_full_install.py`'s record |
+
+- **G3-9 and G3-10** are stage 2's: their checks (`check_readme.py`'s lead, `check_release.py`) don't exist yet. G3-5m and G3-8m are already in the registry, with `ci = false`.
+- **G1-6** is G1's P10's to mark. Its CI part now includes `rename`'s and `demo`'s options (0a removes G3 from `LATER_GOAL`). If P10 has marked G1-6 by then, item 6 adds 1b's, 2a4's, 2b1's and 2b2's option tests to its comment.
+- `.github/scripts/test_criteria.py`'s `test_real_registry_loads` gains the same IDs. #300 applies as for P10.
+- If the deadline (2026-10-31) nears first, item 6 marks what has passed, and a second run marks the rest.
+
+**Test of 6:** `tests/test_criteria.py` and `.github/scripts/test_criteria.py`. `criteria.py` on `main`'s latest records then gives `pass` for each criterion marked, and the PR shows that output, as P10's does.
