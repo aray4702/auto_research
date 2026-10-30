@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-29 | architect, #402 | S3's quiet loggers gain `matplotlib`: with `g1-stage2.md` P13's scratch `MPLCONFIGDIR`, its font-cache warning would print on every diarizing run |
 | 2026-10-29 | architect, #372 | S4: with turns, `g1-stage2.md` P12's turns-first segments replace the words-first rule; without turns it stands |
 | 2026-10-29 | architect, #286 | Schema patterns end with `(?![\s\S])`, not `$`, so Python's and ECMA-262's validators agree on a trailing newline; outputs take `0o666` less the umask, not `mkstemp`'s `0o600` |
 | 2026-10-28 | architect, #260 | The Reviewer's findings on #261: `clip_run` passes no option, writing to its working directory; `lmt.transcript.load` and the move of `jsonschema` stay with stage 2's later items, as G3 assumes; S2's options test pins every ASR setting fixed before measurement |
@@ -185,7 +186,7 @@ class Diarizer:
 - **Loading, never by name.** `load` reads `speaker-diarization-3.1`'s `config.yaml` from its verified directory with `yaml.safe_load` (PyYAML comes with pyannote.audio). It builds `pyannote.audio.pipelines.SpeakerDiarization` from the config's `pipeline.params`, but with `segmentation=load_segmentation(...)` and `embedding=load_embedding(...)`, the loaded models in place of the names the config gives. Then it calls `instantiate(config["params"])`, the config's tuned thresholds. Nothing resolves a model name over the network, and `HF_HUB_OFFLINE=1` is already set by `models.ensure`.
 - **If loading fails on the locked torch** because `torch.load` defaults to `weights_only=True`, the remedy, in order: `torch.serialization.add_safe_globals` for the classes it names; failing that, `weights_only=False` for these files only. That is safe here because each file's SHA-256 is pinned and verified before use. The Developer records which was needed.
 - **`diarize`** calls `configure_torch()`, then the pipeline on `{"waveform": torch.from_numpy(audio)[None, :], "sample_rate": 16000}` with the speaker options as given. It returns `Turn(start, end, speaker)` for each track of the annotation (`itertracks(yield_label=True)`), sorted by `(start, end, speaker)`, unrounded. Turns may overlap. CPU only.
-- **Quiet.** Loading and running happen inside `warnings.catch_warnings()` with `simplefilter("ignore")`, and the `lightning`, `pytorch_lightning` and `pyannote` loggers are set to `ERROR`, so a successful run prints no library warnings.
+- **Quiet.** Loading and running happen inside `warnings.catch_warnings()` with `simplefilter("ignore")`, and the `lightning`, `pytorch_lightning`, `pyannote` and `matplotlib` loggers are set to `ERROR`, so a successful run prints no library warnings. (`matplotlib` since `g1-stage2.md` P13, #402.)
 - **`Turn`** is `lmt.transcript.Turn` (S4), or created in `transcript.py` here as `Word` is in S2.
 
 ### Tests

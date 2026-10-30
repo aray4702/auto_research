@@ -15,8 +15,6 @@ import pytest
 from lmt import cli
 
 PUBLIC_API = Path(__file__).resolve().parents[1] / "design" / "public-api.md"
-# A later goal's command, "(G2)": skipped until the item that adds the command removes its goal here.
-LATER_GOAL = re.compile(r"\((G2)(, [^)]*)?\)$")
 
 
 def run(*argv):
@@ -35,8 +33,6 @@ def documented_options():
         heading, _, body = block.partition("\n")
         if heading == "Global options":
             options[()] = set(re.findall(r"`lmt (--[\w-]+)`", body)) - {"--help"}
-            continue
-        if LATER_GOAL.search(heading):
             continue
         command = re.match(r"`lmt (\w+)", heading).group(1)
         if command == "models":  # one row per subcommand, its options in brackets
@@ -103,23 +99,15 @@ class OptionTableTest(unittest.TestCase):
     @pytest.mark.criterion("G3-3")
     def test_parser_matches_public_api(self):
         documented = documented_options()
-        self.assertEqual(set(documented), {(), ("transcribe",), ("models", "download"), ("models", "list"),
-                                           ("models", "verify"), ("eval",), ("rename",), ("demo",)})
+        self.assertEqual(set(documented), {(), ("transcribe",), ("live",), ("models", "download"),
+                                           ("models", "list"), ("models", "verify"), ("eval",), ("rename",),
+                                           ("demo",)})
         self.assertEqual(parser_options(cli.build_parser()), documented)
 
     def test_transcribe_table_is_read(self):
         # Guards the reader: a table it failed to parse would compare empty with empty.
         self.assertIn("--output-dir", documented_options()[("transcribe",)])
         self.assertIn("-f", documented_options()[("transcribe",)])
-
-    def test_later_goals_sections_are_skipped(self):
-        for heading in ("`lmt live` (G2)",):
-            with self.subTest(heading=heading):
-                self.assertTrue(LATER_GOAL.search(heading))
-        for heading in ("`lmt transcribe INPUT`", "`lmt models`", "`lmt eval`", "Global options",
-                        "`lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)", "`lmt demo [TRANSCRIPT]` (G3, F8)"):
-            with self.subTest(heading=heading):
-                self.assertFalse(LATER_GOAL.search(heading))
 
 
 @pytest.mark.criterion("G1-6")
