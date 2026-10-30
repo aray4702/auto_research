@@ -36,7 +36,9 @@ TOOL = "local-meeting-transcriber"  # the tool's environment, <scratch>/tools/<T
 # 4a1's pins, by their names in uv.lock.
 PINNED = ("faster-whisper", "ctranslate2", "pyannote-audio", "torch", "torchaudio", "av", "numpy",
           "huggingface-hub")
-EVAL_EXTRA = ("jiwer", "pyannote.metrics")
+# The eval extra's own distribution. Its pyannote.metrics also comes with pyannote.audio 3.4.0, so it
+# isn't checked (the Owner's answer on #415).
+EVAL_EXTRA = ("jiwer",)
 MODULES = ("lmt.cli", "lmt.rename", "lmt.demo.server", "lmt.demo.sample")
 INDEX_HTML = "demo/static/index.html"  # in the installed lmt package
 CRITERIA = ["G3-7"]
@@ -242,6 +244,9 @@ def step_pins(run):
             problems.append(f"{name} isn't installed")
         elif strip_local(installed) != strip_local(locked):
             problems.append(f"{name} {installed} isn't uv.lock's {locked}")
+    expected = (run.root / ".python-version").read_text().strip()
+    if ".".join(probe["python"].split(".")[:2]) != expected:
+        problems.append(f"Python {probe['python']} isn't .python-version's {expected}")
     if problems:
         raise StepFailed("; ".join(problems), lines)
     return lines
