@@ -3,16 +3,20 @@
 import json
 import unittest
 from pathlib import Path
+from typing import NamedTuple
 
 from fixtures.markup import IMG, SCRIPT, markup_transcript
+from fixtures.segments import MIN_CURRENT, current_span, play_targets
 
 from lmt import schema
 from lmt.transcript import load
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "two_speakers.transcript.json"
 
-# G3-5 checks the marked segment 1 s after the click, from up to 0.05 s before its start (g3-stage1.md, 3b).
-MIN_SEGMENT = 1.6
+
+class Seg(NamedTuple):
+    start: float
+    end: float
 
 
 class TranscriptFixtureTest(unittest.TestCase):
@@ -26,12 +30,33 @@ class TranscriptFixtureTest(unittest.TestCase):
     def test_two_speakers(self):
         self.assertEqual([s.id for s in self.t.speakers], ["S1", "S2"])
 
-    def test_first_middle_and_last_segments_last_long_enough(self):
-        n = len(self.t.segments)
-        for i in (0, n // 2, n - 1):
-            s = self.t.segments[i]
+    def test_first_middle_and_last_segments_stay_current_long_enough(self):
+        targets = play_targets(self.t.segments)
+        self.assertEqual(len(set(targets)), 3)
+        for i in targets:
             with self.subTest(segment=i):
-                self.assertGreaterEqual(round(s.end - s.start, 3), MIN_SEGMENT)
+                self.assertGreaterEqual(round(current_span(self.t.segments, i), 3), MIN_CURRENT)
+
+
+class PlayTargetsTest(unittest.TestCase):
+    def test_picks_by_how_long_a_segment_stays_current(self):
+        segments = [
+            Seg(0.0, 2.0),
+            Seg(1.8, 3.0),  # segment 0 overlaps it, so 0 stays current for 1.8 s
+            Seg(3.0, 5.0),  # n // 2: lasts 2 s but stays current for only 0.5 s, so the rule skips it
+            Seg(3.5, 4.0),  # lasts 0.5 s, but the gap after it keeps it current for 2.5 s
+            Seg(6.0, 8.0),
+        ]
+        self.assertAlmostEqual(current_span(segments, 0), 1.8)
+        self.assertAlmostEqual(current_span(segments, 2), 0.5)
+        self.assertAlmostEqual(current_span(segments, 3), 2.5)
+        self.assertAlmostEqual(current_span(segments, 4), 2.0)
+        self.assertEqual(play_targets(segments), (0, 3, 4))
+
+    def test_raises_when_no_middle_segment_stays_current(self):
+        segments = [Seg(0.0, 2.0), Seg(2.0, 3.0), Seg(3.0, 4.0), Seg(4.0, 6.0)]
+        with self.assertRaisesRegex(LookupError, "index 2"):
+            play_targets(segments)
 
 
 class MarkupFixtureTest(unittest.TestCase):
