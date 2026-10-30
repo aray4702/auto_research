@@ -159,7 +159,16 @@ jobs:
       # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
       - env:
           LMT_TIER: ${{ needs.changes.outputs.tier }}
+          LMT_FIXTURE_OUT: ${{ runner.temp }}/fixture
         run: uv run --frozen pytest -m models --criteria-out=criteria-test-models.json
+      # The run's JSON when it differs from the transcript fixture (design/internal/g3-stage1.md, 0d), for the
+      # builder to commit unchanged. Before the record's upload, which stays the job's last step.
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: transcript-fixture
+          path: ${{ runner.temp }}/fixture
+          if-no-files-found: ignore
       # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

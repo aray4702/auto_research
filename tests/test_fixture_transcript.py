@@ -1,10 +1,16 @@
-"""The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c)."""
+"""The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c), and
+the transcript fixture kept equal to Linux's product run, which does (0d)."""
 
 import json
+import os
+import re
+import shutil
+import sys
 import unittest
 from pathlib import Path
 from typing import NamedTuple
 
+import pytest
 from fixtures.markup import IMG, SCRIPT, markup_transcript
 from fixtures.segments import MIN_CURRENT, current_span, play_targets
 
@@ -12,6 +18,13 @@ from lmt import schema
 from lmt.transcript import load
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "two_speakers.transcript.json"
+
+# A word's probability isn't reproduced exactly from one CPU run to the next, so the comparison masks it (0d).
+PROBABILITY = re.compile(r'("probability": )[^,\n}]+')
+
+
+def mask_probabilities(text: str) -> str:
+    return PROBABILITY.sub(r"\1_", text)
 
 
 class Seg(NamedTuple):
@@ -36,6 +49,41 @@ class TranscriptFixtureTest(unittest.TestCase):
         for i in targets:
             with self.subTest(segment=i):
                 self.assertGreaterEqual(round(current_span(self.t.segments, i), 3), MIN_CURRENT)
+
+
+@pytest.mark.models
+@pytest.mark.skipif(sys.platform != "linux", reason="the fixture is the product run's on Linux (spec G3, Terms)")
+def test_the_fixture_is_the_product_runs_json(two_speakers_run):
+    assert two_speakers_run.returncode == 0, two_speakers_run.stderr
+    produced = two_speakers_run.out_dir / "two_speakers.json"
+    text = produced.read_text(encoding="utf-8")
+    expected = FIXTURE.read_text(encoding="utf-8")
+    if mask_probabilities(text) != mask_probabilities(expected):
+        # The run's file goes to the job's artifact, for the builder to commit unchanged (0d).
+        if out := os.environ.get("LMT_FIXTURE_OUT"):
+            Path(out).mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(produced, Path(out) / FIXTURE.name)
+        pytest.fail(f"{FIXTURE.name} differs from this run's two_speakers.json in more than word probabilities")
+    words = [w for s in json.loads(text)["segments"] for w in s["words"]]
+    values = [m.group(0)[len(m.group(1)) :] for m in PROBABILITY.finditer(text)]
+    assert len(values) == len(PROBABILITY.findall(expected)) == len(words)
+    for value in values:
+        assert 0 <= float(value) <= 1, value
+
+
+class MaskProbabilitiesTest(unittest.TestCase):
+    TEXT = '{\n  "start": 0.5,\n  "text": " also",\n  "probability": 0.943\n},\n{"probability": 0.5, "end": 1.0}\n'
+
+    def test_texts_differing_only_in_a_probability_mask_the_same(self):
+        other = self.TEXT.replace("0.943", "0.959").replace('"probability": 0.5', '"probability": 1e-05')
+        self.assertNotEqual(other, self.TEXT)
+        self.assertEqual(mask_probabilities(other), mask_probabilities(self.TEXT))
+        self.assertEqual(mask_probabilities(self.TEXT).count('"probability": _'), 2)
+
+    def test_texts_differing_in_a_start_or_a_text_do_not(self):
+        for old, new in [('"start": 0.5', '"start": 0.51'), ('" also"', '" else"')]:
+            with self.subTest(changed=new):
+                self.assertNotEqual(mask_probabilities(self.TEXT.replace(old, new)), mask_probabilities(self.TEXT))
 
 
 class PlayTargetsTest(unittest.TestCase):
