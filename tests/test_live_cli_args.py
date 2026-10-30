@@ -2,9 +2,12 @@
 
 import contextlib
 import io
+import sys
 import unittest
+from unittest import mock
 
 import pytest
+from fake_sounddevice import FakeSoundDevice, device
 
 from lmt import cli
 
@@ -28,10 +31,6 @@ class LiveHelpTest(unittest.TestCase):
         code, out, err = run("live", "--help")
         self.assertEqual(code, 0, err)
         self.assertIn("usage: lmt live", out)
-
-    def test_stub_is_one_error_line(self):
-        # Until 3b3, a valid command line reaches the stub: exit 1, one `lmt: error:` line.
-        self.assertEqual(run("live"), (1, "", "lmt: error: lmt live: not built yet (G1 stage 2)\n"))
 
 
 @pytest.mark.criterion("G2-7")
@@ -112,9 +111,10 @@ class LiveValidTest(unittest.TestCase):
         self.assertTrue(args.list_devices)
 
     def test_list_devices_reaches_the_handler(self):
-        # validate doesn't reject it: the stub's NotBuilt (1) is reached, not a UsageError (2).
-        code, _, err = run("live", "--list-devices", "--no-diarize", "--max-speakers", "3")
-        self.assertEqual(code, 1, err)
+        # validate doesn't reject it: the handler lists the stand-in's devices (0), not a UsageError (2).
+        with mock.patch.dict(sys.modules, {"sounddevice": FakeSoundDevice([device("Microphone", 1)])}):
+            code, out, err = run("live", "--list-devices", "--no-diarize", "--max-speakers", "3")
+        self.assertEqual((code, out), (0, "0*\tMicrophone\t1 ch\t48000 Hz\n"), err)
 
 
 if __name__ == "__main__":
