@@ -4,6 +4,16 @@
 
 Local Meeting Transcriber is planned to turn a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. So far only the `lmt` command's skeleton is built and tested: `lmt --help` and the results table's check, `lmt eval --check-readme`, work, and the other commands say they aren't built yet. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
 
+## Install
+
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
+
+```sh
+uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
+```
+
+The speaker models are gated on Hugging Face. Once, before the first download: make a free account, accept the conditions on the pages of [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1), [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) and [pyannote/wespeaker-voxceleb-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM), create a read token, and set it as `HF_TOKEN` for `lmt models download`. After that, nothing needs the network.
+
 ## Build
 
 Prerequisites:
