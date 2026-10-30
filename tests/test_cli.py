@@ -15,8 +15,8 @@ import pytest
 from lmt import cli
 
 PUBLIC_API = Path(__file__).resolve().parents[1] / "design" / "public-api.md"
-# A later goal's command, "(G2)" or "(G3, …)": skipped until the item that adds the command removes its goal here.
-LATER_GOAL = re.compile(r"\((G2|G3)(, [^)]*)?\)$")
+# A later goal's command, "(G3, …)": skipped until the item that adds the command removes its goal here.
+LATER_GOAL = re.compile(r"\((G3)(, [^)]*)?\)$")
 
 
 def run(*argv):
@@ -101,8 +101,8 @@ class OptionTableTest(unittest.TestCase):
 
     def test_parser_matches_public_api(self):
         documented = documented_options()
-        self.assertEqual(set(documented), {(), ("transcribe",), ("models", "download"), ("models", "list"),
-                                           ("models", "verify"), ("eval",)})
+        self.assertEqual(set(documented), {(), ("transcribe",), ("live",), ("models", "download"),
+                                           ("models", "list"), ("models", "verify"), ("eval",)})
         self.assertEqual(parser_options(cli.build_parser()), documented)
 
     def test_transcribe_table_is_read(self):
@@ -111,11 +111,11 @@ class OptionTableTest(unittest.TestCase):
         self.assertIn("-f", documented_options()[("transcribe",)])
 
     def test_later_goals_sections_are_skipped(self):
-        for heading in ("`lmt live` (G2)", "`lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)",
-                        "`lmt demo [TRANSCRIPT]` (G3, F8)"):
+        for heading in ("`lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)", "`lmt demo [TRANSCRIPT]` (G3, F8)"):
             with self.subTest(heading=heading):
                 self.assertTrue(LATER_GOAL.search(heading))
-        for heading in ("`lmt transcribe INPUT`", "`lmt models`", "`lmt eval`", "Global options"):
+        for heading in ("`lmt transcribe INPUT`", "`lmt live` (G2)", "`lmt models`", "`lmt eval`",
+                        "Global options"):
             with self.subTest(heading=heading):
                 self.assertFalse(LATER_GOAL.search(heading))
 
