@@ -13,6 +13,7 @@ import pytest
 from fake_sounddevice import FakeSoundDevice, device
 
 from lmt import audio
+from lmt.errors import InputError
 from lmt.live.mic import Device, MicSource
 from lmt.live.source import BLOCK
 
@@ -196,6 +197,36 @@ def test_a_slow_consumer_never_blocks_the_callback_and_every_frame_arrives():
     assert backend.streams[0].done.wait(WAIT)  # every callback returned while the consumer held its block
     src.stop()
     assert len(first) + sum(len(b) for b in blocks) == 5 * audio.SAMPLE_RATE
+
+
+def test_the_callback_copies_its_input():
+    """PortAudio reuses one buffer for every callback, as the stand-in does. Every block after the first is
+    taken only once all of them were delivered, so a callback keeping `indata` would hand over the last one's
+    samples over and over. A 16 kHz mono device, so the samples come back as they went in (4b)."""
+    data = np.arange(audio.SAMPLE_RATE, dtype=np.float32).reshape(-1, 1) / audio.SAMPLE_RATE
+    backend = FakeSoundDevice([device("Mic", 1, rate=audio.SAMPLE_RATE)], data=data, blocksize=256)
+    src = MicSource(Device(0, "Mic", 1, audio.SAMPLE_RATE, True), backend=backend, warn=lambda m: None)
+    blocks = src.blocks()
+    first = next(blocks)
+    assert backend.streams[0].done.wait(WAIT)
+    src.stop()
+    got = np.concatenate([first, *blocks])
+    assert len(got) == len(data)
+    assert np.max(np.abs(got - data[:, 0])) <= 1e-6
+
+
+@pytest.mark.parametrize("when", ["open_error", "start_error"])
+def test_a_device_that_cant_be_opened_is_exit_3(when):
+    """Busy, unplugged since `resolve`, or its rate unsupported: PortAudio fails to open or to start the
+    stream. An InputError (3) naming the device, with PortAudio's message; nothing captured."""
+    backend = fake(two_channels(speech(1)), **{when: "Device unavailable [PaErrorCode -9985]"})
+    src = MicSource(mic(), backend=backend, warn=lambda m: None)
+    with pytest.raises(InputError) as e:
+        next(src.blocks())
+    assert e.value.exit_code == 3
+    assert str(e.value) == "--device: can't open input device 'Mic' (Device unavailable [PaErrorCode -9985])"
+    assert src.position == 0
+    assert all(s.closed and not s.started for s in backend.streams)
 
 
 def test_input_overflows_are_counted():
