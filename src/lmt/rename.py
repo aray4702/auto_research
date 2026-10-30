@@ -1,13 +1,14 @@
 """`lmt rename`: gives speakers names, then exports again (design/public-api.md; g3-stage1.md §1).
 
-Item 1a builds its parts; `cli_rename` stays a stub until item 1b.
 """
 
 import dataclasses
 import re
+from pathlib import Path
 
-from lmt.errors import NotBuilt, UsageError
-from lmt.transcript import Transcript
+from lmt import export
+from lmt.errors import UsageError
+from lmt.transcript import Transcript, load
 
 MAX_NAME = 32
 _CONTROL = re.compile("[\x00-\x1f\x7f-\x9f]")
@@ -88,5 +89,16 @@ def speaker_table(transcript: Transcript) -> str:
     return "\n".join(lines)
 
 
-def cli_rename(args):
-    raise NotBuilt("rename", "G3 stage 1")
+def cli_rename(args) -> int:
+    """Read the transcript; with no pairs print its speaker table, else write it again with the new labels.
+    Every pair is checked before anything is written, so a bad pair changes nothing."""
+    t = load(args.transcript)
+    if not args.pairs:
+        print(speaker_table(t))
+        return 0
+    labels = resolve(t, [parse_pair(arg) for arg in args.pairs])
+    path = Path(args.transcript)
+    out_dir = args.output_dir if args.output_dir is not None else path.parent
+    for written in export.write(relabel(t, labels), out_dir, path.stem, args.formats, overwrite=True):
+        print(written)
+    return 0

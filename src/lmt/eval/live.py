@@ -1,7 +1,7 @@
 """`lmt eval --set live`'s measures: matching committed words to the reference, their delays, nearest-rank
 percentiles and reading a run's event log (design/internal/g2-stage1.md §5, item 5a), as spec/acceptance.md
-G2 "Terms" defines them; the runs of `lmt live` they're measured on (item 5b); and the figure that pools
-the runs (item 5c).
+G2 "Terms" defines them; the runs of `lmt live` they're measured on (item 5b); the figure that pools
+the runs (item 5c); and `lmt eval --set live`, which writes it to `results/live.json` (item 5d).
 
 jiwer is imported inside `match_words`, as `score` imports it, so this module imports without the `eval` extra.
 """
@@ -10,6 +10,7 @@ import json
 import math
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 from collections.abc import Sequence
@@ -19,7 +20,7 @@ from typing import NamedTuple
 
 from lmt import models, transcript
 from lmt.errors import InputError
-from lmt.eval import score
+from lmt.eval import datasets, report, score
 from lmt.transcript import Word
 
 
@@ -173,6 +174,22 @@ def figure(item: score.Item, ref_words, logs: Sequence[RunLog]) -> dict:
         "matched_words": len(pooled),
         "runs": runs,
     }
+
+
+def cli_eval_live(args) -> int:
+    """`lmt eval --set live`: AMI-ci's three runs, in a temporary directory under `--out` that's removed after,
+    pooled into <out>/live.json with the first run's models. Prints the file's path, as `--set ci` does."""
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    item, ref_words = datasets.live_reference()
+    with tempfile.TemporaryDirectory(dir=out_dir, prefix=".lmt-eval-live-") as work_dir:
+        logs = run_live(item.audio, Path(work_dir))
+    results = report.build("live", [figure(item, ref_words, logs)], logs[0].transcript["models"],
+                           determinism=None, out_dir=out_dir)
+    path = out_dir / "live.json"
+    report.write(path, results)
+    print(path)
+    return 0
 
 
 def _delay(values: Sequence[float], q: float) -> float | None:
