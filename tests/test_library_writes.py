@@ -13,14 +13,15 @@ from isolation import snapshot
 
 pytestmark = pytest.mark.criterion("G1-13")
 
-# The product's paths for both libraries: diarize.load's matplotlib (through pyannote.audio's tasks) and P11's
-# VAD path, which starts onnxruntime's environment and runs a session.
+# The product's paths for both libraries: diarize.load's matplotlib (through pyannote.audio's tasks, imported inside
+# _quiet() as load does) and P11's VAD path, which starts onnxruntime's environment and runs a session.
 BOTH = """
 import json
 import numpy
 from lmt import asr, diarize
 diarize.scratch_matplotlib()
-import pyannote.audio.pipelines
+with diarize._quiet():
+    import pyannote.audio.pipelines
 import matplotlib
 print(json.dumps(str(matplotlib.get_cachedir())))
 asr.quiet_onnxruntime()
@@ -41,7 +42,8 @@ print(json.dumps(os.environ.get("ORT_DISABLE_TELEMETRY")))
 
 
 def run(code, tmp_path):
-    """The child's exit and its last stdout line as JSON, and the four directories it was given."""
+    """The child's last stdout line as JSON, once it has exited 0, the four directories it was given, and its
+    stderr."""
     dirs = home, tmp, xdg, work = [tmp_path / name for name in ("home", "tmp", "xdg", "work")]
     for directory in dirs:
         directory.mkdir()
@@ -50,18 +52,22 @@ def run(code, tmp_path):
     r = subprocess.run([sys.executable, "-c", code], env=env, cwd=work, capture_output=True, text=True,
                        check=False, timeout=600)
     assert r.returncode == 0, r.stderr
-    return json.loads(r.stdout.splitlines()[-1]), dirs
+    return json.loads(r.stdout.splitlines()[-1]), dirs, r.stderr
 
 
 def test_neither_library_leaves_a_file(tmp_path):
-    cachedir, dirs = run(BOTH, tmp_path)
+    cachedir, dirs, stderr = run(BOTH, tmp_path)
     left = snapshot(*dirs)
     assert left == {}, f"left after the run: {sorted(left)}"
     assert Path(cachedir).resolve().is_relative_to(dirs[1].resolve()), f"matplotlib's directory: {cachedir}"
+    # The font list is always built here, so matplotlib's "building the font cache" warning prints unless its
+    # logger is quiet.
+    loud = [line for line in stderr.splitlines() if "matplotlib" in line.lower()]
+    assert not loud, f"matplotlib on stderr: {loud}"
 
 
 def test_the_scratch_directory_is_the_processs_own_and_goes_at_exit(tmp_path):
-    (a, b, variable, is_dir), (_home, tmp, _xdg, _work) = run(SCRATCH, tmp_path)
+    (a, b, variable, is_dir), (_home, tmp, _xdg, _work), _stderr = run(SCRATCH, tmp_path)
     assert a == b == variable
     assert is_dir
     assert Path(a).parent == tmp
@@ -70,5 +76,5 @@ def test_the_scratch_directory_is_the_processs_own_and_goes_at_exit(tmp_path):
 
 
 def test_onnxruntimes_telemetry_switch_is_set(tmp_path):
-    value, _dirs = run(SWITCH, tmp_path)
+    value, _dirs, _stderr = run(SWITCH, tmp_path)
     assert value == "1"
