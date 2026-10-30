@@ -1,7 +1,6 @@
 """`lmt demo`'s server (g3-stage1.md §2a).
 
-`Demo`, `wav_bytes` and `load` are 2a2's, `make_server` and `Handler` 2a3's. `cli_demo` (2a4) is still
-to come, so it raises `NotBuilt`.
+`Demo`, `wav_bytes` and `load` are 2a2's, `make_server` and `Handler` 2a3's, and `cli_demo` 2a4's.
 """
 
 import errno
@@ -10,9 +9,11 @@ import importlib.resources
 import io
 import re
 import secrets
+import signal
 import sys
 import threading
 import wave
+import webbrowser
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -22,7 +23,7 @@ import numpy
 from lmt import audio as lmt_audio
 from lmt import transcript as lmt_transcript
 from lmt.demo import sample
-from lmt.errors import InputError, NotBuilt
+from lmt.errors import InputError
 from lmt.export import vtt
 
 
@@ -208,7 +209,38 @@ class Handler(BaseHTTPRequestHandler):
                          headers=ranges + [("Content-Range", f"bytes {start}-{end}/{total}")])
 
 
-def cli_demo(args):
+class _Stop(BaseException):
+    """Raised by the SIGTERM handler, so SIGTERM stops the server as Ctrl-C does.
+
+    A BaseException, like KeyboardInterrupt, so socketserver's per-request
+    ``except Exception`` doesn't swallow it."""
+
+
+def _stop(signum, frame):
+    raise _Stop
+
+
+def cli_demo(args) -> int:
+    """Serve the demo until Ctrl-C or SIGTERM, then exit 0 (§2a, "cli_demo")."""
     if args.sample:
-        sample.prepare(offline=args.offline)
-    raise NotBuilt("demo", "G3 stage 1")
+        transcript, audio = sample.prepare(offline=args.offline)
+        demo = load(transcript, audio, True)
+    else:
+        demo = load(Path(args.transcript), args.audio and Path(args.audio), args.audio is not None)
+    server = make_server(demo, args.port)
+    previous = signal.getsignal(signal.SIGTERM)
+    # The handler is installed and the try entered before the URL is printed,
+    # so a stop signal while printing, opening the browser or serving exits 0.
+    try:
+        signal.signal(signal.SIGTERM, _stop)
+        url = f"http://127.0.0.1:{demo.port}/{demo.token}/"
+        print(url, flush=True)
+        if not args.no_browser:
+            webbrowser.open(url)
+        server.serve_forever()
+    except (KeyboardInterrupt, _Stop):
+        pass
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+        server.server_close()
+    return 0
