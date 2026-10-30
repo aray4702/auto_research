@@ -5,6 +5,7 @@ import shlex
 import signal
 import socket
 import sys
+import threading
 import time
 import wave
 from pathlib import Path
@@ -68,6 +69,30 @@ def test_it_prints_the_url_serves_and_exits_0_when_stopped(tmp_path, stop):
         assert status == 200 and b"<main>" in body
     assert demo.stdout == ""
     assert not errors(demo.stderr) and not warnings(demo.stderr), demo.stderr
+
+
+def test_a_stop_while_a_request_starts_stops_the_server(tmp_path):
+    # A SIGTERM raises _Stop in the main thread, which may be inside process_request (starting the
+    # request's thread). socketserver's `except Exception` there must not swallow it.
+    from lmt.demo import server as demo_server
+
+    directory = fixture_dir(tmp_path)
+    demo = demo_server.load(directory / TRANSCRIPT, directory / AUDIO, True)
+    server = demo_server.make_server(demo, 0)
+
+    def stop_now(request, client_address):
+        server.shutdown_request(request)
+        raise demo_server._Stop
+
+    server.process_request = stop_now
+    swallowed = threading.Timer(5, server.shutdown)  # without the fix it keeps serving: end it, and fail
+    swallowed.start()
+    try:
+        with socket.create_connection(("127.0.0.1", demo.port), timeout=5), pytest.raises(demo_server._Stop):
+            server.serve_forever(poll_interval=0.05)
+    finally:
+        swallowed.cancel()
+        server.server_close()
 
 
 def test_two_runs_get_different_tokens(tmp_path):
