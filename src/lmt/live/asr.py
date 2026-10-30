@@ -1,8 +1,8 @@
 """Streaming ASR: LocalAgreement-2 over a rolling buffer (design/internal/g2-stage1.md §1). Positions are
 samples at 16 kHz; word times are seconds, rounded to the millisecond once, when the word is committed.
-The pause rule (step 4) comes with item 1c.
 """
 
+import itertools
 import unicodedata
 from dataclasses import dataclass
 
@@ -16,6 +16,7 @@ NGRAM_MAX = 5  # the n-gram check's longest run of words
 NGRAM_WINDOW = 1.0  # s: the run's first word starts within this of the buffer's start
 OVERFLOW_MARGIN = 2.0  # s: overflow commits words that end at least this long before the buffer's end
 MIN_DURATION = 0.010  # s: a committed word's shortest length
+PAUSE_MARGIN = 3200  # samples (0.2 s): a word may reach this far into a gap, and the cut keeps this much lead-in
 
 
 @dataclass(frozen=True)
@@ -49,12 +50,32 @@ def key(text: str) -> str:
     return text[start:end].casefold()
 
 
+_quiet = False  # whether vad_speech has quieted onnxruntime's log yet
+
+
+def vad_speech(buffer) -> list[tuple[int, int]]:
+    """Silero VAD's speech chunks in `buffer`, as (start, end) in samples from its start. It runs through
+    `lmt.asr`, imported first, so P11's quiet log covers it."""
+    global _quiet
+    from lmt import asr
+
+    if not _quiet:
+        asr.quiet_onnxruntime()
+        _quiet = True
+    from faster_whisper.vad import VadOptions, get_speech_timestamps
+
+    chunks = get_speech_timestamps(numpy.asarray(buffer, dtype=numpy.float32),
+                                   VadOptions(min_silence_duration_ms=500, speech_pad_ms=0))
+    return [(int(c["start"]), int(c["end"])) for c in chunks]
+
+
 class StreamingASR:
     """A stage: `feed` runs at most one update per call, once the position reaches the next multiple of U."""
 
-    def __init__(self, engine, config=DEFAULT_ASR_CONFIG):
+    def __init__(self, engine, config=DEFAULT_ASR_CONFIG, *, speech=vad_speech):
         self._engine = engine
         self._config = config
+        self._speech = speech
         self._buffer = numpy.zeros(0, dtype=numpy.float32)
         self._buffer_start = 0
         self._position = 0
@@ -86,11 +107,19 @@ class StreamingASR:
         n = 0
         while n < min(len(self._previous), len(hyp)) and key(self._previous[n].text) == key(hyp[n].text):
             n += 1
+        # 4. Pause: P, the words that end by the last gap's start plus 0.2 s, if no word straddles the gap.
+        gap = self._gap(hyp)
+        p = 0
+        if gap is not None:
+            while p < len(hyp) and hyp[p].end <= (gap[0] + PAUSE_MARGIN) / SAMPLE_RATE:
+                p += 1
         # 5. Commit.
-        words = self._commit(hyp[:n])
-        if words:
+        words = self._commit(hyp[:max(n, p)])
+        if gap is not None and p >= n:
+            self._cut(gap[1] - PAUSE_MARGIN)
+        elif words:
             self._cut_after(words[-1])
-        self._previous = hyp[n:]
+        self._previous = hyp[max(n, p):]
         # 6. Overflow.
         if len(self._buffer) > self._config.max_buffer:
             end = self._position / SAMPLE_RATE - OVERFLOW_MARGIN
@@ -106,6 +135,26 @@ class StreamingASR:
                 self._cut(self._position - self._config.max_buffer)
         # 7. done_until is buffer_start after the cut, which feed returns.
         return words
+
+    def _gap(self, hyp: list[Word]) -> tuple[int, int] | None:
+        """The buffer's last stretch of at least `pause` samples with no speech, as absolute (start, end)
+        samples: between two speech chunks, or from the last one to the buffer's end, or the whole buffer if
+        it has none. None if there is no such stretch, or a word of `hyp` straddles it: one that starts
+        before its end less 0.2 s and ends after its start plus 0.2 s."""
+        chunks = self._speech(self._buffer)
+        if chunks:
+            stretches = [(a[1], b[0]) for a, b in itertools.pairwise(chunks)]
+            stretches.append((chunks[-1][1], len(self._buffer)))
+        else:
+            stretches = [(0, len(self._buffer))]
+        gaps = [(start, end) for start, end in stretches if end - start >= self._config.pause]
+        if not gaps:
+            return None
+        start, end = (self._buffer_start + s for s in gaps[-1])
+        for w in hyp:
+            if w.start < (end - PAUSE_MARGIN) / SAMPLE_RATE and w.end > (start + PAUSE_MARGIN) / SAMPLE_RATE:
+                return None
+        return start, end
 
     def _hypothesis(self) -> list[Word]:
         """Steps 1 and 2: the buffer transcribed, in absolute times, without what's already committed."""
