@@ -30,7 +30,8 @@ class FakeEngine:
 
 
 def make(engine, config=asr.DEFAULT_ASR_CONFIG):
-    return StreamingASR(engine, config)
+    """All speech, so no gap: the pause rule (1c) never applies here."""
+    return StreamingASR(engine, config, speech=lambda b: [(0, len(b))])
 
 
 class Feeder:
