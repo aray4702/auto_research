@@ -1,10 +1,10 @@
 """`lmt eval`: `--check-readme` (G1-14, design §6), `--set ci` and `--out` (design/internal/g1-stage2.md,
-P2a), and `--set full` and `--update-readme` (P8)."""
+P2a), `--set full` and `--update-readme` (P8), and `--set live` (design/internal/g2-stage1.md §5, item 5d)."""
 
 from pathlib import Path
 
 from lmt.errors import CheckFailed
-from lmt.eval import readme, runner
+from lmt.eval import live, readme, runner
 
 README = Path("README.md")
 
@@ -18,6 +18,8 @@ def cli_eval(args):
             raise CheckFailed(str(README), f"the results table differs from {results}; "
                                            "run lmt eval --set full --update-readme")
         return 0
+    if args.set == "live":
+        return live.cli_eval_live(args)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     if args.set == "ci":

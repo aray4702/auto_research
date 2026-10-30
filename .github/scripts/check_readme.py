@@ -1,12 +1,15 @@
-"""The CI checks of S1-1 to S1-5 (spec/acceptance.md, S1's done-check) on README.md.
+"""The CI checks of S1-1 to S1-5 (spec/acceptance.md, S1's done-check) and G3-7's Install section on README.md.
 
 Usage: python3 -I .github/scripts/check_readme.py [--root DIR] [--no-install] [--criteria-out PATH]
+       python3 -I .github/scripts/check_readme.py [--root DIR] --print-install
 
 DIR is a checkout of the commit under test (default: the current directory). Each `sh`
 block runs as one `sh -e` script: the Build block in a new empty directory, with the
-clone URL redirected to DIR; the Checks block from DIR. --no-install skips S1-3 and S1-4,
-the two checks that run a block, as tier 0 does. --criteria-out writes the job's record
-(design/internal/criteria.md §3), after the last check. Standard library only.
+clone URL redirected to DIR; the Checks block from DIR. The Install block isn't run here
+(check_install.py runs it). --no-install skips S1-3 and S1-4, the two checks that run a
+block, as tier 0 does. --criteria-out writes the job's record (design/internal/criteria.md
+§3), after the last check. --print-install prints the Install block's command and exits,
+or exits 1 if the section breaks its check. Standard library only.
 """
 
 import argparse
@@ -27,6 +30,10 @@ GATE_COMMAND = "python3 -I system/gate/generic.py --base origin/main"
 # S1-4: the product's commands the README names as inline code, each also run by product.yml's jobs.
 PRODUCT_COMMANDS = ["uv run --frozen pytest", "uv run --frozen lmt eval --set ci"]
 PRODUCT_YML = ".github/workflows/product.yml"
+# G3-7: the Install block's one command, and what its section must name.
+INSTALL_COMMAND = re.compile(r"^uv tool install git\+https://github\.com/aray4702/auto_research@v\d+\.\d+\.\d+$")
+UV_INSTALLER_URL = "https://docs.astral.sh/uv/getting-started/installation/"
+HF_TOKEN = "HF_TOKEN"
 
 FENCE = re.compile(r"^```(\S*)[^\n]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
 INLINE_LINK = re.compile(r"!?\[[^\]]*\]\(\s*<?([^)\s>]*)>?(?:\s+[\"'(][^)]*)?\)")
@@ -175,12 +182,36 @@ def check_links(root, text):
     return problems
 
 
+def install_command(text):
+    """Problems with the Install section, and its block's one command (None if there are problems)."""
+    problems, block = heading_and_block(text, "Install")
+    lines = []
+    if block is not None:
+        lines = [line.strip() for line in block.splitlines()
+                 if line.strip() and not line.strip().startswith("#")]
+        if len(lines) != 1:
+            problems.append(f"the Install block has {len(lines)} commands, not 1")
+        elif not INSTALL_COMMAND.match(lines[0]):
+            problems.append(f"the Install block's command {lines[0]!r} doesn't match {INSTALL_COMMAND.pattern!r}")
+    body = section(text, "Install")
+    if UV_INSTALLER_URL not in link_targets(body):
+        problems.append(f"the Install section doesn't link {UV_INSTALLER_URL}")
+    if HF_TOKEN not in body:
+        problems.append(f"the Install section doesn't name {HF_TOKEN}")
+    return problems, (None if problems else lines[0])
+
+
+def check_install(root, text):
+    return install_command(text)[0]
+
+
 CHECKS = [
     ("S1-1 title", check_title),
     ("S1-2 what it is", check_what_it_is),
     ("S1-3 build", check_build),
     ("S1-4 checks", check_checks),
     ("S1-5 relative links", check_links),
+    ("G3-7 install", check_install),
 ]
 # The checks that run a block, so need the install; --no-install skips them.
 INSTALL_CHECKS = (check_build, check_checks)
@@ -201,9 +232,22 @@ def main(argv=None):
     parser.add_argument("--no-install", action="store_true", help="skip S1-3 and S1-4")
     parser.add_argument("--criteria-out", metavar="PATH",
                         help="write each check's outcome to PATH, criteria-readme.json (design/internal/criteria.md §3)")
+    parser.add_argument("--print-install", action="store_true",
+                        help="print the Install block's command and exit, for check_install.py")
     args = parser.parse_args(argv)
     readme = Path(args.root) / "README.md"
     text = readme.read_text() if readme.is_file() else None
+
+    if args.print_install:
+        if text is None:
+            problems, command = ["README.md is missing at the repository root"], None
+        else:
+            problems, command = install_command(text)
+        if problems:
+            print("\n".join(f"FAIL G3-7 install: {p}" for p in problems), file=sys.stderr)
+            return 1
+        print(command)
+        return 0
 
     lines, records, failed = [], [], 0
     for name, check in CHECKS:
