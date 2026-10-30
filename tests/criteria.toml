@@ -41,11 +41,37 @@ complete = true
 [G1-3]
 complete = true
 
+# G1-4: tests/test_g1_4.py, both clips' product runs with the real ffmpeg in test-models, with
+# tests/test_subtitle_checks.py's helpers and tests/test_cli.py's test_default_formats (g1-stage2.md P3,
+# P6a and P6b, #348).
+[G1-4]
+complete = true
+
+# G1-5: tests/test_eval_ci.py, the eval-ci job's double run of lmt eval --set ci (g1-stage2.md P2b, #348).
+[G1-5]
+complete = true
+
+# G1-6: tests/test_cli.py, test_g1_6.py, test_models.py, test_readme_table.py, test_eval_runner.py and
+# test_eval_full.py, one test per CLI option and per bad input (g1-stage2.md P3, P2a and P8, #348).
+[G1-6]
+complete = true
+
+# G1-8c: tests/test_eval_ci.py reads results/ci.json against the bounds in eval-ci (g1-stage2.md P2b, #348).
+[G1-8c]
+complete = true
+
+# G1-11: tests/test_g1_11.py and test_decode_fuzz.py, bad input never crashes it (g1-stage2.md P4, #348).
+[G1-11]
+complete = true
+
 [G1-4m]
 ci = false
 owner = "The two-speaker clip's SRT and WebVTT show their cues at the right times, with the speaker's label, in QuickTime Player and in VLC"
 
+# G1-13: tests/test_g1_13.py on the two-speaker clip in test-models with isolated true, with
+# tests/test_netguard.py and test_isolation.py (g1-stage2.md P7a, P7b and P7c, #348). Its owner line stays.
 [G1-13]
+complete = true
 owner = "The two-speaker clip transcribes with Wi-Fi off"
 
 [G2-5m]
