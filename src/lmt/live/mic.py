@@ -49,7 +49,7 @@ def resolve(spec: str | None, backend=None) -> Device:
         found = [d for d in devices if d.default]
         if not found:  # PortAudio names no default input
             raise InputError("--device", "no input device found")
-    elif spec.strip().isdigit():
+    elif spec.strip().isdecimal():
         found = [d for d in devices if d.index == int(spec)]
     else:
         found = [d for d in devices if d.name == spec]
