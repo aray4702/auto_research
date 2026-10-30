@@ -9,6 +9,7 @@ from pathlib import Path
 
 from packaging.markers import Marker
 from packaging.requirements import Requirement
+from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
@@ -28,6 +29,11 @@ def environments():
         for full in PYTHONS:
             yield {**platform, "python_full_version": full, "python_version": full.rsplit(".", 1)[0],
                    "os_name": "posix", "implementation_name": "cpython", "extra": ""}
+
+
+def admits(requires_python, minor):
+    """Whether requires-python admits some release of a Python minor version, such as "3.12"."""
+    return any(SpecifierSet(requires_python).contains(f"{minor}.{patch}") for patch in (0, 99))
 
 
 def pin_problems(pyproject, lock):
@@ -72,6 +78,14 @@ class PackagingTest(unittest.TestCase):
     def test_every_one_of_the_eight_is_in_the_lock(self):
         locked = {p["name"] for p in self.lock["package"]}
         self.assertEqual([n for n in PINNED if n not in locked], [])
+
+    def test_requires_python_admits_python_version_s_minor_alone(self):
+        # The install takes the Python CI measures (G3 §4a, #415).
+        requires = self.pyproject["project"]["requires-python"]
+        minor = (ROOT / ".python-version").read_text().strip()
+        self.assertEqual(minor, "3.11")
+        self.assertEqual({m: admits(requires, m) for m in ["3.10", minor, "3.12", "3.13"]},
+                         {"3.10": False, minor: True, "3.12": False, "3.13": False})
 
     def test_version_matches_pyproject(self):
         self.assertEqual(lmt.__version__, self.pyproject["project"]["version"])
