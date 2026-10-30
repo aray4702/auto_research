@@ -209,8 +209,11 @@ class Handler(BaseHTTPRequestHandler):
                          headers=ranges + [("Content-Range", f"bytes {start}-{end}/{total}")])
 
 
-class _Stop(Exception):
-    """Raised by the SIGTERM handler, so SIGTERM stops the server as Ctrl-C does."""
+class _Stop(BaseException):
+    """Raised by the SIGTERM handler, so SIGTERM stops the server as Ctrl-C does.
+
+    A BaseException, like KeyboardInterrupt, so socketserver's per-request
+    ``except Exception`` doesn't swallow it."""
 
 
 def _stop(signum, frame):
@@ -225,18 +228,19 @@ def cli_demo(args) -> int:
     else:
         demo = load(Path(args.transcript), args.audio and Path(args.audio), args.audio is not None)
     server = make_server(demo, args.port)
+    previous = signal.getsignal(signal.SIGTERM)
+    # The handler is installed and the try entered before the URL is printed,
+    # so a stop signal while printing, opening the browser or serving exits 0.
     try:
+        signal.signal(signal.SIGTERM, _stop)
         url = f"http://127.0.0.1:{demo.port}/{demo.token}/"
         print(url, flush=True)
         if not args.no_browser:
             webbrowser.open(url)
-        previous = signal.signal(signal.SIGTERM, _stop)
-        try:
-            server.serve_forever()
-        except (KeyboardInterrupt, _Stop):
-            pass
-        finally:
-            signal.signal(signal.SIGTERM, previous)
+        server.serve_forever()
+    except (KeyboardInterrupt, _Stop):
+        pass
     finally:
+        signal.signal(signal.SIGTERM, previous)
         server.server_close()
     return 0
