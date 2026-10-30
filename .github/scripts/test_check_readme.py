@@ -297,6 +297,7 @@ class ReadmeTest(unittest.TestCase):
         # The Install block isn't part of S1-3: a failing uv fails only the Build block.
         self.commit(GOOD, {"FAIL_UV": ""})
         code, out = self.run_checks()
+        self.assertEqual(code, 1, out)
         self.assertIn("PASS G3-7", out)
         self.assertIn("FAIL S1-3", out)
 
