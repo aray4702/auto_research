@@ -3,7 +3,7 @@
 
 import contextlib
 import os
-import tempfile
+import secrets
 from pathlib import Path
 
 from lmt.errors import InputError, NotBuilt, UsageError
@@ -42,13 +42,17 @@ def check(out_dir: Path, stem: str, formats, *, overwrite: bool) -> list[Path]:
 
 
 def write(transcript, out_dir: Path, stem: str, formats, *, overwrite: bool) -> list[Path]:
-    """Every format to a temporary file, then all renamed into place; on any exception, none."""
+    """Every format to a temporary file, then all renamed into place; on any exception, none.
+
+    An output's mode is what `open(path, "w")` gives a new file: 0o666 less the umask, which the kernel
+    applies to `os.open`'s mode. `tempfile.mkstemp` would make it 0o600 (#286)."""
     paths = check(out_dir, stem, formats, overwrite=overwrite)
     temps = []
     try:
         for fmt in formats:
             text = render(transcript, fmt)
-            fd, temp = tempfile.mkstemp(prefix=f".{stem}.", suffix=f".{fmt}.tmp", dir=out_dir)
+            temp = Path(out_dir) / f".{stem}.{secrets.token_hex(8)}.{fmt}.tmp"
+            fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o666)
             temps.append(temp)
             with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
                 f.write(text)

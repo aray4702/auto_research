@@ -268,20 +268,260 @@ licence = "CC-BY-4.0"
 keep = false
 
 [[source.member]]
+path = "words/TS3003c.D.words.xml"
+sha256 = "9c31a56a4e4a292d0480b6be91956852f9af4851f2b2be7c285f9dfc567b1325"
+
+[[source.member]]
+path = "words/ES2004d.B.words.xml"
+sha256 = "8cc367443319363dcfce6a2a876a4cf8cf4c085b666047a431323aefd23d75fe"
+
+[[source.member]]
+path = "words/IS1009c.A.words.xml"
+sha256 = "117320bc123e3f0b9f75f476caf80136e81f92329f7199920858ce1185a18554"
+
+[[source.member]]
+path = "words/ES2004d.C.words.xml"
+sha256 = "83d7fcf4bd7691c13200fd4cf719e1c8529c60f57e527e6d1a731f6de62f9e97"
+
+[[source.member]]
+path = "words/IS1009d.B.words.xml"
+sha256 = "ae42631189765dff78cbfa082763a66383a7c5164e293178c3c3746e065316b4"
+
+[[source.member]]
+path = "words/ES2004a.D.words.xml"
+sha256 = "e085188b2f4855808911934c309ba965c283e54371044c9086185f27913d44f8"
+
+[[source.member]]
+path = "words/TS3003b.C.words.xml"
+sha256 = "8e536bade4c9ec5dc1e88ba2713004ac589e1d89079a45cfec70e765e8261df6"
+
+[[source.member]]
+path = "words/IS1009d.C.words.xml"
+sha256 = "3fded73fba41aaeda8e3fb1ce1d555997eba27922e676690917f8609c4a376c0"
+
+[[source.member]]
+path = "words/TS3003b.B.words.xml"
+sha256 = "fb9a340819eb3f2399190c6e3715acc5c4c043b9ee22fa4097711248772f4fab"
+
+[[source.member]]
+path = "words/EN2002b.B.words.xml"
+sha256 = "b9265cb5ac3391b6aefefc4d19f12a9b525650cbdda951f5252cd2725a0ca819"
+
+[[source.member]]
+path = "words/TS3003b.D.words.xml"
+sha256 = "6d887dc2d6100a2ebbeaefed4d3f0d8f5112f7c913a28cf8a62686b0cce9c470"
+
+[[source.member]]
+path = "words/EN2002d.D.words.xml"
+sha256 = "c1292bb5a0e33f95f6030f8ba304e699fd357bc10ee96d1deac5600c5ebf0838"
+
+[[source.member]]
+path = "words/TS3003a.A.words.xml"
+sha256 = "b343403033d4d960f2bdfc605d2425c4974956285a3191ba19ec66c74e4e3855"
+
+[[source.member]]
+path = "words/EN2002c.B.words.xml"
+sha256 = "33981270e5c678564f63807257b2d45fde160232633866036d313047be19e7ae"
+
+[[source.member]]
+path = "words/TS3003d.B.words.xml"
+sha256 = "24a6209d78212b3274dfb889a4e913f519d0692dc4195e29f1d99a04c1cef17f"
+
+[[source.member]]
+path = "words/TS3003c.B.words.xml"
+sha256 = "c4f27fea8721ed687f2417edbf97dcc9111b44ad49a895e59cbe8ca3f941d788"
+
+[[source.member]]
+path = "words/IS1009a.A.words.xml"
+sha256 = "003b03367aafbb3bc775e2c47fbb91933a95494d7c877cd7331ddc0a340eb2ef"
+
+[[source.member]]
+path = "words/EN2002d.A.words.xml"
+sha256 = "f0876699592389ae0557a12f28eeb37bc425525e7991ede21bd8a5a357ed25a4"
+
+[[source.member]]
+path = "words/TS3003b.A.words.xml"
+sha256 = "218a42d3f4dc34f56b477b66a4e4ffe6c40c4a7583b88f8f26b117800fb29928"
+
+[[source.member]]
+path = "words/ES2004b.B.words.xml"
+sha256 = "7ad3102b35c57a9f8a9c8aa0b6ac76b84ab3703a5b54d492b26975d734cab3bb"
+
+[[source.member]]
+path = "words/TS3003c.C.words.xml"
+sha256 = "65cfa734db01feda0e49092e52889f3914846cb5ca819407977020fd79dfa276"
+
+[[source.member]]
+path = "words/ES2004b.D.words.xml"
+sha256 = "67c2cd59f26df56727d814c3646f693178443e6fc85afee288209a69ea4ad777"
+
+[[source.member]]
+path = "words/EN2002c.C.words.xml"
+sha256 = "6cfff82fa6dfebf6b7eaeeeb19766c47b3cd0ba4a181b4fb9fd0964329d76f44"
+
+[[source.member]]
+path = "words/EN2002a.C.words.xml"
+sha256 = "d15c35bac773b389763ded48df784133684806b5db37f9e3343fa29ec37ec6e0"
+
+[[source.member]]
+path = "words/IS1009a.D.words.xml"
+sha256 = "eebb82de5bd46511217319a700ab8e926c7e0bf227832154a15a78d820a9a792"
+
+[[source.member]]
+path = "words/ES2004c.A.words.xml"
+sha256 = "9088056d2c6e05932d9f38749be9d8a3a93668a6a2e7400c137594271e037ecc"
+
+[[source.member]]
+path = "words/EN2002b.C.words.xml"
+sha256 = "efe80687926259f6f0318d4e08f885f54a502b275ce51e0dab1777e084a09bbc"
+
+[[source.member]]
+path = "words/IS1009b.A.words.xml"
+sha256 = "f7ff17ddfcf4b40b3a4420ced4abdaefb86f669259f0bb98b65f14bd35dc84cc"
+
+[[source.member]]
+path = "words/EN2002c.D.words.xml"
+sha256 = "fc5f8b8ad568870ca61dbbe63b946c1a316486d4a45d692ee8f7ffe94cd0b8c8"
+
+[[source.member]]
+path = "words/TS3003d.C.words.xml"
+sha256 = "d7e83f317bf109be954c33b5521af6db49cfbd49266f830056e445c0f9c2cc9f"
+
+[[source.member]]
+path = "words/IS1009c.B.words.xml"
+sha256 = "2463b857a947af4edd628da05e0ce238ef97dc74ecf3d35ed2fce48fc3f11243"
+
+[[source.member]]
+path = "words/IS1009c.C.words.xml"
+sha256 = "6b2a8cf0e13a1aa95df47a2689fd686578620498bd7e7a45c59272e655e926e3"
+
+[[source.member]]
+path = "words/EN2002c.A.words.xml"
+sha256 = "9528abd7adde4a95bd5b740aba984b6e4996dbc4a11aa06cf4a35e2d1802e6af"
+
+[[source.member]]
+path = "words/ES2004c.B.words.xml"
+sha256 = "6ec6884b65f1979d24cb35ff408d77c939b3e00625b8b37b1e57aca2bffd939a"
+
+[[source.member]]
+path = "words/ES2004d.A.words.xml"
+sha256 = "61aba77f1def73e78e2d780972bcb316124fe448ad656fc567a947c1f118c424"
+
+[[source.member]]
+path = "words/EN2002a.A.words.xml"
+sha256 = "a85a5b87b81b93e4d424fd6c6c8ab5b90df93a515f6d83aa37f7c7eb9d9a9492"
+
+[[source.member]]
+path = "words/EN2002a.B.words.xml"
+sha256 = "b27dfc1d2854810bd5923ca3967b1df6167ef0eccce1b6308aa3e57725f9953a"
+
+[[source.member]]
+path = "words/IS1009c.D.words.xml"
+sha256 = "b2a7de351679d62dd08cf8ea62c9f38bbd1e78d82d19787785d8fef90778af05"
+
+[[source.member]]
+path = "words/TS3003d.A.words.xml"
+sha256 = "8a760c88f852f4d6d4877f057340a622d0a3c4d235ab156a1e1852b48674947f"
+
+[[source.member]]
 path = "words/ES2004a.A.words.xml"
 sha256 = "3b91765c8985e7c2652f1004832c00840e88bad4c3213296192b9fd741d675cc"
+
+[[source.member]]
+path = "words/ES2004b.C.words.xml"
+sha256 = "b8fdfed824a4e09440c86f4b8e32af04b28b79c0ec9160310e985a4d960f91f8"
+
+[[source.member]]
+path = "words/TS3003a.C.words.xml"
+sha256 = "6342c203442438c77906b41f8b95631ce84f85b459cb6411890a08e32d6d0e5e"
+
+[[source.member]]
+path = "words/IS1009d.A.words.xml"
+sha256 = "44539b5a052cab0595921f2940da971a656930b140d7e3076a6010de85478499"
+
+[[source.member]]
+path = "words/IS1009a.B.words.xml"
+sha256 = "59755347ff5b45b3e2b646fec14b2f17779a9900c7c1168e3e39ca8d3a69d04e"
+
+[[source.member]]
+path = "words/EN2002a.D.words.xml"
+sha256 = "d5f610babf78b48dad6d98357ca8cf2ca6bcb396690c079570c2ebb45eea4d5f"
+
+[[source.member]]
+path = "words/ES2004b.A.words.xml"
+sha256 = "ad20241dea29b969b793efb75698bb074518e4a4c6328229833ca31e2ed569a1"
 
 [[source.member]]
 path = "words/ES2004a.B.words.xml"
 sha256 = "0e24646b84f2772bb3ca28e666df5f7ba48cde647589f7ae8f85e2724ff5cbc3"
 
 [[source.member]]
+path = "words/EN2002b.A.words.xml"
+sha256 = "9690a5ad6eefeee14c5be6f9d019a1daa9fbba24467a03faf4d960c7abd16984"
+
+[[source.member]]
+path = "words/ES2004d.D.words.xml"
+sha256 = "e306e8260778ef67d39d0cd3c4383a230d93067e1cf47aedf02a693663e75bdf"
+
+[[source.member]]
+path = "words/TS3003d.D.words.xml"
+sha256 = "6b1990546af8af9f704901335b5918f08c5953d599478003f2c49634023e09dd"
+
+[[source.member]]
+path = "words/IS1009b.B.words.xml"
+sha256 = "2a612ee0514cb11e32e85841592f720af6f19d75b30807b058db74f84f454574"
+
+[[source.member]]
+path = "words/IS1009b.D.words.xml"
+sha256 = "d142766bd0cf1bdab96bbe226367c319ae4a5b9536175c187a05375fc50fd242"
+
+[[source.member]]
+path = "words/EN2002d.C.words.xml"
+sha256 = "b3f295e2c0fc901d3dc091dc6d63e337a36eaa5fb9240262e5bb056f37eeb51b"
+
+[[source.member]]
+path = "words/IS1009a.C.words.xml"
+sha256 = "6a70b4d2301b67dd8b61e25adf16570921fae4bd3c72a6918b6972cd0f6c8d6a"
+
+[[source.member]]
+path = "words/EN2002b.D.words.xml"
+sha256 = "19a9d749879609f5f019446eede56a66c28ff993944edb891e0712edaa447622"
+
+[[source.member]]
+path = "words/ES2004c.C.words.xml"
+sha256 = "297f0fd814ded99fcdee863fb5f362ef0431e42579284677c9ebf99833245a23"
+
+[[source.member]]
+path = "words/TS3003a.D.words.xml"
+sha256 = "2fb26c7afff76c7ae34bd186b1fef28a974f73d9e3a1f22e3410dc3703c53a92"
+
+[[source.member]]
+path = "words/IS1009d.D.words.xml"
+sha256 = "3660328ec54a2f9774f93312acf2f58e33ec1899c1e6e8c4bec276b846639a78"
+
+[[source.member]]
+path = "words/TS3003a.B.words.xml"
+sha256 = "2f0600d74984f3fc925482e556bcdcd2e82ee44e518a0e0910250bba056572ec"
+
+[[source.member]]
+path = "words/IS1009b.C.words.xml"
+sha256 = "5058eaaf1b13f8272455745f3ff8b52e84dd798a38a939e11397f83e2784c5db"
+
+[[source.member]]
 path = "words/ES2004a.C.words.xml"
 sha256 = "07c25c4831fdc91cdff736ebf27c1380d0a7ef98e9835e33b15d44797fed7fd1"
 
 [[source.member]]
-path = "words/ES2004a.D.words.xml"
-sha256 = "e085188b2f4855808911934c309ba965c283e54371044c9086185f27913d44f8"
+path = "words/EN2002d.B.words.xml"
+sha256 = "b36811ef1e4a584db032d6ab4df6080da2300d4238b5828ab879d7ac0081c761"
+
+[[source.member]]
+path = "words/TS3003c.A.words.xml"
+sha256 = "38006fac0fa1ac7614a4895179b6e10354cb8a8459cc2e567c7fb996d3668899"
+
+[[source.member]]
+path = "words/ES2004c.D.words.xml"
+sha256 = "a397d6caf48ad4dfea6e555b176cd1003776dc573434fc8d71a9112c899c59ce"
 
 # BUT's AMI-diarization-setup at its main on 2026-10-29, the commit of 2023-10-17. Every RTTM URL uses this commit.
 [[source]]
@@ -290,6 +530,248 @@ urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/25
 sha256 = "9869c6146c2fd9595403edb36c2caeda65c12ffa2c0af4ce48d6814b673fd5a9"
 size = 14796
 licence = "Apache-2.0"           # the repository's LICENSE at that commit
+keep = true
+
+# AMI full (sets.toml): the other 15 meetings' audio, then their RTTMs (design/internal/g1-stage1.md §5b,
+# decision 4). First-use hashes from `pin` on a local download (#123, 01:50 PT), never from CI's.
+[[source]]
+id = "ami-EN2002a"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/EN2002a/audio/EN2002a.Mix-Headset.wav"]
+sha256 = "a15017d0d3c871866971ee178052a0ce3a7e44d6fbf89fc23dcab326511b65f5"
+size = 68566744                  # 16 kHz, mono, 16-bit, 34,283,350 frames (2,142.7 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-EN2002b"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/EN2002b/audio/EN2002b.Mix-Headset.wav"]
+sha256 = "50e2c8e4737850c4bf3cc24e7087c755e1c733cd91822106afd0df485ba64893"
+size = 57179180                  # 16 kHz, mono, 16-bit, 28,589,568 frames (1,786.8 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-EN2002c"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/EN2002c/audio/EN2002c.Mix-Headset.wav"]
+sha256 = "a057708b3adb553f709fcde97d2af8e0455076bc3f88c250975227433d6e0270"
+size = 95112236                  # 16 kHz, mono, 16-bit, 47,556,096 frames (2,972.3 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-EN2002d"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/EN2002d/audio/EN2002d.Mix-Headset.wav"]
+sha256 = "6aa99d9d71cb695ea699d6be277f78eff68e847c93560031486eba9f18164ebe"
+size = 70716802                  # 16 kHz, mono, 16-bit, 35,358,379 frames (2,209.9 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-ES2004b"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004b/audio/ES2004b.Mix-Headset.wav"]
+sha256 = "ad0cf07c42b1694ccf7bea8f1a37348d9cfab194787abc7d050b29ba56e365c8"
+size = 75055832                  # 16 kHz, mono, 16-bit, 37,527,894 frames (2,345.5 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-ES2004c"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004c/audio/ES2004c.Mix-Headset.wav"]
+sha256 = "47dc9bd2e3b1d174842091ae9e1fe765218f0c87658b17d6469c404e03ec2ac5"
+size = 74699820                  # 16 kHz, mono, 16-bit, 37,349,888 frames (2,334.4 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-ES2004d"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004d/audio/ES2004d.Mix-Headset.wav"]
+sha256 = "3cfce3297ebb7faeb53c02727eea5e9f2c76e9ed4b62db3b03d73e66836e91f3"
+size = 71113346                  # 16 kHz, mono, 16-bit, 35,556,651 frames (2,222.3 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-IS1009a"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/IS1009a/audio/IS1009a.Mix-Headset.wav"]
+sha256 = "6eb5a0ede0d9e72794f976ce7bea5b78133eae969f99b4c5418b43c2468d25b1"
+size = 26844093                  # 16 kHz, mono, 16-bit, 13,421,333 frames (838.8 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-IS1009b"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/IS1009b/audio/IS1009b.Mix-Headset.wav"]
+sha256 = "07c2891ae6ad7c507b2a4f15b2dcd0a2343491df9e4e6a58f9db0d0b2c5e1382"
+size = 65676093                  # 16 kHz, mono, 16-bit, 32,837,333 frames (2,052.3 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-IS1009c"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/IS1009c/audio/IS1009c.Mix-Headset.wav"]
+sha256 = "f317910070db0f2649315decbb34686d648bbe9dc3f7576710184f4d572bdbcc"
+size = 58268093                  # 16 kHz, mono, 16-bit, 29,133,333 frames (1,820.8 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-IS1009d"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/IS1009d/audio/IS1009d.Mix-Headset.wav"]
+sha256 = "470440114ee2ed076cfc77c53136ad5d3af500d8a5a6ca36755e83534f5ca4ea"
+size = 62225427                  # 16 kHz, mono, 16-bit, 31,112,000 frames (1,944.5 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-TS3003a"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/TS3003a/audio/TS3003a.Mix-Headset.wav"]
+sha256 = "b6ce59ff735c234afdd94b13744aa26f6785af746170543fd03b33160e920a6d"
+size = 48180608                  # 16 kHz, mono, 16-bit, 24,090,282 frames (1,505.6 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-TS3003b"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/TS3003b/audio/TS3003b.Mix-Headset.wav"]
+sha256 = "0c94f3a09ab747caa7714efe8852f5ff37d36cf272b75709344991df1aa266ca"
+size = 70729772                  # 16 kHz, mono, 16-bit, 35,364,864 frames (2,210.3 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-TS3003c"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/TS3003c/audio/TS3003c.Mix-Headset.wav"]
+sha256 = "b9f455870e8cb0ba765523a1767cc366775ab7e5e3eabf37d9c91289e5a1a70a"
+size = 82240044                  # 16 kHz, mono, 16-bit, 41,120,000 frames (2,570.0 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-TS3003d"
+urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/TS3003d/audio/TS3003d.Mix-Headset.wav"]
+sha256 = "ece4a41c37c1092c737d1dfe313afb18248364625991f745fed4b372c3c67eb3"
+size = 83782444                  # 16 kHz, mono, 16-bit, 41,891,200 frames (2,618.2 s)
+licence = "CC-BY-4.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-EN2002a"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/EN2002a.rttm"]
+sha256 = "a93919ae5f18e476614b7e5a2713c4dc6bba23e95149fba18dbe68602b13ee40"
+size = 42817
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-EN2002b"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/EN2002b.rttm"]
+sha256 = "c4e6ef3f9f493d82d14664a9669479aca378de05639e4640f02f8398e2ef714a"
+size = 28109
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-EN2002c"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/EN2002c.rttm"]
+sha256 = "e595fa5953a923cbd62ffc881bd9725df98a6587bc14730dd279937773953bca"
+size = 36557
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-EN2002d"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/EN2002d.rttm"]
+sha256 = "f11eeb70b0e1721b5b4b831a891d2b70c0b1a6ad368d0495d73c998335148463"
+size = 39329
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-ES2004b"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/ES2004b.rttm"]
+sha256 = "97a04fa14a37249b09581969939e5024324bbe3fc9c7a77e19976af41147ad7d"
+size = 26917
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-ES2004c"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/ES2004c.rttm"]
+sha256 = "fccef2416fe556133db1784f4f755029fd8961d2929b69e102375240e95493ed"
+size = 28593
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-ES2004d"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/ES2004d.rttm"]
+sha256 = "bb9fdfc402391bd2ff88d5a0caef159a0825d18ff85b346d4c28ce7bf1a714b6"
+size = 34545
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-IS1009a"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/IS1009a.rttm"]
+sha256 = "ba38d35ca567f3f1e061d90fdc33579ce60d2060fc8664eaeb77d2e0fcd88b01"
+size = 11080
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-IS1009b"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/IS1009b.rttm"]
+sha256 = "5cb6ae3948c09ce8356991cc79bb593abc1f0d23f1dbadeeb88e17e055283e67"
+size = 22363
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-IS1009c"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/IS1009c.rttm"]
+sha256 = "356ec69ac61ceec7f95ea66108a6dfe917e83e977f66487c525de5c18b02bbb2"
+size = 16708
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-IS1009d"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/IS1009d.rttm"]
+sha256 = "512f5b84fefaa9a5049ace143ef1a24b219baca6fcfe64a9a8c30b7331fe2e4a"
+size = 29067
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-TS3003a"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/TS3003a.rttm"]
+sha256 = "57137f098ee3be9b8d77c9faa4b16e9155e821bdbf21b974dd8771d7e646d185"
+size = 14427
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-TS3003b"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/TS3003b.rttm"]
+sha256 = "c728c1b1305a977a5adc32830c8299f1ee6084dee113a7e56f6d9cce540e5b3a"
+size = 24207
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-TS3003c"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/TS3003c.rttm"]
+sha256 = "62e491fd0e4265b74bb114c17d1351de7c907af6582a2efbd4f765211ec44d52"
+size = 23142
+licence = "Apache-2.0"
+keep = true
+
+[[source]]
+id = "ami-rttm-TS3003d"
+urls = ["https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/2509d8933721023fab4def2618aabd5c28eb82e9/only_words/rttms/test/TS3003d.rttm"]
+sha256 = "dfdc8e4721d13c9e7a63dee29a32d19b534ed3b99cb5abeda6a4185432a07f86"
+size = 41815
+licence = "Apache-2.0"
 keep = true
 
 # LS full (sets.toml): the same archive as librispeech-test-clean, with every utterance's FLAC and every chapter's
