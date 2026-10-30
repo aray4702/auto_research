@@ -1,17 +1,25 @@
 """`lmt eval --set live`'s measures: matching committed words to the reference, their delays, nearest-rank
 percentiles and reading a run's event log (design/internal/g2-stage1.md §5, item 5a), as spec/acceptance.md
-G2 "Terms" defines them.
+G2 "Terms" defines them; the runs of `lmt live` they're measured on (item 5b); and the figure that pools
+the runs (item 5c).
 
 jiwer is imported inside `match_words`, as `score` imports it, so this module imports without the `eval` extra.
 """
 
+import json
 import math
+import subprocess
+import sys
+import time
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import NamedTuple
 
+from lmt import models, transcript
 from lmt.errors import InputError
+from lmt.eval import score
 from lmt.transcript import Word
 
 
@@ -89,3 +97,84 @@ def read_events(lines: Sequence[tuple[float, dict]]) -> tuple[list[tuple[Word, f
                 words.append((Word(w["start"], w["end"], w["text"], w["probability"]), arrival))
     stop_arrival, stop = lines[-1]
     return words, stop_arrival - stop["t"]
+
+
+def run_once(command: list[str], out_dir: Path, stem: str) -> RunLog:
+    """Run `command` (an `lmt live --jsonl` run writing `<out_dir>/<stem>.json`), stamping each event line with
+    time.monotonic() as readline() returns it. Arrivals count from the start event's arrival; `wall_seconds`
+    from process start to exit. A non-zero exit is an InputError with stderr's last line."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stderr_path = out_dir / ".lmt-live-stderr.txt"
+    stamped = []
+    with open(stderr_path, "wb") as stderr:
+        began = time.monotonic()
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=stderr)
+        with proc.stdout:
+            for line in iter(proc.stdout.readline, b""):
+                arrived = time.monotonic()
+                if line.strip():
+                    stamped.append((arrived, line))
+        code = proc.wait()
+        wall_seconds = time.monotonic() - began
+    if code != 0:
+        lines = stderr_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        last = next((s for s in reversed(lines) if s.strip()), "")
+        raise InputError("lmt live", f"exited {code}: {last}")
+    events = []
+    for n, (arrived, line) in enumerate(stamped, start=1):
+        try:
+            events.append((arrived, json.loads(line)))
+        except ValueError:
+            raise InputError("lmt live", f"line {n} of its output isn't JSON") from None
+    origin = next((a for a, e in events if isinstance(e, dict) and e.get("type") == "start"), began)
+    return RunLog(
+        lines=[(arrived - origin, event) for arrived, event in events],
+        wall_seconds=wall_seconds,
+        transcript=transcript.to_dict(transcript.load(out_dir / f"{stem}.json")),
+    )
+
+
+def run_live(wav: Path, work_dir: Path, *, runs=3, command_prefix=None) -> list[RunLog]:
+    """Ensure the models `lmt models download` fetches, so no run downloads, then run `lmt live` on `wav`
+    `runs` times, one after another, each writing `run<i>.json` under `work_dir`. `command_prefix` replaces
+    `python -m lmt`, as stage 2's tuning entry point does."""
+    models.ensure(models.download_defaults(models.load_manifest()), offline=False)
+    prefix = list(command_prefix) if command_prefix is not None else [sys.executable, "-m", "lmt"]
+    logs = []
+    for i in range(1, runs + 1):
+        stem = f"run{i}"
+        command = prefix + ["live", "--from-file", str(wav), "--jsonl", "--offline", "-f", "json", "-n", stem,
+                            "-o", str(work_dir), "--overwrite"]
+        logs.append(run_once(command, Path(work_dir), stem))
+    return logs
+
+
+def figure(item: score.Item, ref_words, logs: Sequence[RunLog]) -> dict:
+    """The runs pooled, in public-api.md's key order: G1's figure for the runs as that many items, then the
+    delays over every matched word of every run, `matched_words`, and each run's p95 delay and
+    `behind_seconds`. A delay with no matched word is None."""
+    refs = [RefWord(*w) for w in ref_words]
+    hyps = []
+    pooled = []
+    runs = []
+    for log in logs:
+        hyp = score.hypothesis_from_transcript(log.transcript)
+        hyps.append(replace(hyp, wall_seconds=log.wall_seconds))
+        words, behind = read_events(log.lines)
+        run_delays = delays(match_words(refs, words))
+        pooled += run_delays
+        runs.append({"p95_delay_seconds": _delay(run_delays, 0.95), "behind_seconds": round(behind, 3)})
+    return {
+        **score._figure(item.dataset, "product-live", [item] * len(logs), hyps),
+        "p50_delay_seconds": _delay(pooled, 0.5),
+        "p95_delay_seconds": _delay(pooled, 0.95),
+        "max_delay_seconds": _delay(pooled, 1.0),
+        "matched_words": len(pooled),
+        "runs": runs,
+    }
+
+
+def _delay(values: Sequence[float], q: float) -> float | None:
+    """The q-th nearest-rank percentile rounded to 3 decimal places (q = 1 is the max), or None for no values."""
+    return round(percentile(values, q), 3) if values else None
