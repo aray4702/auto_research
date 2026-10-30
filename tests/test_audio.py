@@ -1,4 +1,5 @@
-"""Decode (design/internal/g1-slice.md, S2; design/internal/g1-stage2.md, P1), with no model."""
+"""Decode (design/internal/g1-slice.md, S2; design/internal/g1-stage2.md, P1) and the resampler
+(design/internal/g2-stage1.md, 4b), with no model."""
 
 import struct
 import wave
@@ -130,3 +131,40 @@ def test_a_data_size_of_0xffffffff_is_no_truncation(tmp_path):
         audio.decode(path)
     except InputError as e:
         assert not e.problem.startswith("truncated"), e.problem
+
+
+def stereo_48k(seconds=1.0):
+    t = numpy.arange(round(48_000 * seconds)) / 48_000
+    left, right = 0.5 * numpy.sin(2 * numpy.pi * 440 * t), 0.3 * numpy.sin(2 * numpy.pi * 1000 * t)
+    return numpy.stack([left, right], axis=1).astype(numpy.float32)
+
+
+def resample_in_pushes(signal, size, rate=48_000, channels=2):
+    resampler = audio.Resampler(rate, channels)
+    pieces = [resampler.push(signal[i:i + size]) for i in range(0, len(signal), size)]
+    return numpy.concatenate([*pieces, resampler.flush()])
+
+
+@pytest.mark.parametrize("size", [512, 1000])
+def test_resampling_in_pushes_matches_one_push(size):
+    signal = stereo_48k()
+    whole = resample_in_pushes(signal, len(signal))
+    pushed = resample_in_pushes(signal, size)
+    assert whole.dtype == pushed.dtype == numpy.float32
+    assert whole.ndim == pushed.ndim == 1
+    assert abs(len(whole) - 16_000) <= 16
+    assert len(pushed) == len(whole)
+    assert numpy.max(numpy.abs(pushed - whole)) <= 1e-4
+
+
+def test_resampling_16_khz_mono_gives_back_its_input():
+    signal = (tone(16_000) / 32768).astype(numpy.float32)
+    got = resample_in_pushes(signal.reshape(-1, 1), 1600, rate=16_000, channels=1)
+    assert got.shape == signal.shape
+    assert numpy.max(numpy.abs(got - signal)) <= 1e-6
+
+
+def test_an_empty_push_gives_an_empty_array():
+    got = audio.Resampler(48_000, 2).push(numpy.zeros((0, 2), numpy.float32))
+    assert got.dtype == numpy.float32
+    assert got.shape == (0,)

@@ -5,6 +5,7 @@ import json
 import wave
 
 import pytest
+from test_models_live import live_manifest
 
 from lmt import asr, cli, diarize, models, pipeline
 from lmt.transcript import Turn, Word
@@ -101,6 +102,13 @@ def test_writes_the_four_files_and_prints_their_paths(fakes, wav, out, capsys):
     }
     assert fakes.ensured == [m.name for m in models.default_models(manifest)]
     assert stderr == ""
+
+
+def test_transcribe_never_ensures_the_live_default(fakes, wav, out, capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(models, "MANIFEST_PATH", live_manifest(tmp_path))  # default "tiny", live "other"
+    code, _, stderr = run(capsys, "transcribe", wav, "-o", out)
+    assert code == 0, stderr
+    assert fakes.ensured == ["tiny", "diar", "seg", "emb"]
 
 
 @pytest.mark.parametrize("parallel", [True, False])

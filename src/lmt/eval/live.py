@@ -1,0 +1,148 @@
+"""`lmt eval --set live`'s measures: matching committed words to the reference, their delays, nearest-rank
+percentiles and reading a run's event log (design/internal/g2-stage1.md §5, item 5a), as spec/acceptance.md
+G2 "Terms" defines them; and the runs of `lmt live` they're measured on (item 5b).
+
+jiwer is imported inside `match_words`, as `score` imports it, so this module imports without the `eval` extra.
+"""
+
+import json
+import math
+import subprocess
+import sys
+import time
+import unicodedata
+from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import NamedTuple
+
+from lmt import models, transcript
+from lmt.errors import InputError
+from lmt.transcript import Word
+
+
+class RefWord(NamedTuple):  # a reference word with its times; datasets' triples are RefWord(*w)
+    start: float
+    end: float
+    text: str
+
+
+def key(text: str) -> str:
+    """The form both sides are matched in: casefolded, Unicode punctuation (category P) dropped, stripped."""
+    folded = text.casefold()
+    return "".join(c for c in folded if not unicodedata.category(c).startswith("P")).strip()
+
+
+def match_words(ref: Sequence[RefWord], hyp: Sequence[tuple[Word, float]]) -> list[tuple[RefWord, float]]:
+    """Each matched word, as its reference word with its committed word's time, in reference order: both sides
+    keyed, empty keys dropped, and every `equal` chunk of jiwer's alignment pairs a reference word with a
+    committed word."""
+    import jiwer
+
+    ref_kept = [(w, k) for w in ref if (k := key(w.text))]
+    hyp_kept = [(t, k) for w, t in hyp if (k := key(w.text))]
+    if not ref_kept or not hyp_kept:
+        return []
+    out = jiwer.process_words(" ".join(k for _, k in ref_kept), " ".join(k for _, k in hyp_kept))
+    matches = []
+    for chunk in out.alignments[0]:
+        if chunk.type != "equal":
+            continue
+        refs = range(chunk.ref_start_idx, chunk.ref_end_idx)
+        hyps = range(chunk.hyp_start_idx, chunk.hyp_end_idx)
+        matches.extend((ref_kept[r][0], hyp_kept[h][0]) for r, h in zip(refs, hyps))
+    return matches
+
+
+def delays(matches: Sequence[tuple[RefWord, float]]) -> list[float]:
+    """Each matched word's delay: its committed word's time minus its reference word's end."""
+    return [t - ref.end for ref, t in matches]
+
+
+def percentile(values: Sequence[float], q: float) -> float:
+    """The nearest-rank percentile: the ⌈q·n⌉-th smallest of the n values, for 0 < q ≤ 1."""
+    if not values:
+        raise ValueError("no values")
+    if not 0 < q <= 1:
+        raise ValueError(f"q must be in (0, 1], not {q}")
+    rank = math.ceil(round(q * len(values), 9))  # rounded first, so 0.07 · 100 is rank 7, not 8
+    return sorted(values)[rank - 1]
+
+
+@dataclass(frozen=True)
+class RunLog:  # one run of `lmt live --jsonl`
+    lines: list[tuple[float, dict]]  # (arrival in seconds from the start event's arrival, event)
+    wall_seconds: float
+    transcript: dict
+
+
+def read_events(lines: Sequence[tuple[float, dict]]) -> tuple[list[tuple[Word, float]], float]:
+    """Each committed word with its event's arrival, and `behind_seconds`: the stop event's arrival minus its `t`.
+    A stream that doesn't start with `start`, doesn't end with `stop`, or whose `t` falls is an InputError."""
+    if not lines or lines[0][1].get("type") != "start":
+        raise InputError("lmt live", "the event stream doesn't start with a start event")
+    if lines[-1][1].get("type") != "stop":
+        raise InputError("lmt live", "the event stream doesn't end with a stop event")
+    words = []
+    previous = None
+    for n, (arrival, event) in enumerate(lines, start=1):
+        t = event["t"]
+        if previous is not None and t < previous:
+            raise InputError("lmt live", f"event {n}'s t {t} falls below the previous event's {previous}")
+        previous = t
+        if event["type"] == "words":
+            for w in event["words"]:
+                words.append((Word(w["start"], w["end"], w["text"], w["probability"]), arrival))
+    stop_arrival, stop = lines[-1]
+    return words, stop_arrival - stop["t"]
+
+
+def run_once(command: list[str], out_dir: Path, stem: str) -> RunLog:
+    """Run `command` (an `lmt live --jsonl` run writing `<out_dir>/<stem>.json`), stamping each event line with
+    time.monotonic() as readline() returns it. Arrivals count from the start event's arrival; `wall_seconds`
+    from process start to exit. A non-zero exit is an InputError with stderr's last line."""
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stderr_path = out_dir / ".lmt-live-stderr.txt"
+    stamped = []
+    with open(stderr_path, "wb") as stderr:
+        began = time.monotonic()
+        proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=stderr)
+        with proc.stdout:
+            for line in iter(proc.stdout.readline, b""):
+                arrived = time.monotonic()
+                if line.strip():
+                    stamped.append((arrived, line))
+        code = proc.wait()
+        wall_seconds = time.monotonic() - began
+    if code != 0:
+        lines = stderr_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        last = next((s for s in reversed(lines) if s.strip()), "")
+        raise InputError("lmt live", f"exited {code}: {last}")
+    events = []
+    for n, (arrived, line) in enumerate(stamped, start=1):
+        try:
+            events.append((arrived, json.loads(line)))
+        except ValueError:
+            raise InputError("lmt live", f"line {n} of its output isn't JSON") from None
+    origin = next((a for a, e in events if isinstance(e, dict) and e.get("type") == "start"), began)
+    return RunLog(
+        lines=[(arrived - origin, event) for arrived, event in events],
+        wall_seconds=wall_seconds,
+        transcript=transcript.to_dict(transcript.load(out_dir / f"{stem}.json")),
+    )
+
+
+def run_live(wav: Path, work_dir: Path, *, runs=3, command_prefix=None) -> list[RunLog]:
+    """Ensure the models `lmt models download` fetches, so no run downloads, then run `lmt live` on `wav`
+    `runs` times, one after another, each writing `run<i>.json` under `work_dir`. `command_prefix` replaces
+    `python -m lmt`, as stage 2's tuning entry point does."""
+    models.ensure(models.download_defaults(models.load_manifest()), offline=False)
+    prefix = list(command_prefix) if command_prefix is not None else [sys.executable, "-m", "lmt"]
+    logs = []
+    for i in range(1, runs + 1):
+        stem = f"run{i}"
+        command = prefix + ["live", "--from-file", str(wav), "--jsonl", "--offline", "-f", "json", "-n", stem,
+                            "-o", str(work_dir), "--overwrite"]
+        logs.append(run_once(command, Path(work_dir), stem))
+    return logs
