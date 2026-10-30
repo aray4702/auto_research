@@ -93,8 +93,8 @@ class RenderTest(unittest.TestCase):
         self.assertIn("identical accuracy figures: no.", readme.render(results))
 
     def test_placeholder(self):
-        placeholder = json.loads((ROOT / "results" / "full.json").read_text())
-        self.assertEqual(placeholder["figures"], [])
+        # A results file with no figures, as `results/full.json` was until G1 stage 3's run filled it.
+        placeholder = dict(copy.deepcopy(RESULTS), figures=[])
         self.assertEqual(readme.render(placeholder), "No full-set results yet. The Owner's run of "
                          "`lmt eval --set full` fills this table (G1 stage 3).")
 
