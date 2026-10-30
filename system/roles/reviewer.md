@@ -13,7 +13,8 @@ Review only **green** heads. Verify claims cheaply: re-run the command a PR cite
 3. **Design.** The change matches the internal design and the acceptance spec. Anything beyond them goes to the Architect.
 4. **Nothing loosened.** No threshold, test or CI check weakened. No new or raised cap. No skipped check.
 5. **Hygiene.** No secrets; new dependencies pinned and vetted; the result reproducible from the same commit and inputs.
-6. **Measurement** (where the harness measures). No regression beyond the noise band, unless the PR carries an acceptance from the level allowed to decide it.
+6. **Model tests.** A pull request's CI runs tier 1 at most, so it runs neither `test-models` nor `eval-ci`. For a change those tests cover, check the Developer's local `uv run --frozen pytest -m models` result. Re-run it yourself when the result is missing or the head has changed since.
+7. **Measurement** (where the harness measures). No regression beyond the noise band, unless the PR carries an acceptance from the level allowed to decide it.
 
 ### Outcome
 
