@@ -557,12 +557,12 @@ On the one-hour recording, ASR alone takes 708 s (RTF 0.197) with a peak of 5.03
 One chunk per call, not a batch: in this container it is the fastest per chunk (above), and a chunk's embedding then depends on nothing but its own waveform and masks. `load` no longer reads `embedding_batch_size`, which only pyannote's own `get_embeddings` used. `segmentation_batch_size` stays 32. Nothing else in the pipeline, its parameters, the models or the threads changes.
 
 **What it gives** (the container, against `main`'s path, same input):
-- Turns: byte-identical RTTM on the two-speaker clip, AMI-ci and ES2004a. The active pairs' embeddings differ from `main`'s by at most 3.6 × 10⁻⁷ (relative), the float noise of a different batch through the same convolutions.
+- Turns: byte-identical RTTM to `main`'s on the two-speaker clip and AMI-ci, and on ES2004a to the inactive-pairs-skipped path at batch 8 (`main`'s own path wasn't run on all of ES2004a or the one-hour recording, at about 0.9 RTF here). The active pairs' embeddings differ from `main`'s, on AMI-ci, by at most 3.6 × 10⁻⁷ (relative), the float noise of a different batch through the same convolutions.
 - Diarization alone: 3.7 times faster on the two-speaker clip, 4.5 times on AMI-ci, and 1.6 times faster on ES2004a than skipping the inactive pairs alone. Its peak RSS: 1.0–1.06 × 10⁹ B, down from 2.41–2.48.
 - On the one-hour recording, diarization alone takes 530 s (RTF 0.147) with P14 and P15, one after the other (P16's table).
 - On the Mac, expected: diarization's RTF from 0.84–0.89 to about 0.2, so the product's from 0.85–0.89 to about 0.4 with P16's order, ASR's 0.20 then diarization's (P17 measures it). The memory peak falls by about 1.4 × 10⁹ B.
 
-**Risk to G1-8 and G1-12.** The turns are the same as `main`'s wherever the measurements reached; an embedding's last bits may differ, which could in principle move a pair across the clustering threshold (0.7046) and shift a turn, so AMI full's DER is re-measured (P17). It is deterministic: each chunk is computed alone, in a fixed order, with `configure_torch`'s threads, `use_deterministic_algorithms` and seed.
+**Risk to G1-8 and G1-12.** The turns were the same as `main`'s on both files compared (above); an embedding's last bits may differ, which could in principle move a pair across the clustering threshold (0.7046) and shift a turn, so AMI full's DER is re-measured (P17). It is deterministic: each chunk is computed alone, in a fixed order, with `configure_torch`'s threads, `use_deterministic_algorithms` and seed.
 
 **Tests.** `tests/test_diarize.py`:
 - **`load` installs it** (`fake` fixture, tagged `G1-9`, `G1-10`): the fake pipeline's `get_embeddings` is a `functools.partial` of `diarize.chunk_embeddings` bound to that pipeline.
