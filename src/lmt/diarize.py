@@ -27,7 +27,7 @@ DIARIZATION = "speaker-diarization-3.1"
 SEGMENTATION = "segmentation-3.0"
 EMBEDDING = "wespeaker-voxceleb-resnet34-LM"
 
-LOGGERS = ("lightning", "pytorch_lightning", "pyannote")
+LOGGERS = ("lightning", "pytorch_lightning", "pyannote", "matplotlib")
 
 _scratch: Path | None = None  # scratch_matplotlib's directory, once made
 
