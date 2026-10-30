@@ -1,12 +1,112 @@
 {
   "schema_version": "1.0",
   "set": "full",
-  "commit": null,
+  "commit": "47cdcf28e374dcc6e6e042a3d51fbb57fcd73c22",
   "dirty": false,
-  "date": null,
-  "machine": null,
+  "date": "2026-10-30T11:38:02-07:00",
+  "machine": {
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "memory_bytes": 17179869184,
+    "os": "macOS 27.0.1"
+  },
   "lmt_version": "0.1.0",
-  "models": null,
-  "figures": [],
-  "determinism": null
+  "models": {
+    "asr": {
+      "name": "distil-large-v3",
+      "repository": "Systran/faster-distil-whisper-large-v3",
+      "revision": "c3058b475261292e64a0412df1d2681c06260fab"
+    },
+    "diarization": {
+      "name": "speaker-diarization-3.1",
+      "repository": "pyannote/speaker-diarization-3.1",
+      "revision": "84fd25912480287da0247647c3d2b4853cb3ee5d"
+    }
+  },
+  "figures": [
+    {
+      "dataset": "LS full",
+      "system": "product",
+      "wer": 0.023271,
+      "der": null,
+      "audio_seconds": 19452.481,
+      "wall_seconds": 17165.23,
+      "rtf": 0.882,
+      "peak_rss_bytes": 2252128256
+    },
+    {
+      "dataset": "LS full",
+      "system": "whisper-alone",
+      "wer": 0.023271,
+      "der": null,
+      "audio_seconds": 19452.481,
+      "wall_seconds": 14909.005,
+      "rtf": 0.766,
+      "peak_rss_bytes": null
+    },
+    {
+      "dataset": "AMI full",
+      "system": "product",
+      "wer": 0.243181,
+      "der": 0.235193,
+      "audio_seconds": 32623.865,
+      "wall_seconds": 27567.846,
+      "rtf": 0.845,
+      "peak_rss_bytes": 4469669888
+    },
+    {
+      "dataset": "AMI full",
+      "system": "whisper-alone",
+      "wer": 0.243114,
+      "der": null,
+      "audio_seconds": 32623.865,
+      "wall_seconds": 6550.415,
+      "rtf": 0.201,
+      "peak_rss_bytes": null
+    },
+    {
+      "dataset": "AMI full",
+      "system": "pyannote-alone",
+      "wer": null,
+      "der": 0.188046,
+      "audio_seconds": 32623.865,
+      "wall_seconds": 27527.866,
+      "rtf": 0.844,
+      "peak_rss_bytes": null
+    },
+    {
+      "dataset": "one-hour",
+      "system": "product",
+      "wer": 0.337042,
+      "der": 0.308936,
+      "audio_seconds": 3600.0,
+      "wall_seconds": 3207.293,
+      "rtf": 0.891,
+      "peak_rss_bytes": 4099358720
+    },
+    {
+      "dataset": "one-hour",
+      "system": "whisper-alone",
+      "wer": 0.337042,
+      "der": null,
+      "audio_seconds": 3600.0,
+      "wall_seconds": 858.337,
+      "rtf": 0.238,
+      "peak_rss_bytes": null
+    },
+    {
+      "dataset": "one-hour",
+      "system": "pyannote-alone",
+      "wer": null,
+      "der": 0.244371,
+      "audio_seconds": 3600.0,
+      "wall_seconds": 3202.815,
+      "rtf": 0.89,
+      "peak_rss_bytes": null
+    }
+  ],
+  "determinism": {
+    "runs": 2,
+    "identical": true
+  }
 }
