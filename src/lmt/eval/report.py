@@ -13,7 +13,9 @@ from pathlib import Path
 
 from lmt import __version__
 
-TIMING_FIELDS = ("date", "wall_seconds", "rtf", "peak_rss_bytes")
+TIMING_FIELDS = ("date", "wall_seconds", "rtf", "peak_rss_bytes",
+                 "p50_delay_seconds", "p95_delay_seconds", "max_delay_seconds")
+RUN_TIMING_FIELDS = ("p95_delay_seconds", "behind_seconds")  # in each of a live figure's `runs`
 
 
 def build(set_name, figures, models, determinism=None, *, out_dir,
@@ -48,10 +50,18 @@ def write(path, results) -> None:
 
 
 def strip_timing(results) -> dict:
-    """A copy without the timing fields, at the top level and in each figure (G1-5, G1-12)."""
+    """A copy without the timing fields, at the top level, in each figure and in each of a live figure's
+    runs, keeping the runs' entries (G1-5, G1-12)."""
     stripped = {k: v for k, v in results.items() if k not in TIMING_FIELDS}
-    stripped["figures"] = [{k: v for k, v in f.items() if k not in TIMING_FIELDS} for f in results["figures"]]
+    stripped["figures"] = [_strip_figure(f) for f in results["figures"]]
     return copy.deepcopy(stripped)
+
+
+def _strip_figure(figure) -> dict:
+    stripped = {k: v for k, v in figure.items() if k not in TIMING_FIELDS}
+    if "runs" in stripped:
+        stripped["runs"] = [{k: v for k, v in r.items() if k not in RUN_TIMING_FIELDS} for r in stripped["runs"]]
+    return stripped
 
 
 def same_accuracy(a, b) -> bool:
