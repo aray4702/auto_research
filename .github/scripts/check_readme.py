@@ -25,7 +25,7 @@ CLONE_LINES = [f"git clone {CLONE_URL}", "cd auto_research"]
 BUILD_LAST_LINE = "uv run lmt --help"
 GATE_COMMAND = "python3 -I system/gate/generic.py --base origin/main"
 # S1-4: the product's commands the README names as inline code, each also run by product.yml's jobs.
-PRODUCT_COMMANDS = ["uv run --frozen pytest"]
+PRODUCT_COMMANDS = ["uv run --frozen pytest", "uv run --frozen lmt eval --set ci"]
 PRODUCT_YML = ".github/workflows/product.yml"
 
 FENCE = re.compile(r"^```(\S*)[^\n]*\n(.*?)^```[ \t]*$", re.MULTILINE | re.DOTALL)
