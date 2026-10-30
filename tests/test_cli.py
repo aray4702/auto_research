@@ -258,17 +258,5 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual((code, err), (1, "lmt: error: internal: ValueError: boom\n"))
 
 
-class G3StubTest(unittest.TestCase):
-    """`rename` and `demo` reach their stubs until G3 stage 1 builds them."""
-
-    def test_each_stub_exits_1_with_one_line(self):
-        for argv, command in ((["rename", "t.json", "S1=Ana"], "rename"),
-                              (["demo", "t.json", "--port", "65535", "--no-browser"], "demo"),
-                              (["demo", "--sample", "--offline"], "demo --sample")):
-            with self.subTest(argv=argv):
-                code, out, err = run(*argv)
-                self.assertEqual((code, out, err), (1, "", f"lmt: error: {command}: not built yet (G3 stage 1)\n"))
-
-
 if __name__ == "__main__":
     unittest.main()
