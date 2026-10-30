@@ -7,6 +7,7 @@
 
 schema_version = 1
 default_asr = "distil-large-v3"
+default_live_asr = "distil-large-v3"     # lmt live's model: the offline default until G2 stage 2 pins one
 
 [[model]]
 name = "distil-large-v3"
