@@ -14,6 +14,7 @@ from lmt.errors import LmtError, UsageError
 
 FORMATS = ("txt", "srt", "vtt", "json")
 SPEAKERS_MIN, SPEAKERS_MAX = 1, 20
+PORT_MIN, PORT_MAX = 0, 65535
 
 _ARGUMENT = re.compile(r"^argument (\S+): (.*)$", re.DOTALL)
 _REQUIRED = re.compile(r"^the following arguments are required: ([^,\s]+)")
@@ -92,6 +93,34 @@ def build_parser():
     e.add_argument("--check-readme", action="store_true",
                    help="Check README.md's results table against results/full.json. Exits 6 if it differs.")
     e.set_defaults(handler="lmt.eval.cli:cli_eval")
+
+    r = commands.add_parser("rename", help="Give speakers names, then export again.",
+                            description="Gives speakers names, then exports again. With no KEY=NAME, prints "
+                                        "each speaker's id, label, segments, speaking time and first words.")
+    r.add_argument("transcript", metavar="TRANSCRIPT", help="A transcript JSON that lmt wrote.")
+    r.add_argument("pairs", metavar="KEY=NAME", nargs="*",
+                   help="A speaker's id (S1) or current label (Speaker 1), and the name to give it.")
+    r.add_argument("-o", "--output-dir", metavar="DIR", default=None,
+                   help="Where the outputs go, as <DIR>/<transcript stem>.<ext> (default: the transcript's "
+                        "directory).")
+    r.add_argument("-f", "--formats", metavar="LIST", default=",".join(FORMATS),
+                   help="A comma-separated subset of txt, srt, vtt and json (default: all four).")
+    r.set_defaults(handler="lmt.rename:cli_rename")
+
+    dm = commands.add_parser("demo", help="Show a transcript and play its audio in a local page.",
+                             description="Serves a page on this computer that shows a transcript, its speakers "
+                                         "and its audio together. Clicking a segment plays the audio from it.")
+    dm.add_argument("transcript", metavar="TRANSCRIPT", nargs="?", help="The transcript JSON to show.")
+    dm.add_argument("--audio", metavar="FILE",
+                    help="The recording to play (default: source.file, beside the transcript).")
+    dm.add_argument("--sample", action="store_true",
+                    help="Instead of TRANSCRIPT, the sample meeting. The first run downloads and transcribes it.")
+    dm.add_argument("--port", metavar="N", type=int, default=0,
+                    help="The local port (default: 0, a free port the system picks).")
+    dm.add_argument("--no-browser", action="store_true", help="Print the URL without opening a browser.")
+    dm.add_argument("--offline", action="store_true",
+                    help="Never download. Only --sample's first run needs the network.")
+    dm.set_defaults(handler="lmt.demo.server:cli_demo")
     return parser
 
 
@@ -101,9 +130,13 @@ def validate(args):
         _validate_transcribe(args)
     elif args.command == "eval":
         _validate_eval(args)
+    elif args.command == "rename":
+        _validate_formats(args)
+    elif args.command == "demo":
+        _validate_demo(args)
 
 
-def _validate_transcribe(args):
+def _validate_formats(args):
     formats = args.formats.split(",")
     for f in formats:
         if f not in FORMATS:
@@ -111,6 +144,10 @@ def _validate_transcribe(args):
     if len(set(formats)) != len(formats):
         raise UsageError("--formats", "a format is repeated")
     args.formats = formats
+
+
+def _validate_transcribe(args):
+    _validate_formats(args)
 
     for option in ("num_speakers", "min_speakers", "max_speakers"):
         value = getattr(args, option)
@@ -135,6 +172,17 @@ def _validate_eval(args):
         raise UsageError("--check-readme", "can't be combined with --set")
     if args.update_readme and args.set != "full":
         raise UsageError("--update-readme", "only with --set full")
+
+
+def _validate_demo(args):
+    if args.transcript is not None and args.sample:
+        raise UsageError("--sample", "can't be combined with TRANSCRIPT")
+    if args.transcript is None and not args.sample:
+        raise UsageError("TRANSCRIPT", "give TRANSCRIPT or --sample")
+    if args.audio is not None and args.sample:
+        raise UsageError("--audio", "can't be combined with --sample")
+    if not PORT_MIN <= args.port <= PORT_MAX:
+        raise UsageError("--port", f"must be from {PORT_MIN} to {PORT_MAX}, not {args.port}")
 
 
 def _flag(dest):

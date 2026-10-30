@@ -42,6 +42,8 @@ class TierForPathTest(unittest.TestCase):
     def test_g3_files_left_out_of_tier_3(self):
         self.assertTier("src/lmt/rename.py", 2)
         self.assertTier("src/lmt/demo/page.html", 2)
+        self.assertTier("src/lmt/demo/server.py", 2)
+        self.assertTier("src/lmt/demo/static/app.js", 2)
 
     def test_workflows_are_tier_3(self):
         self.assertTier(".github/workflows/gate.yml", 3)
