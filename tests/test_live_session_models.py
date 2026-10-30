@@ -1,0 +1,172 @@
+"""G2-1, G2-3 and G2-6c (spec/acceptance.md), in process, on the models (design/internal/g2-stage1.md §3a, item
+3a4): one lockstep run of the whole live pipeline on the two-speaker clip, through `FileSource(paced=False)` and
+`run_lockstep`, with the live default ASR model and online diarization, shared by the three cases. Each event's `t`
+is the stream position when it was written. Offline word times come from `two_speakers_run`, and committed words are
+matched to them with `lmt.eval.live.match_words`."""
+
+import io
+import json
+from collections import Counter
+from itertools import pairwise
+from pathlib import Path
+from typing import NamedTuple
+
+import jsonschema
+import pytest
+from test_g1_1 import report
+from test_g1_3 import read_rttm, reference_speaker
+
+from lmt.transcript import Word
+
+ROOT = Path(__file__).resolve().parents[1]
+TWO_SPEAKERS = ROOT / "tests" / "fixtures" / "two_speakers.wav"
+RTTM = ROOT / "tests" / "fixtures" / "two_speakers.rttm"
+EVENTS_SCHEMA = ROOT / "schema" / "live-events.schema.json"
+RATE = 16000
+
+EARLY = 5.0  # s, spec/acceptance.md G2-1: words ending at least 5 s before the clip's end are committed before its end
+SHARE_BOUND = 0.90  # spec/acceptance.md G2-3: at least 90 % of a speaker's words carry their majority label
+P95_BOUND = 2.0  # s, spec/acceptance.md G2-6c: p95 stream delay <= 2.0 s, inclusive
+
+
+class Session(NamedTuple):
+    events: list[dict]
+    result: object  # lmt.live.session.SessionResult
+    duration: float  # s, the clip's length: the position of the source's last block
+    asr_name: str
+
+
+@pytest.fixture(scope="module")
+def session():
+    """The one lockstep run. HF_HUB_OFFLINE is put back afterwards, undoing ensure()'s."""
+    from lmt import asr, diarize, models
+    from lmt.live.asr import StreamingASR
+    from lmt.live.diarize import OnlineDiarizer
+    from lmt.live.events import EventWriter
+    from lmt.live.session import run_lockstep
+    from lmt.live.source import FileSource
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("HF_HUB_OFFLINE", "0")
+        manifest = models.load_manifest()
+        live_asr = models.default_live_asr(manifest)
+        segmentation, embedding = manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)
+        dirs = models.ensure([live_asr, segmentation, embedding])
+        diarize.scratch_matplotlib()
+        engine = asr.load(dirs[live_asr.name])
+        diarizer = OnlineDiarizer(diarize.load_segmentation(Path(dirs[segmentation.name])),
+                                  diarize.load_embedding(Path(dirs[embedding.name])))
+
+        source = FileSource(TWO_SPEAKERS, paced=False)
+        stream = io.StringIO()
+        # In lockstep, `t` is the position of the last block handed over.
+        writer = EventWriter(stream, jsonl=True, clock_t=lambda: source.position)
+        info = {m: {"name": model.name, "repository": model.repository, "revision": model.revision}
+                for m, model in (("asr", live_asr), ("diarization", manifest.get(diarize.DIARIZATION)))}
+        result = run_lockstep(source, StreamingASR(engine), diarizer, writer,
+                              source_info={"file": TWO_SPEAKERS.name, "live": True}, models=info)
+        events = [json.loads(line) for line in stream.getvalue().splitlines()]
+        yield Session(events, result, source.position / RATE, live_asr.name)
+
+
+def committed(events) -> list[tuple[Word, float, str]]:
+    """Each committed word, in stream order, with its event's `t` and speaker."""
+    return [(Word(w["start"], w["end"], w["text"], w["probability"]), e["t"], e["speaker"])
+            for e in events if e["type"] == "words" for w in e["words"]]
+
+
+def offline_words(run):
+    from lmt.eval.live import RefWord
+
+    assert run.returncode == 0, run.stderr
+    doc = json.loads((run.out_dir / "two_speakers.json").read_text(encoding="utf-8"))
+    # Turns-first segments can hold words out of time order where turns overlap (P12), so sort them.
+    words = sorted((RefWord(w["start"], w["end"], w["text"]) for s in doc["segments"] for w in s["words"]),
+                   key=lambda w: (w.start, w.end))
+    assert words, "the offline run has no words"
+    return words
+
+
+@pytest.mark.models
+@pytest.mark.criterion("G2-1")
+def test_g2_1_words_are_committed_while_the_audio_arrives(session, two_speakers_run):
+    from lmt.eval.live import match_words
+
+    events = session.events
+    validator = jsonschema.Draft202012Validator(json.loads(EVENTS_SCHEMA.read_text(encoding="utf-8")))
+    for n, event in enumerate(events, start=1):
+        errors = [e.message for e in validator.iter_errors(event)]
+        assert not errors, f"event {n} ({event.get('type')}): {errors}"
+    types = [e["type"] for e in events]
+    assert types[0] == "start" and types[-1] == "stop", f"first {types[0]}, last {types[-1]}"
+    assert types.count("start") == 1 and types.count("stop") == 1, Counter(types)
+
+    words = committed(events)
+    assert words, "nothing was committed"
+    ids = {s.id for s in session.result.speakers}
+    assert all(speaker in ids for _, _, speaker in words), f"speakers {ids}"
+    for (a, _, _), (b, _, _) in pairwise(words):
+        assert a.start <= b.start, f"out of order: {a} then {b}"
+        assert a.end <= b.start, f"overlapping: {a} then {b}"
+    keys = Counter((w.start, w.end, w.text) for w, _, _ in words)
+    assert not [k for k, n in keys.items() if n > 1], "repeated words"
+    # Nothing changed after its event: the final segments hold exactly the committed words, with their speakers.
+    final = [(w, s.speaker) for s in session.result.segments for w in s.words]
+    assert final == [(w, speaker) for w, _, speaker in words], "the final segments differ from the event stream"
+
+    offline = offline_words(two_speakers_run)
+    matches = match_words(offline, [(w, t) for w, t, _ in words])
+    early = [(ref, t) for ref, t in matches if ref.end <= session.duration - EARLY]
+    late = [(ref, t) for ref, t in early if t >= session.duration]
+    report(f"G2-1: the live pipeline ({session.asr_name}) in lockstep on tests/fixtures/two_speakers.wav "
+           f"({session.duration:.3f} s): {len(events)} events, {len(words)} committed words, {len(matches)} of "
+           f"{len(offline)} offline words matched ({len(matches) / len(offline):.1%}); {len(early)} matched words "
+           f"end at least {EARLY:.0f} s before the clip's end, {len(late)} of them committed at its end")
+    assert matches, "no committed word matched an offline word"
+    assert not late, f"committed only at the clip's end: {late[:5]}"
+
+
+@pytest.mark.models
+@pytest.mark.criterion("G2-3")
+def test_g2_3_each_speakers_words_carry_one_label(session):
+    words = committed(session.events)
+    speakers = session.result.speakers
+    turns = read_rttm(RTTM)
+    labels = {speaker: Counter() for speaker in dict.fromkeys(turn.speaker for turn in turns)}
+    for w, _, speaker in words:
+        labels[reference_speaker(w.start, w.end, turns)][speaker] += 1
+
+    majority, shares = {}, {}
+    for speaker, counts in labels.items():
+        total = sum(counts.values())
+        majority[speaker], top = counts.most_common(1)[0] if counts else (None, 0)
+        shares[speaker] = top / total if total else 0.0
+        report(f"G2-3: reference speaker {speaker}: {total} committed words, majority label {majority[speaker]} "
+               f"on {shares[speaker]:.1%} (bound {SHARE_BOUND:.0%}), labels {dict(counts)}")
+    report(f"G2-3: the live pipeline in lockstep on tests/fixtures/two_speakers.wav: speakers "
+           f"{[s.id for s in speakers]}, {len(session.result.segments)} segments")
+
+    assert len(speakers) == 2, f"speakers: {speakers}"
+    assert {speaker for _, _, speaker in words} == {s.id for s in speakers}, "the words don't use both speakers"
+    for speaker, share in shares.items():
+        assert share >= SHARE_BOUND, f"reference speaker {speaker}: {share:.1%} on their majority label"
+    assert len(set(majority.values())) == len(majority), f"the speakers' majority labels are the same: {majority}"
+
+
+@pytest.mark.models
+@pytest.mark.criterion("G2-6c")
+def test_g2_6c_the_p95_stream_delay_is_within_the_bound(session, two_speakers_run):
+    from lmt.eval.live import delays, match_words, percentile
+
+    offline = offline_words(two_speakers_run)
+    matches = match_words(offline, [(w, t) for w, t, _ in committed(session.events)])
+    assert matches, "no committed word matched an offline word"
+
+    values = delays(matches)
+    p50, p95 = percentile(values, 0.50), percentile(values, 0.95)
+    over = sum(d > P95_BOUND for d in values)
+    line = (f"G2-6c: the live pipeline ({session.asr_name}) in lockstep on tests/fixtures/two_speakers.wav: "
+            f"stream delay p50 {p50:.3f} s, p95 {p95:.3f} s (bound {P95_BOUND:.1f} s), maximum {max(values):.3f} s, "
+            f"{len(matches)} of {len(offline)} offline words matched, {over} over {P95_BOUND:.1f} s")
+    report(line)
+    assert p95 <= P95_BOUND, line
