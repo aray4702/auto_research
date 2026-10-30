@@ -15,6 +15,7 @@
 | 1.9     | 2026-10-27 | architect, from the Owner's answers (#83, 22:57 PT) | G3 is due 2026-10-30 for the criteria CI checks and 2026-10-31 for the Owner's readings and the release; v1.0 is G1 and G3, and live mode (G2) follows as v1.1; the short demo, Q5's CI runners, the install command, the published sample audio and the Hugging Face token |
 | 1.10    | 2026-10-28 | architect, from the Owner's answer (#84, answer 1, 13:54 PT) | The goals' dates move. G1: the criteria CI checks are due 2026-10-30, and the checks on the Owner's Mac and the checks by eye 2026-10-31. G2: the criteria CI checks 2026-10-31, and the checks on the Owner's Mac 2026-11-01. G3: the criteria CI checks 2026-10-31, and the Owner's readings and the release 2026-11-01 |
 | 1.11    | 2026-10-28 | architect, from the Owner's decision (#243, 19:40 PT) | Q6 (observability) isn't in v1.0: §5's Q6 row and §6's v1.0 line say so, and §11 records the decision |
+| 1.12    | 2026-10-30 | architect, from the Owner's decision (#123, relayed by the builder, 16:13 PT) | Q2 is relaxed for v0.1, the MVP: real-time factor ≤ 1.0 (faster than real time). 0.5 stays v1.0's target. §5's Q2 row says so, and §11 records the decision |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -124,7 +125,7 @@ already hold; add only what goes beyond them.
 | ID  | Attribute                                                                    | Target            | Conditions, and where it's measured                   | Priority |
 | --- | ---------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------- | -------- |
 | Q1  | accuracy | Speech recognition: WER ≤ 5 % on LibriSpeech test-clean, and WER ≤ 25 % on AMI. Speaker labels: DER ≤ 25 % on AMI | AMI: the headset-mix recordings, standard test split. WER is scored with `jiwer` after Whisper's English text normalizer. DER is scored with `pyannote.metrics`, with no collar and overlapping speech included. The full sets are measured on the Owner's Mac; CI runs a small fixed subset as a pass/fail check. Compare against Whisper alone and pyannote alone | must |
-| Q2  | performance: latency, throughput, startup | Offline: real-time factor ≤ 0.5 (an hour of audio in 30 minutes or less) | On the Owner's Mac (Apple M4, 16 GB; a device CI doesn't have); CI records its own numbers without failing on them | must |
+| Q2  | performance: latency, throughput, startup | Offline: real-time factor ≤ 1.0 for v0.1, the MVP (an hour of audio in an hour or less), and ≤ 0.5 for v1.0 (an hour of audio in 30 minutes or less) (#123, 2026-10-30) | On the Owner's Mac (Apple M4, 16 GB; a device CI doesn't have); CI records its own numbers without failing on them | must |
 | Q3  | performance: resource use (CPU, memory, power, binary size) | Peak memory ≤ 4 GB; models ≤ 2 GB on disk | A one-hour recording, on the Owner's Mac | should |
 | Q4  | reliability (crash-free rate, recovery time) | Never crashes on bad input: a corrupt, empty, silent or unsupported file gives a clear error | Fuzzed and malformed inputs in CI | must |
 | Q5  | usability and accessibility | Installs with one command; works offline after the first model download; subtitles follow SRT and WebVTT | A clean macOS user account (the Owner's), and the CI runners `ubuntu-24.04` and `macos-15` (#83, answer 10a) | should |
@@ -226,4 +227,5 @@ None open. The Owner answered on #79:
 - the proposed targets and defaults are accepted;
 - the summary (F10) is a non-goal for now;
 - on #82, capturing system audio directly became a non-goal for now;
-- on #243, the Owner accepted v1.0 without Q6 (observability).
+- on #243, the Owner accepted v1.0 without Q6 (observability);
+- on #123 (2026-10-30), the Owner relaxed Q2 for v0.1, the MVP, to a real-time factor ≤ 1.0; 0.5 stays the target for v1.0.
