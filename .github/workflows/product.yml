@@ -139,7 +139,8 @@ jobs:
     needs: changes
     if: fromJSON(needs.changes.outputs.tier) >= 2
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # 60, not 30: G2's live model tests run the pipeline in lockstep (~20 min each for 1e and 3a4 on a runner).
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
