@@ -1,8 +1,10 @@
 """A stand-in for the `sounddevice` module (design/internal/g2-stage1.md §4, item 4c), passed as `backend` to
 `lmt.live.mic`. It has `query_devices()`, `default.device`, and an `InputStream` with sounddevice's constructor
 and `start`, `stop` and `close`, used as a context manager. The stream calls its callback from its own thread
-with the array it was given, in blocks of the size it was given, as `(indata, frames, time, status)`. It records
-whether a stream was opened, so a test can check that no audio was captured.
+with the array it was given, in blocks of the size it was given, as `(indata, frames, time, status)`. As
+PortAudio does, every callback gets a view of one buffer, overwritten for the next, so a callback that keeps
+`indata` without copying it loses its samples. It records whether a stream was opened, so a test can check that
+no audio was captured, and it can fail to open, raising `PortAudioError` as sounddevice does.
 """
 
 import threading
@@ -21,6 +23,10 @@ def device(name, inputs, outputs=0, rate=48000.0):
     }
 
 
+class PortAudioError(Exception):
+    """sounddevice's `PortAudioError`."""
+
+
 class Status:
     """sounddevice's CallbackFlags, as far as the callback reads them: false unless input overflowed."""
 
@@ -35,9 +41,13 @@ class FakeSoundDevice:
     """`devices` are `device(...)` dicts, possibly none. `default` is the default input's index; by default
     the first device with an input, else -1, as PortAudio gives with none. A stream delivers `data`, float32
     (frames, channels), in blocks of `blocksize` frames, the last one shorter, then delivers no more; the blocks
-    whose numbers are in `overflow` come with the input-overflow flag."""
+    whose numbers are in `overflow` come with the input-overflow flag. With `open_error`, constructing a stream
+raises `PortAudioError(open_error)` and opens nothing; with `start_error`, starting it does."""
 
-    def __init__(self, devices=(), *, default=None, data=None, blocksize=512, overflow=()):
+    PortAudioError = PortAudioError
+
+    def __init__(self, devices=(), *, default=None, data=None, blocksize=512, overflow=(), open_error=None,
+                 start_error=None):
         self.devices = [dict(d) for d in devices]
         if default is None:
             default = next((i for i, d in enumerate(self.devices) if d["max_input_channels"] > 0), -1)
@@ -45,6 +55,8 @@ class FakeSoundDevice:
         self.data = np.zeros((0, 1), np.float32) if data is None else np.asarray(data, np.float32)
         self.blocksize = blocksize
         self.overflow = set(overflow)
+        self.open_error = open_error
+        self.start_error = start_error
         self.streams = []  # every InputStream constructed, in order
 
     @property
@@ -56,6 +68,8 @@ class FakeSoundDevice:
         return [dict(d, index=i) for i, d in enumerate(self.devices)]
 
     def InputStream(self, *, device=None, samplerate=None, channels=None, dtype=None, callback=None, **kwargs):
+        if self.open_error is not None:
+            raise PortAudioError(self.open_error)
         stream = InputStream(self, device, samplerate, channels, dtype, callback, kwargs)
         self.streams.append(stream)
         return stream
@@ -78,14 +92,18 @@ class InputStream:
 
     def _run(self):
         data, size = self._fake.data, self._fake.blocksize
+        buffer = np.empty((size, data.shape[1]), np.float32)  # PortAudio's one buffer, reused for every callback
         for n, start in enumerate(range(0, len(data), size)):
             if self._stopping.is_set():
                 break
             block = data[start:start + size]
-            self._callback(block.copy(), len(block), None, Status(n in self._fake.overflow))
+            buffer[:len(block)] = block
+            self._callback(buffer[:len(block)], len(block), None, Status(n in self._fake.overflow))
         self.done.set()
 
     def start(self):
+        if self._fake.start_error is not None:
+            raise PortAudioError(self._fake.start_error)
         self.started = True
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
