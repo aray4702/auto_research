@@ -50,7 +50,7 @@ def summarize(lines, worktree=None):
 def denial_signature(denial, worktree=None):
     """The tool, and for Bash up to two words that look like a command or subcommand. It stops at any
     assignment, path, quote or flag, so no argument, value or secret (#44) can reach the record. An
-    interpreter is followed by what it runs instead (see interpreted). A first word that isn't
+    interpreter is followed by what it runs instead (see interpreted), and so is `uv run` (see uv_run). A first word that isn't
     command-shaped is recorded by its shape (see first_word), not as a bare "?" (#176). Shell operators
     and OUTSIDE follow as symbols: `git diff` is allowed, yet denied with `$(…)` or a path outside the
     worktree (#177)."""
@@ -75,7 +75,9 @@ def denial_signature(denial, worktree=None):
         if not re.fullmatch(r"[a-z]+(-[a-z]+)*", word) or len(word) > 20:
             break
         words.append(word)
-        if len(words) == 2:
+        if words == ["uv", "run"]:
+            words += uv_run(split[i + 1:])
+        if len(words) >= 2:
             break
     outside = [OUTSIDE] if reaches_outside(command, worktree) else []
     return " ".join(["Bash:", " ".join(words) or "?", *shell_operators(command), *outside])
@@ -201,6 +203,25 @@ def interpreted(words):
     return out
 
 
+UV_FLAGS = {"--frozen", "--locked", "--offline", "--no-sync", "--no-project", "--isolated"}
+
+
+def uv_run(words):
+    """What `uv run` runs (#324): uv's own flags that take no value, then the command, and for an interpreter
+    what interpreted() keeps. `uv run` alone hides whether pytest with arguments or `python -c` was denied.
+    Never a flag's value, nor any argument of the command but an interpreter's."""
+    out = []
+    for i, word in enumerate(words):
+        if word in UV_FLAGS:
+            out.append(word)
+            continue
+        if re.fullmatch(COMMAND, word):
+            out.append(word)
+            out += interpreted(words[i + 1:]) if word in INTERPRETERS else []
+        break
+    return out
+
+
 def parse_time(iso):
     return datetime.fromisoformat(iso)
 
@@ -242,8 +263,10 @@ def may_start(caps, runs, role, now, time_zone="America/Los_Angeles"):
     running = active(runs)
     if len(running) >= caps["concurrency"]["max_runs"]:
         reasons.append(f"{len(running)} runs are active; the cap is {caps['concurrency']['max_runs']}")
-    if sum(r["role"] == role for r in running) >= caps["concurrency"]["max_runs_per_role"]:
-        reasons.append(f"a {role} run is already active")
+    # A role named in [concurrency.per_role] has its own limit (the Owner, 2026-10-29: "3 developers").
+    per_role = (caps["concurrency"].get("per_role") or {}).get(role, caps["concurrency"]["max_runs_per_role"])
+    if sum(r["role"] == role for r in running) >= per_role:
+        reasons.append(f"a {role} run is already active" if per_role == 1 else f"{per_role} {role} runs are already active")
     tz = ZoneInfo(time_zone)
     today = now.astimezone(tz).date()
     started_today = sum(

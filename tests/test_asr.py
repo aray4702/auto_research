@@ -2,6 +2,7 @@
 reading on the reference clip with the real one."""
 
 import os
+import subprocess
 import sys
 import types
 from pathlib import Path
@@ -40,10 +41,19 @@ class FakeWhisperModel:
 
 @pytest.fixture
 def fake(monkeypatch):
-    """faster_whisper replaced by a module whose WhisperModel is the fake."""
+    """faster_whisper replaced by a module whose WhisperModel is the fake, onnxruntime by one whose `severities`
+    records each severity set, and faster_whisper.vad by one whose `loads` records each get_vad_model call,
+    each with how many WhisperModels existed then. So no test imports the real onnxruntime, sets its
+    process-wide severity or loads the VAD."""
     monkeypatch.setattr(FakeWhisperModel, "instances", [])
     monkeypatch.setattr(FakeWhisperModel, "segments", [])
     monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=FakeWhisperModel))
+    severities, loads = [], []
+    monkeypatch.setitem(sys.modules, "onnxruntime", types.SimpleNamespace(
+        severities=severities,
+        set_default_logger_severity=lambda level: severities.append((level, len(FakeWhisperModel.instances)))))
+    monkeypatch.setitem(sys.modules, "faster_whisper.vad", types.SimpleNamespace(
+        loads=loads, get_vad_model=lambda: loads.append(len(FakeWhisperModel.instances))))
     return FakeWhisperModel
 
 
@@ -85,6 +95,55 @@ def test_words_are_stripped_and_empty_ones_dropped(fake, tmp_path):
     ]
     words = asr.load(tmp_path).transcribe(numpy.zeros(10, numpy.float32))
     assert words == [Word(0.0, 0.42, "Hello", 0.9), Word(1.234567, 1.9, "world.", 0.75)]
+
+
+def test_onnxruntime_is_quieted_before_the_model_loads(fake, tmp_path):
+    asr.load(tmp_path)
+    assert sys.modules["onnxruntime"].severities == [(3, 0)]  # errors and fatal only, before any WhisperModel
+    assert sys.modules["faster_whisper.vad"].loads == [0]  # the VAD's session too, with the severity set
+
+
+# As onnxruntime writes them on Linux: a colour code, a timestamp, then the severity and the logger
+ONNXRUNTIME_LINES = (b"\x1b[0;93m2026-10-29 22:31:07.508 [W:onnxruntime:Default, device_discovery.cc:95 "
+                     b"GetPciBusId] Skipping pci_bus_id\x1b[m\n"
+                     b"[I:onnxruntime:x] i\n"
+                     b"\x1b[1;31m2026-10-29 22:31:07.509 [E:onnxruntime:x] e\x1b[m\n"
+                     b"other\n")
+
+
+def write_onnxruntime_lines(level):
+    os.write(2, ONNXRUNTIME_LINES)
+
+
+def test_only_onnxruntimes_verbose_info_and_warning_lines_are_dropped(fake, monkeypatch, capfd):
+    monkeypatch.setattr(sys.modules["onnxruntime"], "set_default_logger_severity", write_onnxruntime_lines)
+    asr.quiet_onnxruntime()
+    assert capfd.readouterr().err == "\x1b[1;31m2026-10-29 22:31:07.509 [E:onnxruntime:x] e\x1b[m\nother\n"
+
+
+def test_an_error_propagates_and_stderr_is_restored(fake, monkeypatch, capfd):
+    def fail(level):
+        write_onnxruntime_lines(level)
+        raise RuntimeError("load failed")
+
+    monkeypatch.setattr(sys.modules["onnxruntime"], "set_default_logger_severity", fail)
+    with pytest.raises(RuntimeError, match="load failed"):
+        asr.quiet_onnxruntime()
+    os.write(2, b"later\n")
+    assert capfd.readouterr().err == "\x1b[1;31m2026-10-29 22:31:07.509 [E:onnxruntime:x] e\x1b[m\nother\nlater\n"
+
+
+def test_the_vad_leaves_stderr_empty():
+    """onnxruntime's warnings (on Linux, GetPciBusId's) never reach stderr, so G1-11's one line holds. A fresh
+    process, so its environment is created here; the VAD model ships in faster-whisper's wheel."""
+    code = ("import numpy\n"
+            "from lmt import asr\n"
+            "asr.quiet_onnxruntime()\n"
+            "from faster_whisper.vad import get_speech_timestamps\n"
+            "get_speech_timestamps(numpy.zeros(16_000, numpy.float32))\n")
+    result = subprocess.run([sys.executable, "-c", code], check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == ""
 
 
 @pytest.mark.models

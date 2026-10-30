@@ -12,6 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 CLIP = ROOT / "tests" / "fixtures" / "clip.wav"
+TWO_SPEAKERS = ROOT / "tests" / "fixtures" / "two_speakers.wav"
 SPEC = ROOT / "spec" / "acceptance.md"
 # Exit statuses after which the session ran to its end: 0, 1 (tests failed) and 5 (no tests collected).
 FINISHED = (pytest.ExitCode.OK, pytest.ExitCode.TESTS_FAILED, pytest.ExitCode.NO_TESTS_COLLECTED)
@@ -129,4 +130,13 @@ def clip_run(tmp_path_factory) -> ProductRun:
     the job has downloaded and verified the default models. Once per session."""
     out_dir = tmp_path_factory.mktemp("clip_run")
     r = run_lmt(["transcribe", str(CLIP)], cwd=out_dir)
+    return ProductRun(r.returncode, r.stdout, r.stderr, out_dir)
+
+
+@pytest.fixture(scope="session")
+def two_speakers_run(tmp_path_factory) -> ProductRun:
+    """The product run on the two-speaker clip, made exactly as `clip_run` is: `lmt transcribe <clip>` with
+    no option, in a fresh directory (design/internal/g1-stage2.md, P5). Once per session."""
+    out_dir = tmp_path_factory.mktemp("two_speakers_run")
+    r = run_lmt(["transcribe", str(TWO_SPEAKERS)], cwd=out_dir)
     return ProductRun(r.returncode, r.stdout, r.stderr, out_dir)
