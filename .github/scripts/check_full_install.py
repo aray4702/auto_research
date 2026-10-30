@@ -340,7 +340,7 @@ def step_transcribe(args):
             check(out / name)
         except (KeyboardInterrupt, SystemExit):
             raise
-        except BaseException as e:  # pytest.fail's exception is a BaseException
+        except BaseException as e:  # noqa: BLE001 -- pytest.fail's exception is a BaseException
             raise StepFailed(f"{check.__name__} fails on <work>/out/{name}: {e or type(e).__name__}") from None
 
 
