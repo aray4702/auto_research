@@ -12,6 +12,8 @@ import numpy
 
 from lmt.transcript import Word
 
+os.environ["ORT_DISABLE_TELEMETRY"] = "1"  # before onnxruntime is imported (Q8)
+
 BEAM_SIZE = 5
 THREADS = min(8, os.cpu_count() or 1)  # fixed per machine (Q7)
 # The lines quiet_onnxruntime drops: onnxruntime's verbose, info and warning ones, which on Linux start with
