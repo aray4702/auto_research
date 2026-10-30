@@ -573,6 +573,19 @@ licence = "BSD-3-Clause OR GPL-2.0-only"
 platforms = ["linux-x86_64"]
 source = "pillow's LICENSE, section ZSTD"
 
+# sounddevice 0.5.6: PortAudio, on macOS only (Linux's wheel is pure Python and loads the system's libportaudio2).
+# The universal2 wheel also carries Windows builds of PortAudio in the same folder: 3 plain DLLs (MIT) and 3
+# `*-asio.dll` with Steinberg's ASIO SDK. A Mac never loads them, and this check reads only .so and .dylib
+# files; the Owner accepted them as data files in the macOS install (#209, answer 1, 2026-10-30), as answers
+# 3a and 4a on #122 accepted x264 and LAME in av.
+[[licences.library]]
+distribution = "sounddevice"
+files = "_sounddevice_data/portaudio-binaries/libportaudio.dylib"
+library = "PortAudio (V19.7.0)"
+licence = "MIT"
+platforms = ["macos-arm64"]
+source = "https://github.com/spatialaudio/portaudio-binaries (README.md, Copyright), https://github.com/PortAudio/portaudio/blob/master/LICENSE.txt"
+
 # soundfile 0.14.0: libsndfile, with LAME, mpg123, FLAC, Ogg, Vorbis and Opus linked in (their symbols in
 # the binary).
 [[licences.library]]
