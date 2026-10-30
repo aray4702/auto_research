@@ -126,6 +126,7 @@ def make_repo(root, readme=README):
     (root / "README.md").write_text(readme)
     (root / "pyproject.toml").write_text(PYPROJECT)
     (root / "uv.lock").write_text(LOCK)
+    (root / ".python-version").write_text("3.11\n")
     git(root, "init", "-q")
     git(root, "add", ".")
     git(root, "commit", "-q", "-m", "init")
@@ -303,6 +304,13 @@ class RunTest(unittest.TestCase):
                 self.assertEqual(code, 1)
                 outcomes = self.outcomes(out)
                 self.assertEqual(outcomes, ["FAIL" if str(i + 1) == step else "PASS" for i in range(7)], out)
+
+    def test_a_python_312_install_fails_the_pins_step_even_with_the_lock_s_312_versions(self):
+        versions_312 = VERSIONS | {"av": "19.0.2"}  # the lock's own entry for 3.12, so only the Python fails
+        code, out = self.fake.main(env={"FAKE_PY": "3.12.3", "FAKE_VERSIONS": json.dumps(versions_312)})
+        self.assertEqual(code, 1)
+        self.assertEqual(self.outcomes(out), ["PASS"] * 3 + ["FAIL"] + ["PASS"] * 3, out)
+        self.assertIn("Python 3.12.3 isn't .python-version's 3.11", out)
 
     def test_pyannote_metrics_from_pyannote_audio_passes_the_no_eval_extra_step(self):
         self.assertEqual(cin.EVAL_EXTRA, ("jiwer",))
