@@ -5,14 +5,16 @@ Usage: uv run --frozen python .github/scripts/check_full_install.py --lmt <scrat
 
 Design: design/internal/g3-stage1.md §4b. Under DIR: LMT_CACHE_DIR=DIR/models and
 LMT_DATA_DIR=DIR/data for every command, DIR/out for the transcripts, and each command's own fresh
-HOME, TMPDIR, XDG_CACHE_HOME and working directory under DIR/runs/<step>/. This item (4b1) runs the
-online phase; offline_command() builds the argv of the offline phase, which 4b2 runs. Each step
-prints PASS or FAIL, and the steps go to the step summary. --criteria-out writes the job's record
-(design/internal/criteria.md §3), after the last check. Exits 1 on any failure. The top level imports
-the standard library only, so the `readme` job's unittest can import it with no venv.
+HOME, TMPDIR, XDG_CACHE_HOME and working directory under DIR/runs/<step>/. It runs the online phase,
+then the offline phase as a second process of itself (`offline`, through offline_command()), which
+writes its steps to DIR/offline.json. Each step prints PASS or FAIL, and the steps go to the step
+summary. --criteria-out writes the job's record (design/internal/criteria.md §3), after the last
+check. Exits 1 on any failure. The top level imports the standard library only, so the `readme` job's
+unittest can import it with no venv.
 """
 
 import argparse
+import errno
 import hashlib
 import http.client
 import importlib.util
@@ -21,17 +23,26 @@ import os
 import queue
 import re
 import signal
+import socket
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
 
+CHECKOUT = Path(__file__).resolve().parents[2]
 PLATFORMS = ("linux-x86_64", "macos-arm64")
 FRESH = ("home", "tmp", "cache", "cwd")  # HOME, TMPDIR, XDG_CACHE_HOME and the working directory
 URL = re.compile(r"^http://127\.0\.0\.1:(\d+)/([A-Za-z0-9_-]{22})/$")  # as 2a4's DemoProcess parses it
 FETCH_LIMIT = 10  # seconds, for each GET and for the exit after SIGTERM
 FIRST_URL_LIMIT = 30 * 60  # the first --sample run downloads and transcribes
+TRANSCRIBE_LIMIT = 15 * 60
+RENAME_LIMIT = 2 * 60
+SECOND_URL_LIMIT = 10  # the second --sample run serves the cache, without transcribing again
+PROBE = ("192.0.2.1", 80)  # TEST-NET-1: inside the namespace, connecting to it must fail with ENETUNREACH
+FIXTURE = CHECKOUT / "tests" / "fixtures" / "two_speakers.wav"
+NETGUARD = CHECKOUT / "tests" / "netguard"  # G1's P7a, on every offline lmt command's PYTHONPATH
+RENAME_ARG = "S1=José & Ana"
 # lmt.eval.datasets: sample_meeting's WAV is derived/<dataset>/<meeting>.wav under LMT_DATA_DIR.
 SAMPLE_WAV = "derived/AMI-ci/ES2004a.wav"
 SAMPLE_TRANSCRIPT = "ES2004a.json"  # in LMT_DATA_DIR/sample/<key>/
@@ -42,6 +53,11 @@ NAMESPACE_SCRIPT = ('ip link set lo up && u=$1 g=$2 && shift 2 && '
 CRITERIA = {
     "1.1": ["G3-8"],
     "1.3": ["G3-6"],
+    "2.1": ["G3-8"],
+    "2.2": ["G3-8"],
+    "2.3": ["G3-8"],
+    "2.4": ["G3-6", "G3-8"],
+    "2.5": ["G3-6", "G3-8"],
 }
 
 
@@ -61,6 +77,14 @@ def data_dir(work):
 
 def models_snapshot_path(work):
     return Path(work) / "snapshots" / "models.json"
+
+
+def offline_results_path(work):
+    return Path(work) / "offline.json"
+
+
+def guard_log_path(work):
+    return Path(work) / "netguard.log"
 
 
 def fresh_dirs(work, step):
@@ -84,6 +108,17 @@ def command_env(work, dirs, *, base=None, hf_token=False):
         "HOME": str(dirs["home"]),
         "TMPDIR": str(dirs["tmp"]),
         "XDG_CACHE_HOME": str(dirs["cache"]),
+    })
+    return env
+
+
+def offline_env(work, dirs):
+    """An offline `lmt` command's environment: the phase's own, with the network guard's three variables."""
+    env = command_env(work, dirs)
+    env.update({
+        "PYTHONPATH": str(NETGUARD),
+        "LMT_NETGUARD_ALLOW": "127.0.0.1",
+        "LMT_NETGUARD_LOG": str(guard_log_path(work)),
     })
     return env
 
@@ -267,7 +302,126 @@ def run_steps(steps, args):
     return results
 
 
-# The offline phase's command (§4b, step 2), which 4b2 runs.
+def first_failure(results):
+    return next((r["step"] for r in results if r["problem"]), None)
+
+
+# The offline phase (§4b, step 2): one process, in one network namespace on Linux.
+
+def subtitle_checkers():
+    """(check_srt, check_vtt) from tests/subtitle_checks.py (G1's P6a), imported only here: it needs
+    the checkout's venv (srt, webvtt-py), which the `readme` job's unittest doesn't have."""
+    tests = str(CHECKOUT / "tests")
+    if tests not in sys.path:
+        sys.path.insert(0, tests)
+    import subtitle_checks
+    return subtitle_checks.check_srt, subtitle_checks.check_vtt
+
+
+def step_cut_is_real(args):
+    try:
+        conn = socket.create_connection(PROBE, timeout=2)
+    except OSError as e:
+        if e.errno == errno.ENETUNREACH:
+            return
+        raise StepFailed(f"the namespace has a route out: connecting to {PROBE[0]}:{PROBE[1]} gives "
+                         f"{e or type(e).__name__}, not ENETUNREACH") from None
+    conn.close()
+    raise StepFailed(f"the namespace has a route out: {PROBE[0]}:{PROBE[1]} connects")
+
+
+def step_transcribe(args):
+    dirs = fresh_dirs(args.work, "transcribe")
+    out = args.work / "out"
+    run_command([args.lmt, "transcribe", str(FIXTURE), "-f", "txt,srt,vtt,json", "-o", str(out)],
+                offline_env(args.work, dirs), dirs["cwd"], TRANSCRIBE_LIMIT)
+    for check, name in zip(subtitle_checkers(), ("two_speakers.srt", "two_speakers.vtt")):
+        try:
+            check(out / name)
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except BaseException as e:  # pytest.fail's exception is a BaseException
+            raise StepFailed(f"{check.__name__} fails on <work>/out/{name}: {e or type(e).__name__}") from None
+
+
+def step_rename(args):
+    dirs = fresh_dirs(args.work, "rename")
+    run_command([args.lmt, "rename", str(args.work / "out" / "two_speakers.json"), RENAME_ARG],
+                offline_env(args.work, dirs), dirs["cwd"], RENAME_LIMIT)
+
+
+def step_second_sample(args):
+    data_before = snapshot(data_dir(args.work))
+    dirs = fresh_dirs(args.work, "sample-offline")
+    run_demo([args.lmt, "demo", "--sample", "--no-browser"], offline_env(args.work, dirs), dirs["cwd"],
+             SECOND_URL_LIMIT)
+    check_fresh_empty(dirs)
+    check_unchanged("<work>/data", data_before, snapshot(data_dir(args.work)))
+    check_unchanged("<work>/models", load_models_snapshot(args.work), snapshot(models_dir(args.work)))
+
+
+def step_guard_log(args):
+    path = guard_log_path(args.work)
+    lines = path.read_text(errors="replace").splitlines() if path.exists() else []
+    if any(lines):
+        raise StepFailed(f"the guard's log has {len(lines)} line(s): {lines[0]}")
+
+
+OFFLINE = [
+    ("2.1", "the cut is real", step_cut_is_real),
+    ("2.2", "offline transcribe", step_transcribe),
+    ("2.3", "offline rename", step_rename),
+    ("2.4", "the second --sample run", step_second_sample),
+    ("2.5", "the guard's log", step_guard_log),
+]
+
+
+def offline_steps(platform):
+    """The offline phase's steps. On macOS there's no namespace, so 2.1 doesn't run: the guard is its check."""
+    return [s for s in OFFLINE if not (platform == "macos-arm64" and s[0] == "2.1")]
+
+
+def offline_phase(args):
+    """The `offline` subcommand: run the steps, write them to <work>/offline.json, exit 0 only if all pass."""
+    results = run_steps(offline_steps(args.platform), args)
+    offline_results_path(args.work).write_text(json.dumps({"steps": results}, indent=1) + "\n")
+    return 1 if first_failure(results) else 0
+
+
+def run_phase(argv):
+    """Run the offline phase's argv with no limit of its own (every step inside has one): its exit code."""
+    return subprocess.run(argv, check=False).returncode
+
+
+def run_offline(args):
+    """The outer process's side of the offline phase: run it through offline_command(), then take its
+    steps from <work>/offline.json. A missing file, or one that contradicts the exit code, fails every
+    offline step."""
+    path = offline_results_path(args.work)
+    path.unlink(missing_ok=True)  # a stale file must not count
+    (args.work / "runs" / "offline" / "home").mkdir(parents=True, exist_ok=True)
+    code = run_phase(offline_command(args.lmt, args.platform, args.work))
+    steps = [(step, name) for step, name, _ in offline_steps(args.platform)]
+    problem = None
+    try:
+        results = json.loads(path.read_text())["steps"]
+        listed = [(r["step"], r["name"]) for r in results]
+        if listed != steps or not all(r["problem"] is None or isinstance(r["problem"], str) for r in results):
+            problem = f"offline.json doesn't list the offline steps (the phase exits {code})"
+        elif (code == 0) != (first_failure(results) is None):
+            problem = f"offline.json contradicts the offline phase's exit code {code}"
+    except FileNotFoundError:
+        problem = f"no offline.json: the offline phase exits {code}"
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        problem = f"offline.json is unreadable ({type(e).__name__}; the phase exits {code})"
+    if problem is None:
+        return [{"step": r["step"], "name": r["name"], "problem": r["problem"]} for r in results]
+    results = [{"step": step, "name": name, "problem": problem} for step, name in steps]
+    print(report(results), flush=True)
+    return results
+
+
+# The offline phase's command (§4b, step 2).
 
 def offline_command(lmt, platform, work, *, path=None, uid=None, gid=None):
     """The argv that runs this script's `offline` phase: in its own network namespace as the runner's
@@ -309,18 +463,31 @@ def criteria_module():
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    phase = argv[:1] == ["offline"]
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--lmt", required=True, type=Path, help="the installed lmt")
     parser.add_argument("--platform", required=True, choices=PLATFORMS)
     parser.add_argument("--work", required=True, type=Path)
-    parser.add_argument("--criteria-out", metavar="PATH",
-                        help="write each step's outcome to PATH (design/internal/criteria.md §3)")
-    args = parser.parse_args(argv)
+    if not phase:
+        parser.add_argument("--criteria-out", metavar="PATH",
+                            help="write each step's outcome to PATH (design/internal/criteria.md §3)")
+    args = parser.parse_args(argv[1:] if phase else argv)
     args.lmt, args.work = args.lmt.resolve(), args.work.resolve()
     for d in (models_dir(args.work), data_dir(args.work), args.work / "out"):
         d.mkdir(parents=True, exist_ok=True)
+    if phase:
+        return offline_phase(args)
 
     results = run_steps(ONLINE, args)
+    failed = first_failure(results)
+    if failed:
+        offline = [{"step": step, "name": name, "problem": f"not reached: step {failed} failed"}
+                   for step, name, _ in offline_steps(args.platform)]
+        print(report(offline), flush=True)
+    else:
+        offline = run_offline(args)
+    results += offline
     text = report(results)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
