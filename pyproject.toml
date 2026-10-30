@@ -5,7 +5,7 @@ description = "Offline, speaker-labelled meeting transcription that runs entirel
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
   # The eight pinned to uv.lock's versions, without local labels (G3 §4a; tests/test_packaging.py checks them).
   "faster-whisper==1.2.1",
