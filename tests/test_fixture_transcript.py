@@ -1,10 +1,15 @@
-"""The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c)."""
+"""The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c), and
+the transcript fixture kept equal to Linux's product run, which does (0d)."""
 
 import json
+import os
+import shutil
+import sys
 import unittest
 from pathlib import Path
 from typing import NamedTuple
 
+import pytest
 from fixtures.markup import IMG, SCRIPT, markup_transcript
 from fixtures.segments import MIN_CURRENT, current_span, play_targets
 
@@ -36,6 +41,19 @@ class TranscriptFixtureTest(unittest.TestCase):
         for i in targets:
             with self.subTest(segment=i):
                 self.assertGreaterEqual(round(current_span(self.t.segments, i), 3), MIN_CURRENT)
+
+
+@pytest.mark.models
+@pytest.mark.skipif(sys.platform != "linux", reason="the fixture is the product run's on Linux (spec G3, Terms)")
+def test_the_fixture_is_the_product_runs_json(two_speakers_run):
+    assert two_speakers_run.returncode == 0, two_speakers_run.stderr
+    produced = two_speakers_run.out_dir / "two_speakers.json"
+    if produced.read_bytes() != FIXTURE.read_bytes():
+        # The run's file goes to the job's artifact, for the builder to commit unchanged (0d).
+        if out := os.environ.get("LMT_FIXTURE_OUT"):
+            Path(out).mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(produced, Path(out) / FIXTURE.name)
+        pytest.fail(f"{FIXTURE.name} differs from this run's two_speakers.json")
 
 
 class PlayTargetsTest(unittest.TestCase):
