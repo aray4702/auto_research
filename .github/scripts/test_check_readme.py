@@ -25,6 +25,18 @@ GOOD = """# Local Meeting Transcriber
 
 This repository builds Local Meeting Transcriber, with the system in [`blueprint.md`](blueprint.md). See [the requirements](project_requirements.md#2-goals).
 
+## Install
+
+You need [uv](https://docs.astral.sh/uv/getting-started/installation/).
+
+```sh
+# A comment isn't a command.
+
+uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
+```
+
+Set `HF_TOKEN` for the models.
+
 ## Build
 
 Needs uv 0.9.1.
@@ -127,7 +139,7 @@ class ReadmeTest(unittest.TestCase):
         self.commit(GOOD)
         code, out = self.run_checks()
         self.assertEqual(code, 0, out)
-        self.assertEqual(out.count("PASS"), 5, out)
+        self.assertEqual(out.count("PASS"), 6, out)
 
     def test_missing_readme_fails(self):
         self.commit(GOOD)
@@ -237,9 +249,87 @@ class ReadmeTest(unittest.TestCase):
         self.commit(GOOD, {"FAIL_UV": "", "FAIL_GATE": ""})
         code, out = self.run_checks("--no-install")
         self.assertEqual(code, 0, out)
-        self.assertEqual(out.count("PASS"), 3, out)
+        self.assertEqual(out.count("PASS"), 4, out)
         self.assertIn("SKIP S1-3", out)
         self.assertIn("SKIP S1-4", out)
+
+    def test_missing_install_section_fails(self):
+        self.assertIn("appears 0 times", self.assertFails(GOOD.replace("## Install", "## Setup"), "G3-7"))
+
+    def test_two_install_sections_fail(self):
+        self.assertFails(GOOD.replace("## Build", "## Install\n\n## Build"), "G3-7")
+
+    def test_install_needs_exactly_one_sh_block(self):
+        self.assertIn("2 fenced sh blocks", self.assertFails(
+            GOOD.replace("Set `HF_TOKEN`", "```sh\ntrue\n```\n\nSet `HF_TOKEN`"), "G3-7"))
+        self.assertIn("0 fenced sh blocks", self.assertFails(GOOD.replace("```sh\n# A comment", "```\n# A comment"),
+                                                             "G3-7"))
+
+    def test_install_block_needs_exactly_one_command(self):
+        self.assertIn("2 commands", self.assertFails(GOOD.replace("# A comment isn't a command.", "uv --version"),
+                                                     "G3-7"))
+        self.assertIn("0 commands", self.assertFails(
+            GOOD.replace("uv tool install git+https://github.com/aray4702/auto_research@v1.0.0\n", ""), "G3-7"))
+
+    def test_install_command_must_match(self):
+        command = "uv tool install git+https://github.com/aray4702/auto_research@v1.0.0"
+        for wrong in ("uv tool install git+https://github.com/aray4702/auto_research@main",
+                      "uv tool install git+https://github.com/aray4702/auto_research@v1.0",
+                      "uv tool install git+https://github.com/someone/auto_research@v1.0.0",
+                      "uv tool install git+https://github.com/aray4702/auto_research@v1.0.0 --force",
+                      "pip install git+https://github.com/aray4702/auto_research@v1.0.0"):
+            with self.subTest(wrong=wrong):
+                self.assertIn("doesn't match", self.assertFails(GOOD.replace(command, wrong), "G3-7"))
+
+    def test_install_must_link_the_uv_installer(self):
+        out = self.assertFails(GOOD.replace("getting-started/installation/", ""), "G3-7")
+        self.assertIn("doesn't link", out)
+        # The URL as plain text, or a link in another section, isn't the section's link.
+        self.assertFails(GOOD.replace("[uv](https://docs.astral.sh/uv/getting-started/installation/)",
+                                      "uv (https://docs.astral.sh/uv/getting-started/installation/)"), "G3-7")
+        self.assertFails(GOOD.replace("[uv](https://docs.astral.sh/uv/getting-started/installation/)", "uv").replace(
+            "Needs uv 0.9.1.", "Needs [uv](https://docs.astral.sh/uv/getting-started/installation/) 0.9.1."), "G3-7")
+
+    def test_install_must_name_hf_token(self):
+        self.assertIn("HF_TOKEN", self.assertFails(GOOD.replace("Set `HF_TOKEN`", "Set a token"), "G3-7"))
+
+    def test_install_block_isnt_run(self):
+        # The Install block isn't part of S1-3: a failing uv fails only the Build block.
+        self.commit(GOOD, {"FAIL_UV": ""})
+        code, out = self.run_checks()
+        self.assertIn("PASS G3-7", out)
+        self.assertIn("FAIL S1-3", out)
+
+    def test_no_install_still_checks_the_install_section(self):
+        self.commit(GOOD.replace("Set `HF_TOKEN`", "Set a token"))
+        code, out = self.run_checks("--no-install")
+        self.assertEqual(code, 1, out)
+        self.assertIn("FAIL G3-7", out)
+
+    def print_install(self):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = check_readme.main(["--root", str(self.root), "--print-install"])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_print_install_prints_the_command(self):
+        # Only the command: the checks don't run, so a failing Build block doesn't matter.
+        self.commit(GOOD, {"FAIL_UV": "", "FAIL_GATE": ""})
+        self.assertEqual(self.print_install(),
+                         (0, "uv tool install git+https://github.com/aray4702/auto_research@v1.0.0\n", ""))
+
+    def test_print_install_fails_on_a_bad_section(self):
+        self.commit(GOOD.replace("@v1.0.0", "@main"))
+        code, out, err = self.print_install()
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("doesn't match", err)
+
+    def test_print_install_fails_without_a_readme(self):
+        self.commit(GOOD)
+        self.git("rm", "-q", "README.md")
+        code, out, err = self.print_install()
+        self.assertEqual((code, out), (1, ""))
+        self.assertIn("README.md is missing", err)
 
     def run_record(self, *flags):
         path = self.root / "out" / "criteria-readme.json"
@@ -264,6 +354,7 @@ class ReadmeTest(unittest.TestCase):
             {"check": "check_readme.py::S1-3 build", "criteria": ["S1-3"], "outcome": "passed"},
             {"check": "check_readme.py::S1-4 checks", "criteria": ["S1-4"], "outcome": "passed"},
             {"check": "check_readme.py::S1-5 relative links", "criteria": ["S1-5"], "outcome": "failed"},
+            {"check": "check_readme.py::G3-7 install", "criteria": ["G3-7"], "outcome": "passed"},
         ])
 
     def test_record_with_no_install(self):
@@ -277,7 +368,7 @@ class ReadmeTest(unittest.TestCase):
         self.assertEqual([(c["criteria"], c["outcome"], c.get("reason")) for c in record["checks"]], [
             (["S1-1"], "passed", None), (["S1-2"], "passed", None),
             (["S1-3"], "not-run", "tier 0 runs no install"), (["S1-4"], "not-run", "tier 0 runs no install"),
-            (["S1-5"], "passed", None)])
+            (["S1-5"], "passed", None), (["G3-7"], "passed", None)])
 
     def test_record_without_a_readme_fails_every_check(self):
         self.commit(GOOD)
@@ -285,7 +376,7 @@ class ReadmeTest(unittest.TestCase):
         code, record = self.run_record("--no-install")
         self.assertEqual(code, 1)
         self.assertEqual([c["outcome"] for c in record["checks"]],
-                         ["failed", "failed", "not-run", "not-run", "failed"])
+                         ["failed", "failed", "not-run", "not-run", "failed", "failed"])
 
     def test_no_record_without_the_option(self):
         self.commit(GOOD)
@@ -311,7 +402,7 @@ class RealReadmeTest(unittest.TestCase):
     def test_static_checks_pass(self):
         text = (REPO_ROOT / "README.md").read_text()
         for check in (check_readme.check_title, check_readme.check_what_it_is,
-                      check_readme.check_links):
+                      check_readme.check_links, check_readme.check_install):
             self.assertEqual(check(REPO_ROOT, text), [], check.__name__)
         self.assertIn(check_readme.GATE_COMMAND, text)
         workflow = (REPO_ROOT / check_readme.PRODUCT_YML).read_text()
