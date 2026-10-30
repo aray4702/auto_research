@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-30 | architect, #510 | "Releases": v0.1, the MVP, follows requirements v1.13 (#123, #510). It is judged by G1's criteria for F1–F5, F9, Q1, Q2, Q4, Q7 and Q8; F3 by G1-4 and G1-4m, its G3-8 part moving to G3's release; F5 by G1-6, its G2-7 and G3-3 parts moving to G2's and G3's releases. The Owner's readings for v0.1 go on #510. Rests on the Owner's decisions on #123 (2026-10-30, 16:13 PT) and #510 (16:20 PT), both relayed by the builder. No criterion's text or check changes |
 | 2026-10-30 | architect, #409 | G3's "Terms": the test in `test-models` compares the transcript fixture with Linux's product run only in what doesn't depend on the machine: its schema and `lmt` versions, source, models, speakers, number of segments and each segment's speaker. Word texts, times and probabilities aren't compared. On one machine three runs gave byte-identical JSON, but across machines word times differed by up to 0.58 s and one segment's text differed ("Hay fever." and "Hey, fever."), so the check that compared everything but probabilities (#452) failed on `main` and was reverted (#494). Rests on the Owner's answer 1 on #409 (2026-10-30). No criterion changes |
 | 2026-10-30 | architect, #415 | G3-7 checks only that the install holds no `jiwer`: `pyannote.audio` 3.4.0, which G3 pins, depends on `pyannote-metrics` with no extra marker (`uv.lock`), so every plain install has `pyannote.metrics`. Rests on the Owner's answer 1 on #415 (2026-10-30). G3-7's other checks are unchanged |
 | 2026-10-30 | architect, #409 | G3's "Terms": the transcript fixture is kept equal to Linux's product run except for each word's probability, which two runs on one commit (40998719001, 41003160960) gave differently; text, times and speakers still match. Rests on the Owner's approval on #409 (2026-10-30). No criterion changes |
@@ -21,6 +22,10 @@
 | 2026-10-26 | architect, #20 | First entry: S1's done-check. Rests on the Owner's answers on #20: 1a 2a 3a 4a |
 
 This file maps each requirement in `project_requirements.md` to the check that work is judged by, and turns each goal's measurable outcome into its **done-check**. Each check says where it runs. The Owner approves every change to it.
+
+**Releases.** A release is judged by the criteria of the requirements it ships; a criterion keeps its text and check whichever release judges it.
+- **v0.1, the MVP** (requirements v1.13, §2; the Owner on #123 and #510, 2026-10-30): the offline transcriber, F1–F5 and F9 with Q1, Q2, Q4, Q7 and Q8. It is judged by G1-1 and G1-2 (F1), G1-3 (F2), G1-4 and G1-4m (F3), G1-5 and G1-14 (F4), G1-6 (F5), G1-7 (F9), G1-8 and G1-8c (Q1), G1-9 (Q2, at v0.1's bound), G1-11 (Q4), G1-12 (Q7) and G1-13 (Q8). For v0.1, **F3** is judged by G1-4 and G1-4m alone: G3-8, which also maps to F3, judges it at G3's release. **F5** is judged by G1-6, the offline commands: G2-7 (`lmt live`) judges it at G2's release, and G3-3 (`lmt rename`) at G3's. G1's done-check is unchanged.
+- **Where the Owner's readings for v0.1 go:** G1's release item for v0.1, #510 (G1-4m, and G1-13's run with Wi-Fi off).
 
 The generic requirements (blueprint §1) are mapped by a later Definition item. Until then, the gate's generic checks (`system/conventions.md`, "The gate") are what guard them. G1-15 covers the part G1's toolchain brings: pinned and vetted dependencies.
 
