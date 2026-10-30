@@ -26,7 +26,8 @@ FIELDS = ("wer", "der", "audio_seconds", "wall_seconds", "rtf", "peak_rss_bytes"
 WER_LS = 0.050         # G1-8: LS full WER ≤ 5.0 %
 WER_AMI = 0.250        # G1-8: AMI full WER ≤ 25.0 %
 DER_AMI = 0.250        # G1-8: AMI full DER ≤ 25.0 %
-RTF = 0.50             # G1-9: RTF ≤ 0.50 over AMI full, and on the one-hour recording
+RTF = 1.0              # G1-9: RTF ≤ 1.0 over AMI full, and on the one-hour recording. The Owner relaxed
+                       # Q2 for v0.1 on #123 (2026-10-30); 0.50 stays v1.0's target.
 PEAK_RSS = 4.0e9       # G1-10: the one-hour product run's peak resident memory ≤ 4.0 × 10⁹ bytes
 
 # G1-14's table: WER, DER and RTF per set for the product, Whisper alone and pyannote alone. LS full runs
