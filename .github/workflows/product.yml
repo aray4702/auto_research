@@ -147,6 +147,12 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}   # this step only (#96)
         run: uv run --frozen lmt models download
       - run: uv run --frozen lmt models verify
+      # G1-4's re-encode check (design/internal/g1-stage2.md, P6b). The ffmpeg CLI is only CI's checking tool,
+      # never shipped, so G1-15's inventory doesn't change.
+      - name: The ffmpeg CLI (G1-4)
+        run: |
+          command -v ffmpeg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg; }
+          ffmpeg -version | head -n 1
       # `=`: before tests/conftest.py adds the option, pytest would take a separate PATH for a test path.
       - env:
           LMT_TIER: ${{ needs.changes.outputs.tier }}
