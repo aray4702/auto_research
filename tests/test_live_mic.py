@@ -59,6 +59,16 @@ def test_no_input_device():
     assert not fake.opened
 
 
+def test_no_default_input_device():
+    """An input device exists, but PortAudio names no default input (-1)."""
+    fake = FakeSoundDevice([device("MacBook Pro Microphone", 1)], default=-1)
+    assert mic.input_devices(fake) == [Device(0, "MacBook Pro Microphone", 1, 48000, False)]
+    with pytest.raises(InputError) as e:
+        mic.resolve(None, fake)
+    assert e.value.exit_code == 3
+    assert str(e.value) == "--device: no input device found"
+
+
 def test_resolve_the_default():
     assert mic.resolve(None, devices()).name == "MacBook Pro Microphone"
 
@@ -72,6 +82,14 @@ def test_resolve_an_output_device_by_index_is_unknown():
         mic.resolve("0", devices())
     assert e.value.exit_code == 3
     assert str(e.value) == NOT_LISTED.format("0")
+
+
+def test_resolve_a_digit_int_cannot_parse_is_unknown():
+    """'²' is a digit to str.isdigit() but not to int(): it is an unknown device, not a ValueError."""
+    with pytest.raises(InputError) as e:
+        mic.resolve("²", devices())
+    assert e.value.exit_code == 3
+    assert str(e.value) == NOT_LISTED.format("²")
 
 
 def test_resolve_by_exact_name_before_substring():
