@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy
 import pytest
-from test_live_asr import FakeEngine, Feeder, U, texts
+from test_live_asr import CONFIG, FakeEngine, Feeder, U, texts
 
 from lmt import audio
 from lmt.live import asr
@@ -31,7 +31,7 @@ class Speech:
                 for s, e in self.chunks if s < start + length and e > start]
 
 
-def make(engine, speech, config=asr.DEFAULT_ASR_CONFIG):
+def make(engine, speech, config=CONFIG):
     return StreamingASR(engine, config, speech=speech)
 
 
@@ -77,7 +77,7 @@ class GapTest(unittest.TestCase):
 
     def test_pause_comes_from_the_config(self):
         engine = FakeEngine({(0, U): [(0.1, 0.25, "hello"), (0.26, 0.42, "there")]})
-        feeder = Feeder(make(engine, Speech([(1600, 6400)]), AsrConfig(pause=9601)))
+        feeder = Feeder(make(engine, Speech([(1600, 6400)]), AsrConfig(update=U, pause=9601)))
         self.assertEqual(feeder.seconds(1), [])
 
     def test_the_last_gap_is_taken(self):

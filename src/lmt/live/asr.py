@@ -21,7 +21,7 @@ PAUSE_MARGIN = 3200  # samples (0.2 s): a word may reach this far into a gap, an
 
 @dataclass(frozen=True)
 class AsrConfig:
-    update: int = 16000  # U, samples (1.0 s, provisional; stage 2 sweeps 0.5 and 1.0 s)
+    update: int = 12800  # U, samples (0.8 s, provisional; stage 2 sweeps 0.5 and 1.0 s)
     max_buffer: int = 240000  # 15 s
     pause: int = 8000  # 0.5 s of non-speech commits the buffer (1c)
     prompt_chars: int = 200
