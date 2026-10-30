@@ -1,8 +1,8 @@
-"""G2-2 and ASR's half of G2-6c (spec/acceptance.md): streaming ASR alone, with the live default model, in
-lockstep (`FileSource(paced=False)` through `lockstep`; design/internal/g2-stage1.md §1, item 1e). 3a4 drops the
-two-speaker case once G2-6c's own test runs, so that CI transcribes the clip in lockstep only once."""
+"""G2-2 (spec/acceptance.md): streaming ASR alone, with the live default model, in lockstep
+(`FileSource(paced=False)` through `lockstep`; design/internal/g2-stage1.md §1, item 1e). 1e's two-speaker case,
+ASR's half of G2-6c, went with 3a4: G2-6c's own test (`tests/test_live_session_models.py`) covers it, so CI
+transcribes that clip in lockstep only once."""
 
-import json
 import os
 from pathlib import Path
 
@@ -11,10 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 CLIP = ROOT / "tests" / "fixtures" / "clip.wav"
 CLIP_TEXT = ROOT / "tests" / "fixtures" / "clip.txt"
-TWO_SPEAKERS = ROOT / "tests" / "fixtures" / "two_speakers.wav"
 
 WER_BOUND = 0.100  # spec/acceptance.md G2-2: WER <= 10.0 %, inclusive
-P95_BOUND = 2.0  # s, spec/acceptance.md G2-6c: p95 stream delay <= 2.0 s, inclusive
 
 
 def report(line):
@@ -62,27 +60,3 @@ def test_g2_2_the_clip_in_lockstep_is_within_the_wer_bound(live_engine):
     report(line)
     assert reading <= WER_BOUND, line
 
-
-@pytest.mark.models
-@pytest.mark.criterion("G2-6c")
-def test_g2_6c_asr_stream_delay_on_the_two_speaker_clip(live_engine, two_speakers_run):
-    from lmt.eval.live import RefWord, delays, match_words, percentile
-
-    assert two_speakers_run.returncode == 0, two_speakers_run.stderr
-    doc = json.loads((two_speakers_run.out_dir / "two_speakers.json").read_text(encoding="utf-8"))
-    # Turns-first segments can hold words out of time order where turns overlap (P12), so sort them.
-    offline = sorted((RefWord(w["start"], w["end"], w["text"]) for s in doc["segments"] for w in s["words"]),
-                     key=lambda w: (w.start, w.end))
-    assert offline, "the offline run has no words"
-
-    model, engine = live_engine
-    words = committed(engine, TWO_SPEAKERS)
-    matches = match_words(offline, words)
-    assert matches, "no committed word matched an offline word"
-
-    p95 = percentile(delays(matches), 0.95)
-    line = (f"G2-6c (ASR's half): streaming ASR ({model.name}) in lockstep on tests/fixtures/two_speakers.wav: "
-            f"p95 stream delay {p95:.3f} s (bound {P95_BOUND:.1f} s), {len(matches)} of {len(offline)} offline "
-            f"words matched, {len(words)} committed")
-    report(line)
-    assert p95 <= P95_BOUND, line
