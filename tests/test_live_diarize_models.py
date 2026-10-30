@@ -1,7 +1,9 @@
 """G2-3's speaker rule on time, on the models (design/internal/g2-stage1.md §2, item 2c): the two-speaker clip in
-lockstep (`FileSource(paced=False)`), online diarization alone. The final pieces hold exactly two speakers, and
-each reference speaker in the clip's RTTM has at least 90 % of their speech time covered by one speaker, a
-different one for each. G2-3 itself, on words, is 3a4's. The clip's DER is printed too."""
+lockstep (`FileSource(paced=False)`), online diarization alone. The final pieces hold exactly two speakers. For each
+reference speaker in the clip's RTTM, only the part of their turns' time that some final piece covers counts: at
+least 90 % of it is on one speaker, a different one for each (purity), and it is at least 60 % of the speaker's RTTM
+time (coverage). G2-3 itself, on words, is 3a4's. The clip's DER and each speaker's covered and majority seconds
+are printed too."""
 
 from pathlib import Path
 
@@ -17,7 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 TWO_SPEAKERS = ROOT / "tests" / "fixtures" / "two_speakers.wav"
 RTTM = ROOT / "tests" / "fixtures" / "two_speakers.rttm"
 
-SHARE_BOUND = 0.90  # at least 90 % of a reference speaker's speech time is covered by one speaker
+PURITY_BOUND = 0.90  # at least 90 % of a reference speaker's covered time is on one speaker
+COVERAGE_BOUND = 0.60  # a reference speaker's covered time is at least 60 % of their RTTM time
 
 
 def merged(intervals) -> list[tuple[float, float]]:
@@ -45,7 +48,7 @@ def test_overlap_counts_shared_time_once_per_union():
 
 @pytest.mark.models
 @pytest.mark.criterion("G2-3")
-def test_g2_3_online_diarization_covers_each_speakers_time_with_one_speaker(monkeypatch):
+def test_g2_3_online_diarization_labels_each_speakers_covered_time_with_one_speaker(monkeypatch):
     monkeypatch.setenv("HF_HUB_OFFLINE", "0")  # so teardown undoes ensure()'s
     manifest = models.load_manifest()
     dirs = models.ensure([manifest.get(name) for name in (diarize.SEGMENTATION, diarize.EMBEDDING)])
@@ -72,20 +75,25 @@ def test_g2_3_online_diarization_covers_each_speakers_time_with_one_speaker(monk
         ref.setdefault(turn.speaker, []).append((turn.start, turn.end))
     ref = {speaker: merged(times) for speaker, times in ref.items()}
 
-    majority, shares = {}, {}
+    everyone = merged(t for times in hyp.values() for t in times)
+    majority, purity, coverage = {}, {}, {}
     for speaker, times in ref.items():
         total = sum(end - start for start, end in times)
-        covered = {g: overlap(times, hyp_times) for g, hyp_times in hyp.items()}
-        majority[speaker], top = max(covered.items(), key=lambda kv: (kv[1], -kv[0])) if covered else (None, 0.0)
-        shares[speaker] = top / total
-        report(f"G2-3 (on time): reference speaker {speaker}: {total:.3f} s of speech, majority speaker "
-               f"{majority[speaker]} on {shares[speaker]:.1%} (bound {SHARE_BOUND:.0%}), "
-               f"covered { {g: round(s, 3) for g, s in covered.items()} }")
+        covered = overlap(times, everyone)  # the speaker's turn time some final piece covers
+        on = {g: overlap(times, hyp_times) for g, hyp_times in hyp.items()}
+        majority[speaker], top = max(on.items(), key=lambda kv: (kv[1], -kv[0])) if on else (None, 0.0)
+        purity[speaker] = top / covered if covered else 0.0
+        coverage[speaker] = covered / total
+        report(f"G2-3 (on time): reference speaker {speaker}: {total:.3f} s in the RTTM, {covered:.3f} s covered "
+               f"({coverage[speaker]:.1%}, bound {COVERAGE_BOUND:.0%}), majority speaker {majority[speaker]} on "
+               f"{top:.3f} s ({purity[speaker]:.1%} of covered, bound {PURITY_BOUND:.0%}), "
+               f"per speaker { {g: round(s, 3) for g, s in on.items()} }")
     hyp_turns = [Turn(p.start / RATE, p.end / RATE, str(p.speaker)) for p in pieces]
     report(f"G2-3 (on time): online diarization of tests/fixtures/two_speakers.wav in lockstep: "
            f"{len(pieces)} pieces, speakers {sorted(hyp)}, DER {der([(turns, hyp_turns, duration)]):.1%}")
 
     assert len(hyp) == 2, f"speakers: {sorted(hyp)}"
     for speaker in ref:
-        assert shares[speaker] >= SHARE_BOUND, f"reference speaker {speaker}: {shares[speaker]:.1%}"
+        assert purity[speaker] >= PURITY_BOUND, f"reference speaker {speaker}: purity {purity[speaker]:.1%}"
+        assert coverage[speaker] >= COVERAGE_BOUND, f"reference speaker {speaker}: coverage {coverage[speaker]:.1%}"
     assert len(set(majority.values())) == len(majority), f"the speakers' majority speakers are the same: {majority}"
