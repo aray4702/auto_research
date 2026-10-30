@@ -3,8 +3,11 @@ S3). The pipeline and its two models load only from the verified directories tha
 never by name, and run on the CPU with fixed threads and seed.
 """
 
+import atexit
 import contextlib
 import logging
+import os
+import shutil
 import tempfile
 import warnings
 from collections.abc import Mapping
@@ -26,11 +29,19 @@ EMBEDDING = "wespeaker-voxceleb-resnet34-LM"
 
 LOGGERS = ("lightning", "pytorch_lightning", "pyannote")
 
-_scratch: Path | None = None
+_scratch: Path | None = None  # scratch_matplotlib's directory, once made
 
 
 def scratch_matplotlib() -> Path:
-    return Path(tempfile.gettempdir())  # a stub, for the tests' red run (design/internal/g1-stage2.md, P13)
+    """matplotlib's config and cache in a directory of this process's own under TMPDIR, removed at exit, so its
+    font list lasts no longer than the run (G1-13; design/internal/g1-stage2.md, P13). pyannote.audio's tasks
+    import matplotlib.pyplot, which reads MPLCONFIGDIR then. A later call returns the same directory."""
+    global _scratch
+    if _scratch is None:
+        _scratch = Path(tempfile.mkdtemp(prefix="lmt-matplotlib-"))
+        os.environ["MPLCONFIGDIR"] = str(_scratch)
+        atexit.register(shutil.rmtree, _scratch, ignore_errors=True)
+    return _scratch
 
 
 @contextlib.contextmanager
@@ -80,6 +91,7 @@ def load_embedding(model_dir: Path):
 def load(dirs: Mapping[str, Path]) -> "Diarizer":
     """The pipeline, from the three verified model directories. Call after `models.ensure`, which sets
     HF_HUB_OFFLINE."""
+    scratch_matplotlib()
     config = yaml.safe_load((Path(dirs[DIARIZATION]) / "config.yaml").read_text(encoding="utf-8"))
     with _quiet():
         from pyannote.audio.pipelines import SpeakerDiarization
