@@ -136,16 +136,18 @@ class BoundsTest(Fixture):
         self.assertOnlyFailed(setting(GOOD, "AMI full", "product", der=0.2501), "G1-8 AMI full DER")
 
     def test_rtf_ami_and_one_hour(self):
-        self.assertOnlyFailed(setting(GOOD, "AMI full", "product", rtf=0.845), "G1-9 AMI full RTF")
-        self.assertOnlyFailed(setting(GOOD, "one-hour", "product", rtf=0.51), "G1-9 one-hour RTF")
+        self.assertOnlyFailed(setting(GOOD, "AMI full", "product", rtf=1.0))
+        self.assertOnlyFailed(setting(GOOD, "AMI full", "product", rtf=1.0001), "G1-9 AMI full RTF")
+        self.assertOnlyFailed(setting(GOOD, "one-hour", "product", rtf=1.0))
+        self.assertOnlyFailed(setting(GOOD, "one-hour", "product", rtf=1.0001), "G1-9 one-hour RTF")
 
     def test_peak_rss(self):
         self.assertOnlyFailed(setting(GOOD, "one-hour", "product", peak_rss_bytes=4_000_000_001),
                               "G1-10 one-hour peak RSS")
 
     def test_a_missed_bound_is_reported(self):
-        self.main(setting(GOOD, "AMI full", "product", rtf=0.845))
-        self.assertIn("FAIL G1-9 AMI full RTF: AMI full rtf 0.845 > 0.500", self.stdout)
+        self.main(setting(GOOD, "AMI full", "product", rtf=1.2))
+        self.assertIn("FAIL G1-9 AMI full RTF: AMI full rtf 1.200 > 1.000", self.stdout)
         self.assertIn("1 missed", self.stdout)
 
 
