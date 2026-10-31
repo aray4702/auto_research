@@ -97,6 +97,38 @@ owner = "The two-speaker clip transcribes with Wi-Fi off"
 ci = false
 owner = "lmt live with the built-in microphone, two voices for about two minutes, stopped with Ctrl-C: labelled text appears within a few seconds, the two voices get different labels, and the four outputs are written and open"
 
+# G3-1: tests/test_rename.py and, in test-models, tests/test_rename_models.py (1b, 1c) (design/internal/g3-stage1.md §6).
+[G3-1]
+complete = true
+
+# G3-2: tests/test_rename_subtitles.py (test and test-models' ffmpeg checks, 1c) and, in browser, tests/browser/test_track.py (3c) (design/internal/g3-stage1.md §6).
+[G3-2]
+complete = true
+
+# G3-3: tests/test_cli.py and tests/test_rename.py (0a, 1b) (design/internal/g3-stage1.md §6).
+[G3-3]
+complete = true
+
+# G3-4: tests/test_demo_server.py, tests/test_demo_process.py, tests/test_demo_sample_process.py and tests/test_cli.py (2a3, 2a4, 2b2) (design/internal/g3-stage1.md §6).
+[G3-4]
+complete = true
+
+# G3-5: in browser, tests/browser/test_page.py, test_play.py and test_track.py (3a to 3d) (design/internal/g3-stage1.md §6).
+[G3-5]
+complete = true
+
+# G3-6: check_full_install.py's record in install-full, on both runners of a workflow_dispatch run (4b1, 4b2, 5a) (design/internal/g3-stage1.md §6).
+[G3-6]
+complete = true
+
+# G3-7: check_readme.py's check_install row, and check_install.py's records in test and install-full (4a2, 4a4, 5a) (design/internal/g3-stage1.md §6).
+[G3-7]
+complete = true
+
+# G3-8: check_full_install.py's record in install-full, on both runners of a workflow_dispatch run (4b1, 4b2, 5a) (design/internal/g3-stage1.md §6).
+[G3-8]
+complete = true
+
 [G3-5m]
 ci = false
 owner = "lmt demo --sample opens the page in the default browser, and clicking segments near the start, the middle and the end plays the meeting from each, heard through the speakers"
