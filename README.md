@@ -2,14 +2,14 @@
 
 ## What it is
 
-Local Meeting Transcriber turns a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. It transcribes WAV, MP3, M4A, FLAC and MP4 or MOV audio into text, subtitles and JSON with a speaker label on every line, lets you give the speakers their names, and shows a transcript with its audio in a page on your own computer. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
+Local Meeting Transcriber turns a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. It transcribes WAV, MP3, M4A, FLAC and MP4 or MOV audio into text, subtitles and JSON with a speaker label on every line, lets you give the speakers their names, shows a transcript with its audio in a page on your own computer, and transcribes live from the microphone. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
 
 ## Install
 
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
 
 ```sh
-uv tool install git+https://github.com/aray4702/auto_research@v0.2.0
+uv tool install git+https://github.com/aray4702/auto_research@v0.3.0
 ```
 
 The speaker models are gated on Hugging Face. Once, before the first download: make a free account, accept the conditions on the pages of [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1), [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) and [pyannote/wespeaker-voxceleb-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM), create a read token, and set it as `HF_TOKEN` for `lmt models download`. After that, nothing needs the network.
@@ -45,6 +45,12 @@ Or try it on a sample meeting (AMI ES2004a, CC BY 4.0). The first run downloads 
 
 ```sh
 lmt demo --sample
+```
+
+Transcribe live from the microphone: text with speaker labels appears as people speak, about 10 to 15 seconds behind for now. Ctrl-C stops it and saves the four outputs; `--list-devices` lists the microphones, and `--from-file` plays a recording through it in real time.
+
+```sh
+lmt live -o meetings
 ```
 
 ## Build
