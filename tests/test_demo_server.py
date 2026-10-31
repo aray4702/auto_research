@@ -1,7 +1,6 @@
 """The demo's handler, in process: `make_server` and `Handler` (design/internal/g3-stage1.md, 2a3's tests)."""
 
 import contextlib
-import dataclasses
 import http.client
 import io
 import shutil
@@ -11,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from lmt import export, transcript
+from lmt import cli, transcript
 from lmt.demo.server import load, make_server
 from lmt.errors import InputError
 from lmt.export import vtt
@@ -28,12 +27,8 @@ SECURITY_HEADERS = {
 
 
 def relabel(path, mapping):
-    """The transcript at `path` with its speakers' labels changed, written as JSON alone. 3c swaps this for
-    `lmt rename -f json`, which writes the same file."""
-    t = transcript.load(path)
-    speakers = tuple(dataclasses.replace(s, label=mapping.get(s.id, s.label)) for s in t.speakers)
-    stem = path.name.removesuffix(".json")
-    export.write(dataclasses.replace(t, speakers=speakers), path.parent, stem, ["json"], overwrite=True)
+    """`lmt rename -f json` on the transcript at `path` with `mapping`'s labels: the JSON alone, written again."""
+    assert cli.main(["rename", "-f", "json", str(path), *(f"{k}={v}" for k, v in mapping.items())]) == 0
 
 
 @pytest.fixture
@@ -233,6 +228,33 @@ def test_transcript_is_read_again_on_each_request(served, capfd):
     shutil.copy(FIXTURES / "two_speakers.transcript.json", path)
     assert get(demo, "transcript.json")[0] == 200
     assert get(demo, "transcript.vtt")[0] == 200
+
+
+def test_binds_without_a_reverse_lookup(tmp_path, monkeypatch):
+    # #521: HTTPServer.server_bind's socket.getfqdn waited out resolver timeouts on macOS with the network cut.
+    calls = []
+
+    def getfqdn(*args):
+        calls.append(args)
+        raise AssertionError("socket.getfqdn called")
+
+    monkeypatch.setattr(socket, "getfqdn", getfqdn)
+    shutil.copy(FIXTURES / "two_speakers.transcript.json", tmp_path)
+    shutil.copy(FIXTURES / "two_speakers.wav", tmp_path)
+    with contextlib.redirect_stderr(io.StringIO()):
+        demo = load(tmp_path / "two_speakers.transcript.json", None, False)
+    server = make_server(demo, 0)
+    thread = threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True)
+    thread.start()
+    try:
+        status, headers, _ = get(demo, "")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+    assert status == 200
+    assert headers["Content-Type"] == "text/html; charset=utf-8"
+    assert calls == []
 
 
 def test_a_port_in_use(tmp_path):
