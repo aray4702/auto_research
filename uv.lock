@@ -10,15 +10,6 @@ supported-markers = [
     "platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 
-[manifest]
-overrides = [
-    { name = "aiohttp", specifier = ">=3.12" },
-    { name = "huggingface-hub", specifier = "==2.3.0" },
-    { name = "numpy", specifier = "==2.4.6" },
-    { name = "sentencepiece", specifier = "==0.2.2" },
-    { name = "sounddevice", specifier = ">=0.5.6" },
-]
-
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -522,11 +513,10 @@ dependencies = [
     { name = "huggingface-hub", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "jsonschema", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "moshi-mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "numpy", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "pyannote-audio", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "rustymimi", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "sentencepiece", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
+    { name = "sentencepiece", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "sounddevice", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin') or (platform_machine == 'x86_64' and sys_platform == 'linux')" },
     { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
@@ -560,7 +550,6 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.26" },
     { name = "mlx", marker = "sys_platform == 'darwin'", specifier = "==0.26.5" },
     { name = "more-itertools", marker = "extra == 'eval'" },
-    { name = "moshi-mlx", marker = "sys_platform == 'darwin'", specifier = "==0.3.0" },
     { name = "numpy", specifier = "==2.4.6" },
     { name = "pyannote-audio", specifier = "==3.4.0" },
     { name = "pyannote-metrics", marker = "extra == 'eval'", specifier = ">=3.2,<4" },
@@ -683,26 +672,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/52/b8/c63995bebbb9ac9c059350e0fb8c82c2420c85aeca7d34e40aecf3df9281/more_itertools-11.2.1.tar.gz", hash = "sha256:cbf08fd0af284dc69718b9b76a8e6203df624d70209ea511e4219d350c856f63", size = 154133, upload-time = "2026-10-14T18:50:30.407Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5d/57/3c4b1c6f2e0cc29ba023802458ea3d2a996f87085559e4a5f2192d549532/more_itertools-11.2.1-py3-none-any.whl", hash = "sha256:35a7377edd1dd6608dcb2cdf534ded55ea32d49448875ad042cd3f879fb1ded0", size = 74405, upload-time = "2026-10-14T18:50:29.116Z" },
-]
-
-[[package]]
-name = "moshi-mlx"
-version = "0.3.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "aiohttp", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "huggingface-hub", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "mlx", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "numpy", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "rustymimi", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "safetensors", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "sentencepiece", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "sounddevice", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "sphn", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/34/04/173cf1fc12f73cfc49321e64b45ea1ea15143b49ef570b7171906a45b5a7/moshi_mlx-0.3.0.tar.gz", hash = "sha256:108f0812dfa248cd543de9a46ec11bb2d603387ec3fc92d171157875c783971e", size = 46401, upload-time = "2025-08-04T06:51:02.483Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/41/75/3c00e7392a7ea80887440da615c300679636f9e6f89da10e1082f4970a95/moshi_mlx-0.3.0-py3-none-any.whl", hash = "sha256:2ec210340df8bf34025df6c272ea3ed618f5c22e176c3513f5dba4e529420621", size = 55777, upload-time = "2025-08-04T06:51:01.522Z" },
 ]
 
 [[package]]
@@ -1219,15 +1188,6 @@ wheels = [
 ]
 
 [[package]]
-name = "safetensors"
-version = "0.5.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/71/7e/2d5d6ee7b40c0682315367ec7475693d110f512922d582fef1bd4a63adc3/safetensors-0.5.3.tar.gz", hash = "sha256:b6b0d6ecacec39a4fdd99cc19f4576f5219ce858e6fd8dbe7609df0b8dc56965", size = 67210, upload-time = "2025-02-26T09:15:13.155Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/b8/3b/11f1b4a2f5d2ab7da34ecc062b0bc301f2be024d110a6466726bec8c055c/safetensors-0.5.3-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:21d01c14ff6c415c485616b8b0bf961c46b3b343ca59110d38d744e577f9cce7", size = 418419, upload-time = "2025-02-26T09:15:01.765Z" },
-]
-
-[[package]]
 name = "scikit-learn"
 version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1384,15 +1344,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2f/33/2ed023e4d46f5043188a8e52c9a7672a67bb47b9e7788eefe5998c854512/speechbrain-1.1.2.tar.gz", hash = "sha256:a49328b61f6e6caa0e01ab4e32bc15b564114953e30718b1379d2e1d764e426a", size = 787909, upload-time = "2026-10-14T23:27:57.157Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/38/c7/e66ed19df444c56a9c6176c153b4b373803384651b455d38ee9fef97db62/speechbrain-1.1.2-py3-none-any.whl", hash = "sha256:9fea4144c917ea58bcf13f17a1a1759179ed7472a30ec8416e7c7c8cf21d9c9a", size = 912709, upload-time = "2026-10-14T23:27:55.83Z" },
-]
-
-[[package]]
-name = "sphn"
-version = "0.2.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b7/94/0957f866030d6071bcfd285977ff3652bacf85e663a634d3172cf47055a7/sphn-0.2.1.tar.gz", hash = "sha256:3b19b1fece67d979d84080458bed545d1f55ddc5abac6ca5deae2672a184c7fe", size = 33477, upload-time = "2026-01-07T12:00:32.277Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6c/4c/cda94a813ef7f41bdb241577b7b51e453b59b8b20b184f6bd73ee2f3bdb8/sphn-0.2.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a2238bcb66c21322ddc4a9308d7fbd4903175951ee4357cad8056c5e371e447f", size = 1755729, upload-time = "2026-01-07T12:00:26.067Z" },
 ]
 
 [[package]]
