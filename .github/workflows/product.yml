@@ -141,6 +141,17 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+  # G3-6, G3-7 and G3-8 on both platforms (design/internal/g3-stage1.md §5): by hand only (#83, answer 10a),
+  # so a push or schedule run skips it, and a skipped job passes. Its records come from the called workflow.
+  install-full:
+    needs: changes
+    if: github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/install-full.yml
+    with:
+      tier: ${{ needs.changes.outputs.tier }}
+    secrets:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
   # The tests that run the models (design/internal/g1-stage1.md §3): the pinned model files, cached by the
   # manifest's hash, downloaded on a miss and verified on every run.
   test-models:
