@@ -3,6 +3,8 @@ Copyright (c) 2026 aray4702
 
 The product's own code is licensed under the MIT License; see LICENSE.
 src/lmt/eval/normalizer/ is Whisper's English text normalizer, Copyright (c) 2022 OpenAI, MIT License; see its LICENSE.
+src/lmt/_vendor/moshi_mlx/ is moshi_mlx 0.3.0, Copyright (c) Kyutai, MIT License; see its LICENSE. It runs
+Kyutai STT 1B on MLX.
 
 The product doesn't ship model weights. `lmt models download` downloads these models from
 Hugging Face, each at a pinned revision, under its own licence. src/lmt/models.toml records
