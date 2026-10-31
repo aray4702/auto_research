@@ -122,6 +122,12 @@ licence = "Apache-2.0 AND BSD-3-Clause"
 source = "https://pypi.org/project/python-dateutil/3.0.0/ (python_dateutil-3.0.0.dist-info/licenses/LICENSE)"
 
 [[licences.override]]
+distribution = "rustymimi"
+version = "0.4.1"
+licence = "MIT OR Apache-2.0"
+source = "https://pypi.org/project/rustymimi/0.4.1/ (rustymimi-0.4.1.dist-info/METADATA: License: MIT/Apache-2.0)"
+
+[[licences.override]]
 distribution = "scipy"
 version = "1.17.1"
 licence = "BSD-3-Clause"
@@ -138,6 +144,12 @@ distribution = "soundfile"
 version = "0.14.0"
 licence = "BSD-3-Clause"
 source = "https://pypi.org/project/soundfile/0.14.0/ (soundfile-0.14.0.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "sphn"
+version = "0.2.1"
+licence = "Apache-2.0"
+source = "https://pypi.org/project/sphn/0.2.1/ (sphn-0.2.1.dist-info/licenses/LICENSE, the Apache License 2.0)"
 
 [[licences.override]]
 distribution = "sympy"
@@ -442,6 +454,16 @@ library = "LLVM's OpenMP runtime"
 licence = "Apache-2.0 WITH LLVM-exception"
 platforms = ["macos-arm64"]
 source = "https://github.com/llvm/llvm-project/blob/main/openmp/LICENSE.TXT"
+
+# mlx 0.26.5 (Kyutai's engine, G4): MLX's own library, which the mlx-metal wheel installs into mlx/lib/;
+# mlx.metallib beside it is its compiled Metal kernels.
+[[licences.library]]
+distribution = "mlx-metal"
+files = "mlx/lib/libmlx.dylib"
+library = "MLX"
+licence = "MIT"
+platforms = ["macos-arm64"]
+source = "https://github.com/ml-explore/mlx/blob/v0.26.5/LICENSE (mlx-0.26.5.dist-info/licenses/LICENSE)"
 
 [[licences.library]]
 distribution = "onnxruntime"

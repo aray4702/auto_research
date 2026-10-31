@@ -186,7 +186,7 @@ class SegmentsTest(unittest.TestCase):
     def test_transcript_fields(self):
         t = build([w(0.0, 0.5)], samples=16_000)
         self.assertEqual((t.schema_version, t.lmt_version, t.source, t.models),
-                         ("1.1", "0.1.0", {"file": "a.wav", "duration": 1.0}, MODELS))
+                         ("1.2", "0.1.0", {"file": "a.wav", "duration": 1.0}, MODELS))
 
 
 class TimesTest(unittest.TestCase):

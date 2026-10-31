@@ -1,7 +1,7 @@
 """`lmt live`'s options, a test per option, and G2-5 (ii) and (iii) through the command, with no model
 (design/internal/g2-stage1.md §3b, item 3b4). The real `load_stages` runs, with the stand-in for `sounddevice`,
-`models.ensure`, `asr.load`, the diarization loaders and the stages replaced by fakes that record what they were
-given. `-v` is 3c2's.
+`models.ensure`, `engines.load`, the diarization loaders and the stages replaced by fakes that record what they
+were given. `-v` is 3c2's.
 """
 
 import json
@@ -12,10 +12,11 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from fake_engine import FakeEngine
 from fake_sounddevice import FakeSoundDevice, device
 from test_live_cli import assert_one_error, files, run, tone_wav
 
-from lmt import asr, diarize, models
+from lmt import diarize, engines, models
 from lmt.live import asr as live_asr
 from lmt.live import command
 from lmt.live import diarize as live_diarize
@@ -29,13 +30,13 @@ ensure_for_real = models.ensure  # before the fixture replaces it
 
 
 class FakeASR:
-    """`StreamingASR(engine, config)`: commits one word for each whole second of audio that holds a non-zero
+    """`StreamingASR(stream, gap)`: commits one word for each whole second of audio that holds a non-zero
     sample, each ending a sentence, so every word is a segment of its own and silence gives none. Calls `probe`
     on each block, while the session runs."""
 
-    def __init__(self, engine, config, probe):
-        self.engine = engine
-        self.config = config
+    def __init__(self, stream, gap, probe):
+        self.stream = stream
+        self.gap = gap
         self.position = 0
         self.committed = 0
         self._probe = probe
@@ -68,9 +69,9 @@ class FakeDiarizer(NullDiarizer):
 @pytest.fixture
 def stages(tmp_path, monkeypatch):
     """The fakes `load_stages` meets, and what each was given: `ensured` (the model names asked of
-    `models.ensure`, per call), `asr_dirs`, `segmentation_dirs`, `embedding_dirs`, `asrs` and `diarizers` (the
-    stages built). Set `probe` to run a check on each block the session feeds."""
-    rec = SimpleNamespace(ensured=[], asr_dirs=[], segmentation_dirs=[], embedding_dirs=[], asrs=[], diarizers=[],
+    `models.ensure`, per call), `engines` (engines.load's `(name, offline)`), `segmentation_dirs`, `embedding_dirs`,
+    `asrs` and `diarizers` (the stages built). Set `probe` to run a check on each block the session feeds."""
+    rec = SimpleNamespace(ensured=[], engines=[], segmentation_dirs=[], embedding_dirs=[], asrs=[], diarizers=[],
                           probe=lambda: None)
     cache = tmp_path / "cache"
 
@@ -78,12 +79,12 @@ def stages(tmp_path, monkeypatch):
         rec.ensured.append([m.name for m in needed])
         return {m.name: cache / m.name for m in needed}
 
-    def load(model_dir):
-        rec.asr_dirs.append(Path(model_dir))
-        return f"engine:{Path(model_dir).name}"
+    def load(name, *, offline):
+        rec.engines.append((name, offline))
+        return FakeEngine(name=name, word_gap={"kyutai": 0.24, "apple": 0.0}[name])
 
-    def streaming(engine, config):
-        rec.asrs.append(FakeASR(engine, config, lambda: rec.probe()))
+    def streaming(stream, gap):
+        rec.asrs.append(FakeASR(stream, gap, lambda: rec.probe()))
         return rec.asrs[-1]
 
     def online(segmentation, embedding, config):
@@ -97,7 +98,7 @@ def stages(tmp_path, monkeypatch):
         return load_model
 
     monkeypatch.setattr(models, "ensure", ensure)
-    monkeypatch.setattr(asr, "load", load)
+    monkeypatch.setattr(engines, "load", load)
     monkeypatch.setattr(diarize, "load_segmentation", loader(rec.segmentation_dirs))
     monkeypatch.setattr(diarize, "load_embedding", loader(rec.embedding_dirs))
     monkeypatch.setattr(diarize, "scratch_matplotlib", lambda: tmp_path)
@@ -150,52 +151,40 @@ def test_no_diarize(tmp_path, monkeypatch, stages):
     code, _, err = run("-o", str(tmp_path), "-n", "m", "--duration", "3", "--no-diarize")
     assert (code, err) == (0, "")
     assert stages.diarizers == [] and stages.segmentation_dirs == [] and stages.embedding_dirs == []
-    assert stages.ensured == [[models.default_live_asr(models.load_manifest()).name]]
+    assert stages.ensured == [[]]  # the engine ensures its own model
     doc = transcript(tmp_path)
     assert len(doc["segments"]) == 3
     assert {s["speaker"] for s in doc["segments"]} == {"S1"}
     assert doc["models"]["diarization"] is None
 
 
-def second_asr_manifest(tmp_path):
-    """The package's manifest, with a second ASR model after the others."""
-    text = models.MANIFEST_PATH.read_text(encoding="utf-8") + f"""
-[[model]]
-name = "{SECOND_ASR}"
-role = "asr"
-repository = "test/{SECOND_ASR}"
-revision = "{"b" * 40}"
-licence = "MIT"
-creators = "someone"
-card = "https://example.invalid/{SECOND_ASR}"
-gated = false
-
-[[model.file]]
-path = "model.bin"
-sha256 = "{"c" * 64}"
-size = 1
-"""
-    path = tmp_path / "models.toml"
-    path.write_text(text, encoding="utf-8")
-    return path
-
-
 @pytest.mark.criterion("G1-6", "G2-7")
-@pytest.mark.parametrize("given", [True, False])
-def test_model(tmp_path, monkeypatch, stages, given):
-    monkeypatch.setattr(models, "MANIFEST_PATH", second_asr_manifest(tmp_path))
-    live_default = models.default_live_asr(models.load_manifest()).name
-    assert live_default != SECOND_ASR
+@pytest.mark.parametrize(("argv", "expected", "gap"), [([], "kyutai", 0.24), (["--engine", "kyutai"], "kyutai", 0.24),
+                                                       (["--engine", "apple"], "apple", 0.0)])
+def test_engine(tmp_path, monkeypatch, stages, argv, expected, gap):
     stand_in(monkeypatch)
     out_dir = tmp_path / "out"
     out_dir.mkdir()
-    code, _, err = run("-o", str(out_dir), "-n", "m", "--duration", "1.5", *(["--model", SECOND_ASR] * given))
+    code, _, err = run("-o", str(out_dir), "-n", "m", "--duration", "1.5", *argv)
     assert (code, err) == (0, "")
-    expected = SECOND_ASR if given else live_default
-    assert stages.ensured == [[expected, diarize.SEGMENTATION, diarize.EMBEDDING]]
-    assert stages.asr_dirs == [stages.cache / expected]
-    assert stages.asrs[0].engine == f"engine:{expected}"
-    assert transcript(out_dir)["models"]["asr"]["name"] == expected
+    assert stages.engines == [(expected, False)]
+    assert stages.ensured == [[diarize.SEGMENTATION, diarize.EMBEDDING]]
+    assert stages.asrs[0].gap == gap
+    assert transcript(out_dir)["models"]["asr"]["engine"] == expected
+
+
+@pytest.mark.criterion("G2-7")
+def test_an_engine_that_cant_run_exits_5_before_capture(tmp_path, monkeypatch, stages):
+    fake = stand_in(monkeypatch)
+
+    def load(name, *, offline):
+        raise engines.ModelError(f"--engine {name}", "not in this build")
+
+    monkeypatch.setattr(engines, "load", load)
+    code, out, err = run("-o", str(tmp_path), "-n", "m", "--duration", "1.5", "--engine", "apple")
+    assert (code, out, err) == (5, "", "lmt: error: --engine apple: not in this build\n")
+    assert list(tmp_path.glob("m.*")) == []
+    assert not fake.opened and stages.asrs == [] and stages.diarizers == []
 
 
 @pytest.mark.criterion("G1-6", "G2-7")
@@ -239,7 +228,7 @@ def test_offline_with_an_empty_cache(tmp_path, monkeypatch, stages):
     assert err.startswith("lmt: error: ") and "--offline never downloads" in err, err
     assert files(out_dir) == [] and files(cache) == []
     assert not fake.opened
-    assert stages.asr_dirs == [] and stages.asrs == []
+    assert stages.engines == [("kyutai", True)] and stages.asrs == []
 
 
 @pytest.mark.criterion("G1-6", "G2-7")
