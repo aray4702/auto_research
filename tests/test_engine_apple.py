@@ -105,6 +105,21 @@ class TestWhereItCantRun:
             apple.load(offline=False).transcribe(AUDIO)
         assert e.value.exit_code == 5
 
+    def test_denied_at_load_exits_5_before_any_audio(self, helper, tmp_path):
+        directory = helper(status=write(tmp_path, "denied.jsonl", [
+            (FIXTURES / "status-ok.jsonl").read_text().strip(),
+            '{"type": "error", "code": "denied", "message": "turned off"}']))
+        with pytest.raises(ModelError, match=r"denied in System Settings") as e:
+            apple.load(offline=False)
+        assert e.value.exit_code == 5
+        assert [call["argv"][1] for call in fake.calls(directory)] == ["status"]
+        row = apple.status()
+        assert (row["ok"], row["status"]) == (False, apple.REASONS["denied"])
+
+    def test_the_helper_s_status_verb_checks_authorisation(self):
+        status = SOURCE.read_text().split('case "status":', 1)[1].split("case ", 1)[0]
+        assert "checkAuthorized()" in status
+
     def test_models_list_status_matches(self, helper):
         helper(status=FIXTURES / "status-ok.jsonl")
         assert apple.status()["ok"] is True
@@ -135,6 +150,24 @@ class TestInternalErrors:
         helper(status=write(tmp_path, "empty.jsonl", []))
         with pytest.raises(apple.HelperError, match="without a status line"):
             apple.load(offline=False)
+
+    @pytest.mark.parametrize("lines, message", [
+        ([], "HelperError: lmt-speech status exited 0 without a status line"),
+        (["not json"], "HelperError: lmt-speech status: a line that isn't JSON"),
+        (['{"type": "error", "code": "failed", "message": "the inventory broke"}'], "the inventory broke"),
+    ])
+    def test_models_list_reports_an_internal_error_and_never_raises(self, helper, tmp_path, lines, message):
+        helper(status=write(tmp_path, "bad.jsonl", lines))
+        row = apple.status()
+        assert (row["name"], row["ok"], row["os"]) == ("apple", False, "26.6.2")
+        assert row["status"].startswith("internal error: ") and message in row["status"]
+
+    def test_models_list_reports_a_helper_that_wont_start(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("LMT_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setattr(apple, "macos_version", lambda: "26.6.2")
+        monkeypatch.setattr(apple, "build", lambda: tmp_path / "missing" / "lmt-speech")
+        row = apple.status()
+        assert row["ok"] is False and row["status"].startswith("internal error: FileNotFoundError: ")
 
 
 @pytest.mark.criterion("G4-7")

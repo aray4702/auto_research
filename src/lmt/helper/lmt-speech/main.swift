@@ -1,6 +1,7 @@
 // lmt-speech: Apple's engine's helper (design/architecture.md, "Speech engines (G4)"; design/internal/g4-stage1.md §3).
 //
-//   lmt-speech status --locale en-US       the status line
+//   lmt-speech status --locale en-US       the status line; then, if the assets are there but speech recognition
+//                                          is denied, the denied error line
 //   lmt-speech install --locale en-US      reserves the locale, asks macOS to install its assets, then the status line
 //   lmt-speech transcribe --locale en-US   16 kHz mono float32 little-endian samples on stdin, to end of file;
 //                                          the status line, then volatile and final results, then done
@@ -79,6 +80,15 @@ func assets() async -> (supported: Bool, installed: Bool) {
 func statusLine(_ s: (supported: Bool, installed: Bool)) {
     emit(["type": "status", "os": osVersion(), "build": osBuild(), "locale": locale.identifier,
           "supported": s.supported, "installed": s.installed])
+}
+
+/// Once the assets are there, a denial is G4-2's next reason. `status` checks it too, so lmt finds it at load,
+/// before any audio is captured or decoded (#591).
+func checkAuthorized() {
+    let auth = SFSpeechRecognizer.authorizationStatus()
+    if auth == .denied || auth == .restricted {
+        fail("denied", "speech recognition is turned off in System Settings, Privacy & Security")
+    }
 }
 
 /// Converts stdin's samples to the analyzer's format and passes them on, as they arrive.
@@ -192,7 +202,9 @@ func transcribe() async throws {
 
 switch verb {
 case "status":
-    statusLine(await assets())
+    let s = await assets()
+    statusLine(s)
+    if s.supported && s.installed { checkAuthorized() }
 case "install":
     guard await assets().supported else { fail("unsupported", "Apple's recognizer doesn't support \(locale.identifier) on this Mac") }
     do {
@@ -209,10 +221,7 @@ default:
     statusLine(s)
     guard s.supported else { fail("unsupported", "Apple's recognizer doesn't support \(locale.identifier) on this Mac") }
     guard s.installed else { fail("not-installed", "the \(locale.identifier) speech assets aren't installed") }
-    let auth = SFSpeechRecognizer.authorizationStatus()
-    if auth == .denied || auth == .restricted {
-        fail("denied", "speech recognition is turned off in System Settings, Privacy & Security")
-    }
+    checkAuthorized()
     do {
         try await transcribe()
     } catch {
