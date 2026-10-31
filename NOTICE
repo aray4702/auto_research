@@ -10,15 +10,14 @@ The product doesn't ship model weights. `lmt models download` downloads these mo
 Hugging Face, each at a pinned revision, under its own licence. src/lmt/models.toml records
 each one's revision, files, licence and creators:
 
-- kyutai/stt-1b-en_fr-mlx (speech recognition, the default): Creative Commons Attribution 4.0
-  International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+- kyutai/stt-1b-en_fr-mlx (speech recognition, the default engine): Creative Commons
+  Attribution 4.0 International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
   Attribution: "stt-1b-en_fr-mlx", by Kyutai, published on Hugging Face,
-  https://huggingface.co/kyutai/stt-1b-en_fr-mlx. Quantized to 8 bits when it loads, in memory;
-  the files are used unmodified.
+  https://huggingface.co/kyutai/stt-1b-en_fr-mlx. The files are used unmodified; lmt
+  quantizes the weights to 8 bits in memory when it loads them.
 
-- Systran/faster-distil-whisper-large-v3 (speech recognition, no longer used): MIT License.
-  By SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3.
-  Model card: https://huggingface.co/Systran/faster-distil-whisper-large-v3
+Apple's speech recognizer (the other engine, --engine apple) is part of macOS. lmt downloads
+and redistributes nothing of it; macOS installs its speech model.
 
 - pyannote/speaker-diarization-3.1 (the diarization pipeline): MIT License.
   By pyannote (Hervé Bredin and Alexis Plaquet).
@@ -34,8 +33,8 @@ each one's revision, files, licence and creators:
   pyannote.audio by pyannote, published on Hugging Face,
   https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM. Used unmodified.
 
-The product doesn't ship its dependencies either: they install from PyPI (and, for torch and
-torchaudio on Linux, the PyTorch CPU index), each under its own licence. toolchain.toml's
+The product doesn't ship its dependencies either: they install from PyPI, each under its own
+licence. toolchain.toml's
 [licences] section lists every licence and bundled library that CI checks. Some of them ask
 for these notices:
 
