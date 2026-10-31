@@ -92,13 +92,43 @@ def test_set_full_writes_full_json_with_determinism(fake, tmp_path, capsys):
     results = json.loads((out / "full.json").read_text(encoding="utf-8"))
     assert (results["set"], results["determinism"]) == ("full", {"runs": 2, "identical": True})
     figures = {(f["dataset"], f["system"]): f for f in results["figures"]}
-    assert list(figures) == [("LS full", "product"), ("LS full", "whisper-alone"), ("AMI full", "product"),
-                             ("AMI full", "whisper-alone"), ("AMI full", "pyannote-alone")]
+    assert list(figures) == [("LS full", "product"), ("LS full", "asr-alone"), ("AMI full", "product"),
+                             ("AMI full", "asr-alone"), ("AMI full", "pyannote-alone")]
     # The hand-computed figures of test_eval_runner, as the full set is the same fake items.
     assert figures["LS full", "product"]["wer"] == 0.263158
     assert figures["AMI full", "pyannote-alone"]["der"] == 0.117647
     # One progress line per item for each of the three runs.
     assert len(captured.err.splitlines()) == 18
+
+
+@pytest.mark.criterion("G4-6")
+def test_engine_apple_writes_full_apple_json_without_the_repeat(fake, tmp_path, capsys, monkeypatch):
+    log = tmp_path / "argv.jsonl"
+    monkeypatch.setenv("FAKE_WORKER_LOG", str(log))
+    out = tmp_path / "results"
+    code = cli.main(["eval", "--set", "full", "--engine", "apple", "--out", str(out)])
+    captured = capsys.readouterr()
+    assert code == 0, captured.err
+    assert captured.out == f"{out / 'full-apple.json'}\n"
+    # Apple's engine is exempt from the repeat comparison (G4-6): no ci run, and determinism null.
+    assert fake.fetched == ["full"]
+    assert sorted(p.name for p in out.iterdir()) == ["full-apple.json"]
+    results = json.loads((out / "full-apple.json").read_text(encoding="utf-8"))
+    assert (results["schema_version"], results["set"], results["engine"], results["determinism"]) == (
+        "2.0", "full", "apple", None)
+    # Every product run is `lmt transcribe … --engine apple`.
+    argvs = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+    assert len(argvs) == 6
+    assert all(argv[-2:] == ["--engine", "apple"] for argv in argvs)
+
+
+def test_the_default_engine_passes_no_engine_option(fake, tmp_path, monkeypatch):
+    log = tmp_path / "argv.jsonl"
+    monkeypatch.setenv("FAKE_WORKER_LOG", str(log))
+    results = runner.evaluate("ci", out_dir=tmp_path)
+    assert results["engine"] == "kyutai"
+    assert (tmp_path / "ci.json").exists()
+    assert not any("--engine" in json.loads(line) for line in log.read_text(encoding="utf-8").splitlines())
 
 
 def test_different_words_on_the_second_ci_run_are_not_identical(fake, tmp_path):
@@ -116,8 +146,9 @@ def test_update_readme_rewrites_the_table_and_check_readme_then_exits_0(fake, re
     results = json.loads((repo / "results" / "full.json").read_text(encoding="utf-8"))
     assert results["dirty"] is False
     text = (repo / "README.md").read_text(encoding="utf-8")
-    table = readme.render(results)
+    table = readme.render_all(Path("results"))
     assert text == README.replace(f"{readme.START}\n{readme.END}", f"{readme.START}\n{table}\n{readme.END}")
+    assert table.startswith("**Full sets, Kyutai STT 1B** (`results/full.json`)\n\n")
     assert "| LS full | product | 26.3 % | — |" in table
     assert "Two runs of the CI subset gave identical accuracy figures: yes." in table
     assert cli.main(["eval", "--check-readme"]) == 0

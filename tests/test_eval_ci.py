@@ -18,9 +18,9 @@ SECOND = ROOT / "results" / "ci.json"
 # G1-5's figures, in score's order: WER on both sets, DER on AMI-ci, RTF for each system.
 FIGURES = {
     ("LS-ci", "product"): ("wer", "rtf"),
-    ("LS-ci", "whisper-alone"): ("wer", "rtf"),
+    ("LS-ci", "asr-alone"): ("wer", "rtf"),
     ("AMI-ci", "product"): ("wer", "der", "rtf"),
-    ("AMI-ci", "whisper-alone"): ("wer", "rtf"),
+    ("AMI-ci", "asr-alone"): ("wer", "rtf"),
     ("AMI-ci", "pyannote-alone"): ("der", "rtf"),
 }
 
