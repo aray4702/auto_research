@@ -1,7 +1,8 @@
-# Internal design: G1 stage 2, the rest (G1-3 to G1-7, G1-8c, G1-11, G1-13)
+# Internal design: G1 stage 2, the rest (G1-3 to G1-7, G1-8c, G1-11, G1-13), and stage 3's speed and memory (G1-9, G1-10)
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-30 | architect, #123 | Stage 3's results (#503) fail G1-9 (RTF 0.845 on AMI full, 0.891 on the one-hour recording) and G1-10 (4.099 × 10⁹ B). Profiled in a cloud container: diarization's time is the embedding ResNet run once per (chunk, speaker) pair, three per chunk, though the mask enters only at its pooling; its batch of 32 ten-second windows and faster-whisper's whole-file log-mel are the memory peaks. New items P14 (one ResNet pass per chunk, every speaker pooled from it), P15 (the log-mel in 30 s blocks, bit-identical) and P16 (ASR, then diarization, as `architecture.md` "Run order" allows for memory), then P17, the Mac's re-measurement. No model, setting, thread count or bound changes |
 | 2026-10-29 | architect, #402 | P13's finding on PR #403: with the scratch `MPLCONFIGDIR`, matplotlib's "building the font cache" warning reaches stderr on every diarizing run, so G1-11's silence and noise cases see two lines. `diarize.LOGGERS` gains `"matplotlib"` (S3's quiet loggers), and `test_library_writes.py`'s first case imports pyannote inside `diarize._quiet()` and checks that stderr has no matplotlib line. G1-11 and G1-13 are unchanged |
 | 2026-10-29 | architect, #391 | P7c's finding on PR #400: a product run writes outside its outputs. New item P13 sets `ORT_DISABLE_TELEMETRY=1` in `asr.py` (onnxruntime 1.31.1's 1DS telemetry, which keeps a device id and an event database and posts to Microsoft's collector) and points `MPLCONFIGDIR` at a directory of the process's own under `TMPDIR`, removed at exit, in `diarize.load` (pyannote.audio's tasks import `matplotlib.pyplot`). P7c waits for it. G1-13 and P7c's test are unchanged |
 | 2026-10-29 | architect, #387 | The four export goldens aren't one transcript: `transcript.json` is `test_export.py`'s two-segment `small()`, and `transcript.{txt,srt,vtt}` are `test_export_formats.py`'s five-segment one. P6a's `words` test and P9's golden test now take their JSON from `export.render(test_export_formats.small(), "json")` at test time, in `tmp_path`. No fixture is added or changed, and both items keep their file lists. P9's other golden test checks `transcript.json` against itself. G1-4 is unchanged |
@@ -40,6 +41,10 @@ This is what a Developer needs to build each item below in one run. It finishes 
 | **P11** | onnxruntime's log down to errors, so a run's stderr is the product's own (P4's finding on #364) | — | `src/lmt/asr.py`, `tests/test_asr.py` | 3 |
 | **P12** | Turns-first segments, so the product's DER follows diarization (#372's finding on G1-8c) | — | `src/lmt/align.py`, `tests/test_align.py` | 3 |
 | **P13** | No library writes outside the outputs: onnxruntime's telemetry off, and matplotlib's cache in a directory removed at exit (P7c's finding on #400) | — | `src/lmt/asr.py`, `src/lmt/diarize.py`, `tests/test_library_writes.py` (new), `tests/test_diarize.py` | 3 |
+| **P14** | Speaker embeddings from one ResNet pass per chunk, each active speaker pooled from it (G1-9, G1-10; stage 3's finding) | — | `src/lmt/diarize.py`, `tests/test_diarize.py` | 3 |
+| **P15** | The ASR log-mel computed in 30 s blocks, bit-identical to faster-whisper's (G1-10; stage 3's finding) | — | `src/lmt/asr.py`, `tests/test_asr.py` | 3 |
+| **P16** | ASR, then diarization, with ASR's model freed in between (G1-10, and G1-9; stage 3's finding) | — | `src/lmt/pipeline.py`, `tests/test_pipeline.py` | 3 |
+| **P17** | The Mac's re-measurement: the one-hour recording, then `lmt eval --set full` (builder and Owner) | P14, P15, P16 | `results/full.json`, `README.md` (`## Results`) | — |
 
 **Parallel-safe,** by the files above. Items that share a file are already in sequence through `Needs`: P2a, then P2b and P8 (the runner and `cli.py`). P1 and P3 share no file, but P3's cases rely on decode coming first, so P3 waits for P1. P6b uses P6a's helpers, and P7c uses P7a's guard and P7b's `isolation.py`, so each waits for them. The one pair that may run at the same time and share a file is P2b and P6b, which edit `product.yml` in different jobs (`eval-ci` and `test-models`), so git merges them cleanly; whichever merges second refreshes from `main`. No other two items share a file. Only P10 edits the registry, so the others never conflict there: each item's PR shows its criterion `partial` with every check passing, and P10 turns that into `pass`.
 
@@ -55,6 +60,8 @@ This is what a Developer needs to build each item below in one run. It finishes 
 **P12 goes ahead of every other open item** (#372's finding, 2026-10-29). P2b's reading (#343) is blocked by it, and G1-5 and G1-8c with it. It shares no file with any other item.
 
 **P13 goes next, ahead of the rest** (#391's finding, 2026-10-29). P7c's PR (#400) is blocked by it, and G1-13 and stage 2's close with it. Its files are P11's `asr.py`, already merged, and `diarize.py`, which no open item edits.
+
+**P14, P15 and P16 go ahead of every other G1 item** (stage 3's results, 2026-10-30), any two at a time. They share no file, and no open item edits `diarize.py`, `asr.py` or `pipeline.py`. G1-9 and G1-10, and with them G1's done-check and G3's release (`results/full.json` meeting G1-8 to G1-10), wait for P17, which needs all three merged. If only one run is free, P14 goes first: it carries most of G1-9.
 
 **What the deadline can carry.** It's 09:46 PT on 2026-10-29. Every item is one Developer run, and most are tier 2 or 3, so roughly an hour of CI each, plus review and the Owner's merge where the path is protected. All eleven fit by the end of 2026-10-30 if #123's two-speaker clip merges by the evening of 2026-10-29 (#110 has merged). The criteria at risk are: G1-3, G1-4 and G1-13, behind #123; and G1-5 and G1-8c, if G1-8c's first reading misses a bound. Next most exposed is G1-6, which waits for P8 behind P2a.
 
@@ -508,11 +515,121 @@ matplotlib rebuilds its font list in each process that diarizes, because the cac
 - The Developer's local `uv run --frozen pytest -m models --durations=0`, at the PR's head, with G1-1's to G1-4's tests and G1-11's (`tests/test_g1_11.py`, the silence and noise cases among them) passing unchanged. The PR gives `two_speakers_run`'s setup time beside #391's figure, 282 s on the Mac, for the font list's cost.
 - After P13 merges, #400 merges `main` and shows its local `uv run --frozen pytest -m models -rA tests/test_g1_13.py` passing, with the snapshot's only difference the four outputs. Only then does #400 merge, and `main`'s `test-models` confirms it with `isolated` true (P7c).
 
+## P14 to P17. Speed and memory (G1-9, G1-10)
+
+**The finding** (stage 3, #503: `results/full.json` at 47cdcf2, on the Owner's Mac, an Apple M4 with 16 GB). G1-8 and G1-12 pass. G1-9 fails: the product's RTF is 0.845 over AMI full and 0.891 on the one-hour recording, against 0.50. G1-10 fails on memory: the one-hour recording's peak RSS is 4.099 × 10⁹ B, against 4.0 × 10⁹ (AMI full's largest file gives 4.47 × 10⁹). The diarization stage's seconds are the product's on both sets, since ASR's 0.20 runs beside it.
+
+**Where the time and memory go.** Profiled in a cloud container (4 vCPUs, Linux x86_64, torch 2.8.0+cpu, 4 threads each for CTranslate2 and torch), on `main`'s code with the pinned models. Absolute times differ from the Mac's; the shares and ratios are what carry over. "AMI-ci" is ES2004a's 300 s crop, "ES2004a" the whole 1,049 s meeting, and "one-hour" the recording `sets.toml` builds (EN2002a, then EN2002b's first 1,457.29 s), from the AMI WAVs, checked against `sources.toml`'s SHA-256.
+
+| | Two-speaker clip (67 s) | AMI-ci (300 s) |
+| --- | --- | --- |
+| Diarization alone, `main` | 61 s, of which embeddings 56 s | 261 s, of which embeddings 251 s and segmentation 6 s |
+| Diarization alone, P14 | 16.5 s | 57.5 s |
+| Its peak RSS, `main` → P14 | 2.41 → 1.00 × 10⁹ B | 2.48 → 1.06 × 10⁹ B |
+| ASR alone | — | 30 s, peak 2.03 × 10⁹ B |
+| Both, side by side, `main` | — | 303 s, peak 4.43 × 10⁹ B |
+
+On the one-hour recording, ASR alone takes 708 s (RTF 0.197) with a peak of 5.03 × 10⁹ B on `main`, and 692 s with 2.38 × 10⁹ B with P15, the same 9,249 words.
+
+- **Diarization is the embedding step,** 92–96 % of its time; segmentation is about 2 %. pyannote.audio 3.4's `SpeakerDiarization.get_embeddings` slides a 10 s window in 1 s steps (`segmentation_step` 0.1) and runs the WeSpeaker ResNet34 once for each (chunk, local speaker) pair: three per chunk, active or not, in batches of 32 (`embedding_batch_size` in the pinned `config.yaml`). py-spy puts 62 % of the run in the ResNet, 49 % in its convolutions, and 2.5 % in the fbank. A microbenchmark of the model gives, per chunk, 327 ms at batch 32, 273 ms at batch 8 and 186 ms at batch 1. Pooling three speakers' masks from one pass costs the same as pooling one (281 ms against 273 ms at batch 8): the pooling and the linear head are about 1 ms.
+- **The mask enters only at the pooling layer.** `WeSpeakerResNet34.forward(waveforms, weights)` computes the fbank and `forward_frames` from the waveform alone, and `forward_embedding` applies the weights in `StatsPool`, which takes weights of shape (batch, speakers, frames) and pools each speaker with the same `_pool` as the two-dimensional case. So every speaker of a chunk can be pooled from one pass. The chunks' speakers: AMI-ci has 0.99 active speakers per chunk (33 % of pairs), ES2004a 1.75 (58 %) and the one-hour recording 2.17 (72 %), measured from the pinned segmentation. Skipping the inactive pairs alone would save only 28 % on the one-hour recording; one pass per chunk saves two thirds of the passes whatever the speakers.
+- **The inactive pairs never reach the output.** `AgglomerativeClustering.filter_embeddings` keeps only active pairs (any frame on) with no NaN, for the dendrogram and the centroids. `assign_embeddings` uses an unconstrained `argmax` per pair (`constrained_assignment` is `False`), and `apply` then sets `hard_clusters[inactive_speakers] = -2` before `reconstruct`. `max_num_embeddings` is infinite, so there is no sampling.
+- **Memory, diarization:** the batch of 32 ten-second windows through the ResNet is a transient of about 1.4 × 10⁹ B (peak 2.41–2.48 against 1.0–1.06 at one chunk). It doesn't grow with the file.
+- **Memory, ASR:** faster-whisper 1.2.1's `WhisperModel.transcribe` joins the VAD's speech and calls its `FeatureExtractor` once on all of it (`transcribe.py`, line 916). That builds the windowed frames, the complex64 STFT and its `astype` copy, the power spectrum, the mel matrix and the log's temporaries, for the whole file at once: a transient of 2.6 × 10⁹ B for 3,600 s (0.61 × 10⁹ B for 600 s), on top of the 1.7 × 10⁹ B resident once the model has loaded. It grows with the speech's length, and it comes at the start of `transcribe`, while diarization runs beside it.
+- **Side by side,** the two transients overlap the resident models. AMI-ci's 4.43 × 10⁹ B in this container is the Mac's figure (4.10 and 4.47), so the peak is the models and these two transients, not the audio (230 MB an hour) or pyannote's arrays (tens of MB an hour).
+
+**What was ruled out, or held back:**
+- *Halving each library's threads* while they run side by side: slower than one after the other (AMI-ci: 121 s against 95 s), and it would change the threads fixed per machine (Q7).
+- *`segmentation_step` 0.1 → 0.2* would halve the passes again but changes the turns, and with them G1-8's DER, whose margin is 1.5 points. Not needed after P14.
+- *The Mac's GPU (MPS)* for the ResNet: `architecture.md` "Device" allows it only after an investigation shows it faster and identical on repeated runs. CI can't run it. Held back unless P17 misses.
+- *Smaller embedding batches alone* (32 → 8): 1.5 times faster and half the memory, but P14 supersedes it.
+- *The audio decoded once:* it already is. `pipeline.transcribe` decodes once and both stages read the same array; pyannote's `Audio.crop` slices the in-memory waveform.
+
+### P14. One ResNet pass per chunk
+
+**The change, in `diarize.py`.** A function `chunk_embeddings(pipeline, file, binary_segmentations, exclude_overlap=False, hook=None) -> numpy.ndarray`, with the signature and result of pyannote.audio 3.4's `SpeakerDiarization.get_embeddings`: a `(num_chunks, num_speakers, dimension)` float32 array. `load` installs it on the pipeline it builds, after `instantiate`: `pipeline.get_embeddings = functools.partial(chunk_embeddings, pipeline)`. pyannote.pipeline's `__setattr__` stores anything that is neither a `Parameter` nor a `Pipeline` as a plain attribute, so `apply`'s `self.get_embeddings(...)` calls it. It follows `get_embeddings` step for step, except where marked:
+1. `duration`, `num_chunks, num_frames, num_speakers`, and `min_num_frames` exactly as pyannote computes them: with `exclude_overlap`, `ceil(num_frames * embedding.min_num_samples / (duration * embedding.sample_rate))`, else −1.
+2. `data = nan_to_num(binary_segmentations.data, nan=0.0).astype(float32)`. The clean masks: with `exclude_overlap`, `data * (data.sum(axis=2, keepdims=True) < 2)`, else `data`. Each pair's mask is its clean mask if that sums to more than `min_num_frames`, else its full mask: pyannote's `used_mask`, as an array of shape `(num_chunks, num_frames, num_speakers)`.
+3. `active = data.sum(axis=1) > 0`, of shape `(num_chunks, num_speakers)`: pyannote's own test, in `filter_embeddings` and `apply`.
+4. **Changed:** the result starts as all NaN. For each chunk `c` with any active speaker, in order: its waveform is `pipeline._audio.crop(file, binary_segmentations.sliding_window[c], duration=duration, mode="pad")`, as pyannote crops it. Then, inside `torch.inference_mode()`, `pipeline._embedding.model_(waveform[None], weights=w)`, where `w` is the chunk's masks as a `(1, num_speakers, num_frames)` tensor, gives `(1, num_speakers, dimension)`. The chunk's active speakers' rows are written to the result, and its inactive speakers' rows stay NaN. A chunk with no active speaker isn't run.
+5. `hook("embeddings", None, total=n, completed=0)` before the loop, and `hook("embeddings", None, total=n, completed=i)` after the `i`-th of the `n` chunks run, so pyannote's progress hook sees the same step name. The training cache branch is left out: `lmt` never trains.
+
+One chunk per call, not a batch: in this container it is the fastest per chunk (above), and a chunk's embedding then depends on nothing but its own waveform and masks. `load` no longer reads `embedding_batch_size`, which only pyannote's own `get_embeddings` used. `segmentation_batch_size` stays 32. Nothing else in the pipeline, its parameters, the models or the threads changes.
+
+**What it gives** (the container, against `main`'s path, same input):
+- Turns: byte-identical RTTM to `main`'s on the two-speaker clip and AMI-ci, and on ES2004a to the inactive-pairs-skipped path at batch 8 (`main`'s own path wasn't run on all of ES2004a or the one-hour recording, at about 0.9 RTF here). The active pairs' embeddings differ from `main`'s, on AMI-ci, by at most 3.6 × 10⁻⁷ (relative), the float noise of a different batch through the same convolutions.
+- Diarization alone: 3.7 times faster on the two-speaker clip, 4.5 times on AMI-ci, and 1.6 times faster on ES2004a than skipping the inactive pairs alone. Its peak RSS: 1.0–1.06 × 10⁹ B, down from 2.41–2.48.
+- On the one-hour recording, diarization alone takes 530 s (RTF 0.147) with P14 and P15, one after the other (P16's table).
+- On the Mac, expected: diarization's RTF from 0.84–0.89 to about 0.2, so the product's from 0.85–0.89 to about 0.4 with P16's order, ASR's 0.20 then diarization's (P17 measures it). The memory peak falls by about 1.4 × 10⁹ B.
+
+**Risk to G1-8 and G1-12.** The turns were the same as `main`'s on both files compared (above); an embedding's last bits may differ, which could in principle move a pair across the clustering threshold (0.7046) and shift a turn, so AMI full's DER is re-measured (P17). It is deterministic: each chunk is computed alone, in a fixed order, with `configure_torch`'s threads, `use_deterministic_algorithms` and seed.
+
+**Tests.** `tests/test_diarize.py`:
+- **`load` installs it** (`fake` fixture, tagged `G1-9`, `G1-10`): the fake pipeline's `get_embeddings` is a `functools.partial` of `diarize.chunk_embeddings` bound to that pipeline.
+- **One pass per chunk, on fakes** (tagged `G1-9`): a fake pipeline whose `_embedding.model_` records the shape of each `waveforms` and `weights` it gets and returns, for each speaker, a row filled with that speaker's mask sum; `_audio.crop` returns a waveform filled with the chunk's index; `min_num_samples`, `sample_rate`, `dimension` set. With a `SlidingWindowFeature` of 4 chunks, 3 speakers and 10 frames: chunk 0 has one speaker on, chunk 1 none, chunk 2 two speakers overlapping in some frames, chunk 3 all three. The model is called 3 times (chunks 0, 2, 3), each with a `(1, 1, num_samples)` waveform and `(1, 3, 10)` weights; chunk 1's and every inactive speaker's rows are NaN; and each active row matches pyannote's `used_mask` rule, both the clean mask and, where the clean part is at or below `min_num_frames`, the full one. With `exclude_overlap=False`, the full masks.
+- **The same turns as pyannote's own path** (`@pytest.mark.models`, tagged `G1-9`, `G1-12`): on the two-speaker clip, `Diarizer.raw` from a `load`ed diarizer, and again with `pipeline.get_embeddings` deleted from the instance (so pyannote's method runs), are equal. The active pairs' embeddings, captured through the `hook` argument of a direct pipeline call, agree to `rtol=1e-4, atol=1e-5`.
+- G1-3's test and the other `models` tests pass unchanged.
+
+**Test of the item:** those tests, the `test` job, and `test-models` green. The PR also gives, from the Developer's run, `lmt transcribe tests/fixtures/two_speakers.wav -v`'s `diarize` time on `main` and on the branch, and `eval-ci`'s AMI-ci DER unchanged (G1-8c).
+
+### P15. The log-mel in blocks
+
+**The change, in `asr.py`.** A class `BlockwiseLogMel`, wrapping faster-whisper's `FeatureExtractor`. `load` installs it after building the model: `model.feature_extractor = BlockwiseLogMel(model.feature_extractor)`. `transcribe` reads the extractor's `sampling_rate`, `hop_length`, `chunk_length`, `n_samples`, `nb_max_frames` and `time_per_frame`, so the wrapper passes every attribute read through to the wrapped extractor (`__getattr__`). `asr.py` still imports `faster_whisper` only inside `load`, so the class itself imports nothing from it. `BLOCK_FRAMES = 3000`, 30 s.
+
+`__call__(self, waveform, padding=160, chunk_length=None)` computes what `FeatureExtractor.__call__` does, with the same operations in the same order on the same dtypes, a block of frames at a time:
+1. If `chunk_length` is given, it sets the wrapped extractor's `n_samples` and `nb_max_frames` as `FeatureExtractor.__call__` does. The waveform becomes float32 if it isn't, and is padded with `padding` zeros at the end, then reflect-padded by `n_fft // 2` at both ends: `stft`'s `center` padding.
+2. The frames: `n_frames = 1 + (len(padded) - n_fft) // hop_length`, of which the first `n_out = n_frames - 1` are kept (faster-whisper drops the last, `stft[..., :-1]`). The output is a preallocated `(n_mels, n_out)` float32 array.
+3. The blocks: `n_blocks = max(1, ceil(n_out / BLOCK_FRAMES))`, with bounds `n_out * i // n_blocks` for `i` in `0..n_blocks`, so every block holds 1,500 to 3,000 frames once there's more than one. **No block may be a single frame:** a 1-column matrix product takes BLAS's matrix-vector path, whose sums differ in the last bit (measured: a 3,001-frame input split 3,000 + 1 is not bit-identical; split evenly it is).
+4. Each block: its frames as a strided view of `padded[f0 * hop : (f1 - 1) * hop + n_fft]`; times the float32 Hann window `numpy.hanning(n_fft + 1)[:-1]`; `numpy.fft.rfft(..., n=n_fft, axis=-1)`, transposed and `.astype("complex64")`; `numpy.abs(...) ** 2`; `mel_filters @ ...`; `numpy.log10(numpy.clip(..., a_min=1e-10, a_max=None))`, written into the block's columns.
+5. Then, on the whole array, in place: `maximum(out, out.max() - 8.0)`, `+ 4.0`, `/ 4.0`. The clamp needs the whole file's maximum, which is why it comes last.
+
+**What it gives** (the container): bit-identical output on 95 lengths, from 161 samples to 1,049 s, random and ES2004a's audio, including every remainder from −3 to +11 frames around 1, 2 and 5 blocks. The transient for 3,600 s of noise falls from 2.6 × 10⁹ B to 0.23 × 10⁹ B, the output array included, and it runs in 6 s against 16 s. On the one-hour recording, ASR alone's peak falls from 5.03 to 2.38 × 10⁹ B, with the same 9,249 words, byte for byte. With P16's order, ASR's stage is the product's peak on long files, so on the Mac the one-hour recording's should fall by about as much.
+
+**Risk to G1-8 and G1-12:** none if the output is bit-identical, which the test checks on both platforms. macOS's numpy uses Accelerate, not OpenBLAS, so its matrix product might not be column-for-column the same across block widths. If the `macos` test run fails on bit-equality, the Developer holds the item for the Architect with the failing lengths (`needs-decision:architect`); no tolerance is added.
+
+**Tests.** `tests/test_asr.py` (the `test` job on both platforms: faster-whisper's `feature_extractor` module is pure numpy, so no model is needed):
+- **Bit-identical** (tagged `G1-10`, `G1-12`): for 128 mels (distil-large-v3's), with `chunk_length=30`, `BlockwiseLogMel(FeatureExtractor(feature_size=128))(x)` and `FeatureExtractor(feature_size=128)(x)` are `numpy.array_equal`, in shape and dtype, for: lengths 161, 400 and 1,000 samples; and `160 * (3000 * k + r) + d` samples for `k` in 1, 2 and 5, `r` from −3 to 11 and `d` in 0 and 37, on seeded noise. The case `k = 1, r = 1` is the single-frame block the bounds avoid.
+- **Bounded memory** (tagged `G1-10`): on 600 s of seeded noise, `tracemalloc`'s peak (numpy reports its allocations to it) for the wrapper is under a quarter of the plain extractor's.
+- **Installed, with attributes passed through** (`fake` fixture): the fake `WhisperModel` gains a `feature_extractor`, a `types.SimpleNamespace` with `sampling_rate=16000` and `nb_max_frames=3000`. After `asr.load`, the model's `feature_extractor` is a `BlockwiseLogMel` wrapping that namespace, and its `sampling_rate` and `nb_max_frames` read through. `test_load`'s settings are unchanged.
+
+**Test of the item:** those tests in the `test` job on both platforms, and G1-1's test and `eval-ci` unchanged (the same words, so the same WER).
+
+### P16. ASR, then diarization
+
+**Why.** With P14 and P15, the two stages side by side still peak at 3.83 × 10⁹ B on the one-hour recording in the container, 4 % under G1-10's bound, because both models and both stages' working memory are resident at once. `architecture.md` "Run order" lets the internal design run them one after the other "if memory (Q3) … needs it", and this is that case. It is also faster wherever it was measured, since each library then has every core for its fixed threads.
+
+| One-hour recording, P14 and P15 (container) | Wall time | RTF | Peak RSS |
+| --- | --- | --- | --- |
+| Side by side | 1,855 s (ASR 1,680 s, diarization 1,850 s) | 0.515 | 3.83 × 10⁹ B |
+| One after the other, ASR's model collected in between | 1,180 s (ASR 646 s, then diarization 530 s) | 0.328 | 2.53 × 10⁹ B |
+
+Side by side, ASR took 2.4 times as long as alone (1,680 s against 692 s), and diarization's ResNet likewise: CTranslate2's and torch's 4 threads each oversubscribe 4 vCPUs. The Mac's 10 cores take 8 + 8 threads, so its cost of running side by side is likely smaller, but stage 3 can't show it: Whisper's and pyannote's RTFs in `results/full.json` are the stages' own seconds inside the product run (`eval/runner.py`, `hypotheses`), not separate runs. Serial gives up only the overlap, at most ASR's share (Whisper's 0.20 on the Mac).
+
+**The change, in `pipeline.py`:** `PARALLEL = False`, with its comment saying why: the architecture's "Run order", for G1-10's memory (this item). In the serial branch, after `words = _timed(timings, "asr", run_asr)` and before diarization, `gc.collect()`, so the ASR model is freed before diarization's loads. `run_asr` keeps no reference to the engine, so CPython's reference counts free it on return in a plain run. But `lmt eval`'s worker wraps the engine's `transcribe` in a function that refers back to the engine (`eval/worker.py`, `Stages.loader`), a cycle that only the collector frees, and G1-10's peak is the harness's. The side-by-side branch stays, for the tests that set `PARALLEL = True`, and as G2's or a later machine's option.
+
+**Risk to G1-8 and G1-12:** none to the outputs. Each stage's result depends only on the audio and its own fixed threads, so the order changes no word or turn: the one-hour recording's turns were byte-identical in the two orders, and its 9,249 words the same. The existing `test_speaker_options_reach_diarization` already runs both orders.
+
+**Tests.** `tests/test_pipeline.py`:
+- **The default** (tagged `G1-9`, `G1-10`): `pipeline.PARALLEL is False`.
+- **ASR's model is gone before diarization loads** (with the existing `fakes`, tagged `G1-10`): the fake ASR engine registers a `weakref.ref` to itself and keeps a reference cycle, as the eval worker's wrapper does (`self.transcribe` a closure over `self`); the fake `diarize.load` records whether that weak reference is dead when it is called. With `PARALLEL` at its default, it is dead. The same test with `gc.collect` monkeypatched to do nothing fails, which the PR shows locally.
+- The other pipeline tests pass with the new default.
+
+**Test of the item:** those tests, the `test` job, and `test-models` and `eval-ci` green with the same figures as before (`eval-ci`'s double run compares them, G1-5).
+
+### P17. The Mac's re-measurement
+
+Once P14, P15 and P16 have merged, the builder runs on the Owner's Mac, at `main`'s head with its gate green:
+1. **First, the quick check (about 30 min):** `/usr/bin/time -l uv run --frozen lmt transcribe <data cache>/derived/one-hour/one-hour.wav -v -o <scratch dir>`, which prints each stage's seconds and the maximum resident set size. It passes if the wall time is at most 1,800 s (RTF 0.50) and the peak at most 4.0 × 10⁹ B, with some margin: the expected figures are about 0.4 and about 2.5 × 10⁹ B. The builder posts the stage times, the wall time and the peak on #123.
+2. **If it passes, the full run** (`lmt eval --set full`, its double CI run first), and its `results/full.json` and README table by PR, as in stage 3. It must meet G1-8 again (AMI full's WER 24.3 % has 0.7 points of margin, and P14's turns, and so the turns-first segments, may move by float noise), G1-9, G1-10 and G1-12.
+3. **If the quick check misses,** the builder posts the figures on #123 for the Architect, and doesn't start the full run. The next remedies, in order: the ResNet on the Mac's GPU, after `architecture.md` "Device"'s investigation (faster, and identical on repeated runs); then `segmentation_step` 0.2, measured against G1-8's DER first; then side by side again, if the Mac's figures show it faster and its peak under the bound, which needs the Owner's word that "Run order" allows it for speed with memory to spare.
+
 ## Risks
 
+- **Stage 3's remedies rest on a container's profile.** P14's and P15's outputs are checked exactly, but their speed, and P16's, are measured on 4 Linux vCPUs. The Mac's ratios may differ, chiefly how batch size behaves on its 4 + 6 cores, and the Mac may lose more than the container does from giving up the overlap. P17's quick check finds that in under an hour, before the 14-hour run.
+- **G1-8's margins.** AMI full's WER has 0.7 points and DER 1.5. P14 to P16 change no setting, and their outputs matched `main`'s exactly in every case measured, so the risk is float noise in the embeddings. P17's full run is what shows it.
 - **G1-8c's first reading** may miss a bound, most likely AMI-ci's DER or WER on one 300 s meeting. That goes to the Architect (P2b, above), and only P2b waits. The bounds don't move. It missed AMI-ci's DER (0.426, #343), and P12 is the fix.
 - **P12 rests on one meeting.** #372 measured turns-first on ES2004a alone, which is all of AMI-ci. AMI full, in stage 3 (G1-8), tests whether it holds across meetings. P12's other risk is WER where turns overlap (P12, "Where turns overlap"): its PR measures AMI-ci's WER, and #343's 0.182 leaves 0.068 to the bound.
-- **Determinism of the double run.** ASR and diarization run side by side. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3.
+- **Determinism of the double run.** ASR and diarization ran side by side until P16. If the two runs differ, the Developer sets `pipeline.PARALLEL = False`, as `g1-slice.md` S6 allows, and says so on the item. That changes the product, so the PR is tier 3. P16 makes it the default.
 - **`test-models` time.** These items add about 10 product runs on 60 s clips (P4's silence, noise and mutations; P5; P7c), on top of G1-1's and G1-2's six. The total comes to about 16 runs, 20 to 25 minutes, inside the job's 30-minute timeout and over the architecture's estimate of about 8 runs. The first PR that passes 1.5 times the estimate says so on its item, and the Architect re-sizes the job in `architecture.md` ("CI"), or splits it.
 - **FFmpeg's output on stderr.** Decode already keeps FFmpeg's own log off through `av.logging` (`src/lmt/audio.py`, its docstring). If FFmpeg's output still reaches stderr on a corrupt input, breaking "one line", P4's test finds it, and that's a product finding for the Architect (P4, above).
 - **Other libraries' output on stderr.** onnxruntime's was the first (P11), and matplotlib's font-cache warning the second (P13). Any other library line that reaches stderr is a product finding too, fixed in the stage that loads the library. The test that found it doesn't change.
