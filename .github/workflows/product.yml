@@ -198,9 +198,6 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-  # The CI subset, cached by the manifests' hash, fetched and verified on every run (design/internal/g1-stage1.md
-  # §5a), and `lmt eval --set ci` run twice on it: G1-5's comparison and G1-8c's bounds
-  # (design/internal/g1-stage2.md, P2b).
   # The browser tests (G3-5, G3-2's Chrome parse) on the runner's headless Chrome and its matching
   # chromedriver (CHROMEWEBDRIVER); nothing is downloaded (#83, 8a). 3d adds the record and screenshot.
   browser:
@@ -223,6 +220,9 @@ jobs:
       - run: google-chrome --version && "$CHROMEWEBDRIVER/chromedriver" --version
       - run: uv run --frozen pytest -m browser
 
+  # The CI subset, cached by the manifests' hash, fetched and verified on every run (design/internal/g1-stage1.md
+  # §5a), and `lmt eval --set ci` run twice on it: G1-5's comparison and G1-8c's bounds
+  # (design/internal/g1-stage2.md, P2b).
   eval-ci:
     needs: changes
     if: fromJSON(needs.changes.outputs.tier) >= 3
