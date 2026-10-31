@@ -144,7 +144,7 @@ class RealSpecTest(unittest.TestCase):
     def test_real_registry_loads(self):
         ids = criteria.spec_ids(REPO_ROOT / "spec" / "acceptance.md")
         jobs, entries = criteria.load_registry(REPO_ROOT / "tests" / "criteria.toml", ids)
-        self.assertEqual(jobs, ["readme", "test", "test-models", "eval-ci"])
+        self.assertEqual(jobs, ["readme", "test", "test-models", "eval-ci", "browser"])
         self.assertEqual({k for k, e in entries.items() if e["complete"]},
                          {"S1-1", "S1-2", "S1-3", "S1-5", "G1-1", "G1-2", "G1-3", "G1-4", "G1-5", "G1-6", "G1-7",
                           "G1-8", "G1-8c", "G1-9", "G1-10", "G1-11", "G1-12", "G1-13", "G1-14"})
