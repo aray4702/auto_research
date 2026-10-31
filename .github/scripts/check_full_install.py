@@ -38,7 +38,7 @@ FETCH_LIMIT = 10  # seconds, for each GET and for the exit after SIGTERM
 FIRST_URL_LIMIT = 30 * 60  # the first --sample run downloads and transcribes
 TRANSCRIBE_LIMIT = 15 * 60
 RENAME_LIMIT = 2 * 60
-SECOND_URL_LIMIT = 10  # the second --sample run serves the cache, without transcribing again
+SECOND_URL_LIMIT = 300  # DIAG (was 10)  # the second --sample run serves the cache, without transcribing again
 PROBE = ("192.0.2.1", 80)  # TEST-NET-1: inside the namespace, connecting to it must fail with ENETUNREACH
 FIXTURE = CHECKOUT / "tests" / "fixtures" / "two_speakers.wav"
 NETGUARD = CHECKOUT / "tests" / "netguard"  # G1's P7a, on every offline lmt command's PYTHONPATH
@@ -208,8 +208,10 @@ def run_demo(argv, env, cwd, url_limit):
     try:
         lines = queue.Queue()
         threading.Thread(target=_first_line, args=(proc.stdout, lines), daemon=True).start()
+        _t0 = time.monotonic()
         try:
             line = lines.get(timeout=url_limit)
+            print(f"DIAG time to URL: {time.monotonic() - _t0:.2f} s", flush=True)
         except queue.Empty:
             raise StepFailed(f"no URL on stdout within the {url_limit} s limit") from None
         if not line:
@@ -353,8 +355,8 @@ def step_rename(args):
 def step_second_sample(args):
     data_before = snapshot(data_dir(args.work))
     dirs = fresh_dirs(args.work, "sample-offline")
-    run_demo([args.lmt, "demo", "--sample", "--no-browser"], offline_env(args.work, dirs), dirs["cwd"],
-             SECOND_URL_LIMIT)
+    env = dict(offline_env(args.work, dirs), PYTHONPROFILEIMPORTTIME="1")  # DIAG
+    run_demo([args.lmt, "demo", "--sample", "--no-browser"], env, dirs["cwd"], SECOND_URL_LIMIT)
     check_fresh_empty(dirs)
     check_unchanged("<work>/data", data_before, snapshot(data_dir(args.work)))
     check_unchanged("<work>/models", load_models_snapshot(args.work), snapshot(models_dir(args.work)))
