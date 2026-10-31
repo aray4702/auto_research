@@ -42,41 +42,6 @@ size = 120378
 
 # Whisper: no command reaches it since G4; #584 removes it.
 [[model]]
-name = "distil-large-v3"
-role = "asr"                              # asr | diarization | segmentation | embedding
-repository = "Systran/faster-distil-whisper-large-v3"
-revision = "c3058b475261292e64a0412df1d2681c06260fab"
-licence = "MIT"
-creators = "SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3"
-card = "https://huggingface.co/Systran/faster-distil-whisper-large-v3"
-gated = false
-
-[[model.file]]
-path = "config.json"
-sha256 = "90c55f775cc4e0bb17293d0bf12f96557a486f20dea886fabd8e6075a3588b21"
-size = 2690
-
-[[model.file]]
-path = "model.bin"
-sha256 = "b79368e19b6623813609431a6e5ee309a71506701ebc49fd7820e692dec7c5f5"
-size = 1512927867
-
-[[model.file]]
-path = "preprocessor_config.json"
-sha256 = "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
-size = 340
-
-[[model.file]]
-path = "tokenizer.json"
-sha256 = "6d8cbd7cd0d8d5815e478dac67b85a26bbe77c1f5e0c6d76d1ce2abc0e5f21ca"
-size = 2480617
-
-[[model.file]]
-path = "vocabulary.json"
-sha256 = "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
-size = 1068114
-
-[[model]]
 name = "speaker-diarization-3.1"
 role = "diarization"
 repository = "pyannote/speaker-diarization-3.1"
