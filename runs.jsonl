@@ -1649,3 +1649,4 @@
 {"at": "2026-10-31T21:33:15+00:00", "event": "start", "item": 590, "pid": 19131, "role": "architect", "run_id": "architect-20261031T213307Z", "task": "PR #590 needs work: it conflicts with main."}
 {"at": "2026-10-31T21:35:24+00:00", "cost_usd": 0.3204, "denials": 1, "denied": ["Bash: gh pr"], "event": "end", "five_hour": null, "item": 590, "role": "architect", "run_id": "architect-20261031T213307Z", "seven_day": 0.58, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 19}
 {"at": "2026-10-31T21:37:50+00:00", "cost_usd": 0.827746, "denials": 1, "denied": ["Bash: git merge-base ;"], "event": "end", "five_hour": null, "item": 589, "role": "developer", "run_id": "developer-20261031T212830Z", "seven_day": 0.58, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 40}
+{"at": "2026-10-31T21:40:03+00:00", "event": "start", "item": 589, "pid": 26762, "role": "reviewer", "run_id": "reviewer-20261031T213958Z", "task": "Review PR #589."}
