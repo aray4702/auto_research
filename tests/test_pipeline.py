@@ -5,9 +5,9 @@ import json
 import wave
 
 import pytest
-from test_models_live import live_manifest
+from fake_engine import INFO, FakeEngine
 
-from lmt import asr, cli, diarize, models, pipeline
+from lmt import cli, diarize, engines, models, pipeline
 from lmt.transcript import Turn, Word
 
 WORDS = [Word(0.1, 0.4, "Hello", 0.9), Word(0.5, 0.9, "there.", 0.8), Word(1.1, 1.6, "Hi.", 0.7)]
@@ -15,12 +15,13 @@ TURNS = [Turn(0.0, 1.0, "SPEAKER_00"), Turn(1.0, 1.9, "SPEAKER_01")]
 
 
 class Fakes:
-    """asr.load, diarize.load and models.ensure replaced, recording every call."""
+    """engines.load, diarize.load and models.ensure replaced, recording every call."""
 
     def __init__(self, monkeypatch, tmp_path):
         self.calls = []
         self.words = list(WORDS)
         self.ensured = None
+        self.loads = []  # engines.load's (name, offline)
 
         def ensure(needed, offline=False):
             self.calls.append("ensure")
@@ -29,8 +30,8 @@ class Fakes:
 
         fakes = self
 
-        class Engine:
-            def transcribe(self, audio, initial_prompt=None):
+        class Engine(FakeEngine):
+            def transcribe(self, audio):
                 fakes.calls.append("asr")
                 return list(fakes.words)
 
@@ -39,16 +40,17 @@ class Fakes:
                 fakes.calls.append(("diarize", options))
                 return list(TURNS)
 
-        def load_asr(model_dir):
+        def load_engine(name, *, offline):
             self.calls.append("load asr")
-            return Engine()
+            self.loads.append((name, offline))
+            return Engine(name=name)
 
         def load_diarizer(dirs):
             self.calls.append("load diarize")
             return Diarizer()
 
         monkeypatch.setattr(models, "ensure", ensure)
-        monkeypatch.setattr(asr, "load", load_asr)
+        monkeypatch.setattr(engines, "load", load_engine)
         monkeypatch.setattr(diarize, "load", load_diarizer)
 
 
@@ -94,21 +96,36 @@ def test_writes_the_four_files_and_prints_their_paths(fakes, wav, out, capsys):
     assert [s["speaker"] for s in doc["segments"]] == ["S1", "S2"]
     assert doc["source"] == {"file": "meeting.wav", "duration": 2.0}
     manifest = models.load_manifest()
-    asr_model, diarization = manifest.get(manifest.default_asr), manifest.get(diarize.DIARIZATION)
+    diarization = manifest.get(diarize.DIARIZATION)
+    assert doc["schema_version"] == "1.2"
     assert doc["models"] == {
-        "asr": {"name": asr_model.name, "repository": asr_model.repository, "revision": asr_model.revision},
+        "asr": INFO,
         "diarization": {"name": diarization.name, "repository": diarization.repository,
                         "revision": diarization.revision},
     }
-    assert fakes.ensured == [m.name for m in models.default_models(manifest)]
+    assert fakes.loads == [("kyutai", False)]  # the engine ensures its own model
+    assert fakes.ensured == [m.name for m in models.diarization_models(manifest)]
     assert stderr == ""
 
 
-def test_transcribe_never_ensures_the_live_default(fakes, wav, out, capsys, monkeypatch, tmp_path):
-    monkeypatch.setattr(models, "MANIFEST_PATH", live_manifest(tmp_path))  # default "tiny", live "other"
-    code, _, stderr = run(capsys, "transcribe", wav, "-o", out)
+@pytest.mark.parametrize("argv, expected", [([], "kyutai"), (["--engine", "kyutai"], "kyutai"),
+                                            (["--engine", "apple"], "apple")])
+def test_engine_reaches_engines_load_and_the_transcript(fakes, wav, out, capsys, argv, expected):
+    code, _, stderr = run(capsys, "transcribe", wav, "-o", out, "--offline", *argv)
     assert code == 0, stderr
-    assert fakes.ensured == ["tiny", "diar", "seg", "emb"]
+    assert fakes.loads == [(expected, True)]
+    doc = json.loads((out / "meeting.json").read_text(encoding="utf-8"))
+    assert doc["models"]["asr"]["engine"] == expected
+
+
+def test_an_engine_that_cant_run_exits_5_and_writes_nothing(wav, out, capsys, monkeypatch):
+    def load(name, *, offline):
+        raise engines.ModelError(f"--engine {name}", "not in this build")
+
+    monkeypatch.setattr(engines, "load", load)
+    code, stdout, stderr = run(capsys, "transcribe", wav, "-o", out, "--engine", "apple")
+    assert (code, stdout, stderr) == (5, "", "lmt: error: --engine apple: not in this build\n")
+    assert list(out.iterdir()) == []
 
 
 @pytest.mark.parametrize("parallel", [True, False])
@@ -124,8 +141,7 @@ def test_no_diarize_never_loads_diarization(fakes, wav, out, capsys):
     assert code == 0, stderr
     assert "load diarize" not in fakes.calls
     assert not [c for c in fakes.calls if isinstance(c, tuple)]
-    manifest = models.load_manifest()
-    assert fakes.ensured == [manifest.default_asr]
+    assert fakes.ensured == []
     doc = json.loads((out / "meeting.json").read_text(encoding="utf-8"))
     assert doc["models"]["diarization"] is None
     assert {s["speaker"] for s in doc["segments"]} == {"S1"}
@@ -153,10 +169,11 @@ def test_missing_output_directory_exits_3_before_any_work(fakes, wav, tmp_path, 
     assert stderr.startswith("lmt: error: ") and len(stderr.splitlines()) == 1
 
 
-def test_unknown_model_exits_2_before_any_work(fakes, wav, out, capsys):
-    code, stdout, stderr = run(capsys, "transcribe", wav, "-o", out, "--model", "tiny")
+@pytest.mark.parametrize("argv", [["--engine", "whisper"], ["--model", "tiny"]])
+def test_unknown_engine_or_the_old_model_option_exits_2_before_any_work(fakes, wav, out, capsys, argv):
+    code, stdout, stderr = run(capsys, "transcribe", wav, "-o", out, *argv)
     assert (code, stdout, fakes.calls) == (2, "", [])
-    assert stderr.startswith("lmt: error: --model: ")
+    assert stderr.startswith(f"lmt: error: {argv[0]}: ")
 
 
 def test_no_words_exits_4_and_writes_nothing(fakes, wav, out, capsys):

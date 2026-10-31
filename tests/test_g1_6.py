@@ -8,10 +8,9 @@ import pytest
 import test_models
 import test_pipeline
 from conftest import CLIP, run_lmt
-from test_models import fake_manifest
 from test_pipeline import run
 
-from lmt import asr, diarize, models
+from lmt import diarize, models
 
 pytestmark = pytest.mark.criterion("G1-6")
 # Their fixtures: test_pipeline's Fakes, its silent WAV and output directory, and the fake hub.
@@ -87,18 +86,13 @@ def test_no_diarize(fakes, wav, out, capsys):
     assert doc["models"]["diarization"] is None
 
 
-def test_model(fakes, wav, out, capsys, monkeypatch, tmp_path):
-    (tmp_path / "manifest").mkdir()
-    monkeypatch.setattr(models, "MANIFEST_PATH", fake_manifest(tmp_path / "manifest"))  # ASR: tiny, other
-    monkeypatch.setattr(diarize, "DIARIZATION", "diar")
-    loaded, fake_load = [], asr.load
-    monkeypatch.setattr(asr, "load", lambda model_dir: loaded.append(model_dir) or fake_load(model_dir))
-    code, _, stderr = run(capsys, "transcribe", wav, "-o", out, "--model", "other")
+@pytest.mark.parametrize("argv, expected", [([], "kyutai"), (["--engine", "apple"], "apple")])
+def test_engine(fakes, wav, out, capsys, argv, expected):
+    code, _, stderr = run(capsys, "transcribe", wav, "-o", out, *argv)
     assert code == 0, stderr
-    assert loaded == [tmp_path / "other"]  # the fake ensure's directory for the model named "other"
+    assert fakes.loads == [(expected, False)]
     doc = json.loads((out / "meeting.json").read_text(encoding="utf-8"))
-    assert doc["models"]["asr"]["name"] == "other"
-    assert fakes.ensured == ["other", "diar", "seg", "emb"]
+    assert doc["models"]["asr"]["engine"] == expected
 
 
 @pytest.mark.parametrize("present", [False, True])
@@ -110,12 +104,13 @@ def test_offline(fakes, hub, wav, out, capsys, monkeypatch, present):
         hub["calls"].clear()
     code, stdout, stderr = run(capsys, "transcribe", wav, "-o", out, "--offline")
     assert hub["calls"] == [], "--offline never downloads"
+    assert fakes.loads == [("kyutai", True)], "the engine loads offline too"
     if present:
         assert code == 0, stderr
         assert sorted(out.iterdir()) == sorted(outputs(out))
     else:
         assert (code, stdout) == (5, "")
-        assert stderr == ("lmt: error: org/tiny/config.json: missing, and --offline never downloads; "
+        assert stderr == ("lmt: error: org/diar/config.yaml: missing, and --offline never downloads; "
                           "run lmt models download\n")
         assert list(out.iterdir()) == []
 
