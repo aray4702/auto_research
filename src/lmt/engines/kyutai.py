@@ -53,7 +53,8 @@ class Engine(engines.Engine):
         import mlx.core as mx
         import sentencepiece
         from mlx import nn
-        from moshi_mlx import models as moshi
+
+        from lmt._vendor.moshi_mlx import models as moshi
 
         config = json.loads((directory / CONFIG).read_text(encoding="utf-8"))
         stt = config["stt_config"]
@@ -88,7 +89,7 @@ class _Greedy:
     """moshi_mlx's sampler at temperature 0, keeping each step's log-probabilities for the token's probability."""
 
     def __init__(self):
-        from moshi_mlx.utils import Sampler
+        from lmt._vendor.moshi_mlx.utils import Sampler
 
         self._sampler = Sampler(temp=0.0, top_k=25)
         self.logprobs = None
@@ -105,8 +106,9 @@ class Stream(engines.Stream):
     def __init__(self, engine: Engine, rate: int = audio.SAMPLE_RATE):
         import mlx.core as mx
         import rustymimi
-        from moshi_mlx import models as moshi
-        from moshi_mlx.utils import Sampler
+
+        from lmt._vendor.moshi_mlx import models as moshi
+        from lmt._vendor.moshi_mlx.utils import Sampler
 
         self._mx = mx
         self._engine = engine
