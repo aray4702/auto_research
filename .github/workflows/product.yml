@@ -199,7 +199,7 @@ jobs:
           if-no-files-found: error
 
   # The browser tests (G3-5, G3-2's Chrome parse) on the runner's headless Chrome and its matching
-  # chromedriver (CHROMEWEBDRIVER); nothing is downloaded (#83, 8a). 3d adds the record and screenshot.
+  # chromedriver (CHROMEWEBDRIVER); nothing is downloaded (#83, 8a). Then the page's screenshot, and the record.
   browser:
     needs: changes
     if: fromJSON(needs.changes.outputs.tier) >= 2
@@ -218,7 +218,23 @@ jobs:
           enable-cache: true
       - run: uv sync --locked --all-extras
       - run: google-chrome --version && "$CHROMEWEBDRIVER/chromedriver" --version
-      - run: uv run --frozen pytest -m browser
+      - env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: uv run --frozen pytest -m browser --criteria-out=criteria-browser.json
+      # The page's screenshot, for the Reviewer (design/internal/g3-stage1.md §3, 3d).
+      - run: uv run --frozen python tests/browser/screenshot.py --transcript tests/fixtures/two_speakers.transcript.json --out "$RUNNER_TEMP/demo.png"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: demo-screenshot
+          path: ${{ runner.temp }}/demo.png
+      # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-browser
+          path: criteria-browser.json
+          retention-days: 90
+          if-no-files-found: error
 
   # The CI subset, cached by the manifests' hash, fetched and verified on every run (design/internal/g1-stage1.md
   # §5a), and `lmt eval --set ci` run twice on it: G1-5's comparison and G1-8c's bounds
