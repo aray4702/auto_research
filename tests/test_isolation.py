@@ -15,7 +15,7 @@ import lmt
 pytestmark = pytest.mark.criterion("G1-13")
 
 # Under CI on Linux (the ubuntu runner) wrap must isolate; elsewhere the isolated case skips.
-MUST_ISOLATE = bool(os.environ.get("CI")) and sys.platform.startswith("linux")
+MUST_ISOLATE = bool(os.environ.get("CI")) and sys.platform == "darwin"
 
 PRINT_ENV = "import json, os; print(json.dumps({'environ': dict(os.environ), 'uid': os.getuid()}))"
 CONNECT = """
@@ -129,12 +129,12 @@ class TestWrap:
     def test_where_it_isolates_the_child_has_no_route(self, env, tmp_path):
         completed, isolated = run_wrapped(CONNECT, env, tmp_path)
         if MUST_ISOLATE:
-            assert isolated, "under CI on Linux, wrap must isolate (sudo -n, unshare and setpriv)"
+            assert isolated, "under CI on macOS, wrap must isolate (sandbox-exec)"
         elif not isolated:
-            pytest.skip("wrap can't isolate here: no passwordless sudo, unshare or setpriv")
+            pytest.skip("wrap can't isolate here: no sandbox-exec, or already inside a sandbox")
         assert completed.returncode == 0, completed.stderr
-        # No route fails at once with ENETUNREACH; outside a namespace 192.0.2.1 times out, also an OSError.
-        assert completed.stdout.split() == ["OSError", "OSError", str(errno.ENETUNREACH)], completed.stdout
+        # The sandbox refuses the connect at once with EPERM; unsandboxed, 192.0.2.1 times out, also an OSError.
+        assert completed.stdout.split() == ["OSError", "PermissionError", str(errno.EPERM)], completed.stdout
 
 
 def test_run_isolated_runs_lmt(env, tmp_path):

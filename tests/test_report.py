@@ -24,7 +24,7 @@ MODELS = {
 FIGURES = [
     {"dataset": "LS-ci", "system": "product", "wer": 0.263158, "der": None,
      "audio_seconds": 8.0, "wall_seconds": 3.2, "rtf": 0.4, "peak_rss_bytes": 2000},
-    {"dataset": "LS-ci", "system": "whisper-alone", "wer": 0.263158, "der": None,
+    {"dataset": "LS-ci", "system": "asr-alone", "wer": 0.263158, "der": None,
      "audio_seconds": 8.0, "wall_seconds": None, "rtf": None, "peak_rss_bytes": None},
     {"dataset": "AMI-ci", "system": "product", "wer": None, "der": 0.117647,
      "audio_seconds": 16.0, "wall_seconds": 6.0, "rtf": 0.375, "peak_rss_bytes": 3000},
@@ -48,6 +48,31 @@ def test_write_replaces_an_existing_file(tmp_path):
     (tmp_path / "ci.json").write_text("old\n", encoding="utf-8")
     report.write(tmp_path / "ci.json", fixed())
     assert (tmp_path / "ci.json").read_bytes() == GOLDEN.read_bytes()
+
+
+def test_version_2_0_names_the_engine_and_apples_file():
+    # public-api.md, "Results file, version 2.0": `engine` after `set`; Apple's figures in <set>-apple.json.
+    results = report.build("full", [], MODELS, out_dir="results", engine="apple", commit=COMMIT, dirty=False,
+                           date=DATE, machine=MACHINE)
+    assert list(results)[:3] == ["schema_version", "set", "engine"]
+    assert (results["schema_version"], results["engine"]) == ("2.0", "apple")
+    assert fixed()["engine"] == "kyutai"
+    assert [report.file_name(s, e) for s in ("full", "live") for e in ("kyutai", "apple")] == [
+        "full.json", "full-apple.json", "live.json", "live-apple.json"]
+    with pytest.raises(ValueError, match="not 'whisper'"):
+        report.file_name("full", "whisper")
+    with pytest.raises(ValueError, match="not 'whisper'"):
+        report.build("full", [], MODELS, out_dir="results", engine="whisper")
+
+
+def test_label_delays_are_timing_fields():
+    figure = {"dataset": "AMI-ci", "system": "product-live", "wer": 0.2, "p95_delay_seconds": 0.9,
+              "p95_label_delay_seconds": 2.1, "p50_label_delay_seconds": 1.0, "max_label_delay_seconds": 3.3,
+              "matched_words": 9,
+              "runs": [{"p95_delay_seconds": 0.9, "p95_label_delay_seconds": 2.1, "behind_seconds": 0.3}]}
+    stripped = report.strip_timing(fixed([figure]))
+    assert stripped["figures"] == [{"dataset": "AMI-ci", "system": "product-live", "wer": 0.2, "matched_words": 9,
+                                    "runs": [{}]}]
 
 
 def test_two_runs_differing_only_in_timing_have_the_same_accuracy():
