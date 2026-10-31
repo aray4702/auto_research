@@ -48,6 +48,7 @@ class Engine:
     info: dict  # the transcript's models.asr: name, engine, repository, revision
     word_gap: float  # seconds after a word's end with no new piece that complete it (G4 "Terms")
     peak_rss_bytes: int = 0  # a helper process's peak RSS (Apple), else 0
+    rate: int = 16_000  # the rate the pipeline decodes for transcribe(); one other than 16 kHz comes as rate=...
 
     def transcribe(self, audio) -> list[Word]:
         raise NotImplementedError
