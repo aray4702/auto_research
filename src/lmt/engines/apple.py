@@ -331,11 +331,15 @@ def download() -> None:
 
 
 def status() -> dict:
-    """`lmt models list`'s row: the same status as load's (G4-2), and the macOS version."""
+    """`lmt models list`'s row: the same status as load's (G4-2), and the macOS version. It never raises, so
+    `models list` exits 0 (G4-2) even when the helper fails: the row then names the internal error."""
     version = macos_version()
     try:
         engine = load()
     except ModelError as e:
         return {"name": "apple", "status": e.problem, "ok": False, "os": version}
+    except (HelperError, OSError) as e:  # a helper that crashed, broke its protocol, or wouldn't start
+        return {"name": "apple", "status": f"internal error: {type(e).__name__}: {e}", "ok": False,
+                "os": version}
     return {"name": "apple", "status": "supported, installed, helper built", "ok": True,
             "os": engine.info["revision"]}
