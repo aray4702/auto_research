@@ -2,17 +2,45 @@
 
 ## What it is
 
-Local Meeting Transcriber is planned to turn a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. So far only the `lmt` command's skeleton is built and tested: `lmt --help` and the results table's check, `lmt eval --check-readme`, work, and the other commands say they aren't built yet. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
+Local Meeting Transcriber turns a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. Its `lmt` command works now for recordings: it transcribes one offline with speaker labels and timestamps, renames its speakers, and shows the transcript with its audio in a local page; live transcription is planned. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
 
 ## Install
 
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
 
 ```sh
-uv tool install git+https://github.com/aray4702/auto_research@v0.1.0
+uv tool install git+https://github.com/aray4702/auto_research@v0.2.0
 ```
 
 The speaker models are gated on Hugging Face. Once, before the first download: make a free account, accept the conditions on the pages of [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1), [pyannote/segmentation-3.0](https://huggingface.co/pyannote/segmentation-3.0) and [pyannote/wespeaker-voxceleb-resnet34-LM](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM), create a read token, and set it as `HF_TOKEN` for `lmt models download`. After that, nothing needs the network.
+
+## Use
+
+Download the models once, with your Hugging Face token set as `HF_TOKEN` (see Install). This is the only step that needs the network: after it, everything below works offline, except that `lmt demo --sample`'s first run downloads the sample meeting.
+
+```sh
+HF_TOKEN=<your token> lmt models download
+```
+
+Transcribe a recording: WAV, FLAC, MP3, M4A, MP4 or MOV. It writes `<name>.txt`, `.srt`, `.vtt` and `.json` in the current directory (`-o DIR` for another), with each segment's timestamps and speaker (Speaker 1, Speaker 2, …).
+
+```sh
+lmt transcribe meeting.m4a
+```
+
+Give the speakers names. With only the JSON, `lmt rename` lists each speaker's id, label, speaking time and first words; then give each one as `KEY=NAME`, where the key is its id (`S1`) or current label (`Speaker 1`). It rewrites the JSON with the names and renders the other formats from it again, so the TXT, SRT and WebVTT show the names too.
+
+```sh
+lmt rename meeting.json
+lmt rename meeting.json S1=Alice "Speaker 2=Bob"
+```
+
+Show a transcript in a page on your computer, with its speakers and audio: clicking a segment plays the audio from it. `lmt demo` opens it in your browser (`--no-browser` prints the URL instead); press Ctrl-C to stop it. `--sample` shows a sample meeting instead, which its first run downloads and transcribes.
+
+```sh
+lmt demo meeting.json
+lmt demo --sample
+```
 
 ## Build
 
