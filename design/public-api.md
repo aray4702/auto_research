@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-31 | architect, #581 | The Reviewer's findings on #572, merged before they were fixed: live events 1.1's `text` and `words` events carry the same words, in order; exit 6 compares the README's table with every results file present |
 | 2026-10-31 | architect, #570 | G4 (#565): `--engine kyutai\|apple` on `transcribe`, `live`, `models download` and `eval`, replacing `--model`; exit 5 when Apple's engine can't run; live events 1.1 add the `text` event, so words go out before their labels; transcript JSON 1.2 adds `models.asr.engine`; results file 2.0 (`engine`, `asr-alone`, the label delays, the `-apple` files). Waiting for the Owner's approval and the answers on #570 |
 | 2026-10-29 | architect, #328 | The results file states `rtf`'s basis for each system: the product's from process start to exit, Whisper alone's and pyannote alone's as their stage's time within the product run. Approved by the Owner on #328 (option 1) |
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: exit 130's row covers both `lmt live` and `lmt demo`, and `lmt demo`'s stopping bullet no longer calls it the one command whose Ctrl-C isn't 130; the speaker-name rule needs no new schema version, now that the schema is 1.1 |
@@ -161,6 +162,8 @@ G4 (F11, #565) changes the commands above as follows. The tables under "Commands
 | --- | --- | --- |
 | `text` | `t`, `text` (one piece: part of a word, or a whole word, with a leading space when it starts a word), `start`, `end` (the piece's audio, in session time), `starts_word` | Text is committed, before its speaker is known. It is never changed or sent again. Q10's word delay is measured at the event carrying a word's last piece (spec, G4 "Terms"). Volatile text is never sent. |
 
+The two event types carry the same words: joining the `text` events' pieces at each `starts_word` gives exactly the words of the `words` events, in order, with each word's text its pieces' text joined (without the leading space), its `start` its first piece's and its `end` its last piece's. A word's `words` event comes after the `text` event carrying its last piece. A reader that wants labels can read `words` events alone, as in 1.0; one that wants text first reads `text` events (spec, G2-1).
+
 ## Install and versions (G3, Q5)
 
 - **The install command,** for v1.0: `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0` (#83, question 9). `uv` is the one prerequisite. It fetches a suitable Python itself if there isn't one. The product runs on macOS 26 or later, on Apple silicon (§6, #565). Apple's engine also needs Xcode's Command Line Tools, for the Swift compiler that builds its helper on first use; Kyutai, the default, doesn't.
@@ -177,7 +180,7 @@ G4 (F11, #565) changes the commands above as follows. The tables under "Commands
 | 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. For `lmt live`: no input device, an unknown one, or one that can't be opened. A device that gives only silence is a warning, not an error ("A silent device", above). |
 | 4 | No speech found in the input. |
 | 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. Or Apple's engine can't run on this Mac: macOS older than 26, the recognizer unsupported or not installed, recognition denied, or no Swift compiler to build the helper (G4-2). |
-| 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from what `results/full.json` renders. A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
+| 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from the table rendered from the results files present: `results/full.json`, and since G4 also `full-apple.json`, `live.json` and `live-apple.json` (spec, G1-14). A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
 | 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving. `<stem>.txt` and `<stem>.wav` are kept (above). `lmt demo` exits 0 instead, since Ctrl-C is how it stops. |
 
 Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11), except what a live session keeps ("What a failed session keeps", above).
