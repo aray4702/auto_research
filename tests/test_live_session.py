@@ -100,10 +100,11 @@ class Order(unittest.TestCase):
     def test_start_comes_first_with_the_source_info_and_models_given_and_stop_last(self):
         log, writer, _ = session()
         events = writer.events()
-        self.assertEqual(events[0], {"type": "start", "schema_version": "1.0", "t": 0, "source": SOURCE,
+        self.assertEqual(events[0], {"type": "start", "schema_version": "1.1", "t": 0, "source": SOURCE,
                                      "models": MODELS})
         self.assertEqual(events[-1], {"type": "stop", "t": 0.4, "reason": "end-of-input"})
-        self.assertEqual([e["type"] for e in events], ["start", "words", "segment", "words", "segment", "stop"])
+        self.assertEqual([e["type"] for e in events],
+                         ["start", "text", "words", "segment", "text", "words", "segment", "stop"])
         self.assertEqual(log[0], ("event", "start"))
         self.assertEqual(log[-1], ("event", "stop"))
 
@@ -118,13 +119,22 @@ class Order(unittest.TestCase):
         # "there" is labelled once the flushed activity reaches it, and `finish` then closes its segment.
         flushed = log.index(("diar", "flush"))
         self.assertEqual(log[flushed + 1:], [("event", "words"), ("event", "segment"), ("event", "stop")])
-        self.assertEqual(writer.events()[3]["words"][0]["text"], "there")
+        self.assertEqual(writer.events()[5]["words"][0]["text"], "there")
+
+    def test_text_goes_out_when_its_words_are_committed_before_their_label(self):
+        log, writer, _ = session()
+        # "there" is committed at block 2, its text event written then, and labelled only after the flushes.
+        written = log.index(("event", "text"), log.index(("asr", 2)))
+        self.assertLess(written, log.index(("asr", 3)))
+        self.assertEqual(writer.events()[4], {"type": "text", "t": 0.3, "text": " there", "start": THERE.start,
+                                              "end": THERE.end, "starts_word": True})
 
     def test_a_closed_segment_reaches_on_segment_before_its_event_is_written(self):
         log, _, _ = session(lambda log: Sinks(on_segment=lambda s, label: log.append(("on_segment", s.text, label))))
         self.assertEqual([entry for entry in log if entry[0] in ("event", "on_segment")],
-                         [("event", "start"), ("event", "words"), ("on_segment", "Hello.", "Speaker 1"),
-                          ("event", "segment"), ("event", "words"), ("on_segment", "there", "Speaker 2"),
+                         [("event", "start"), ("event", "text"), ("event", "words"),
+                          ("on_segment", "Hello.", "Speaker 1"), ("event", "segment"), ("event", "text"),
+                          ("event", "words"), ("on_segment", "there", "Speaker 2"),
                           ("event", "segment"), ("event", "stop")])
 
     def test_on_block_sees_every_block_before_the_stages(self):

@@ -1,14 +1,38 @@
-"""The join, on scripted ASR and diarization updates and no model (design/internal/g2-stage1.md §3a, item 3a1)."""
+"""The join, on scripted ASR and diarization updates and no model (design/internal/g2-stage1.md §3a, item 3a1), and
+its text before labels (g4-stage1.md §4, item 5)."""
 
 import unittest
+from dataclasses import dataclass
 
 from lmt import align
+from lmt.live import join as join_module
 from lmt.live.asr import AsrUpdate
 from lmt.live.diarize import DiarUpdate, Piece
-from lmt.live.join import Join, SegmentOut, WordsOut
+from lmt.live.join import SegmentOut, TextOut, WordsOut
 from lmt.transcript import Segment, Speaker, Turn, Word
 
 RATE = 16000
+
+
+class Join(join_module.Join):
+    """The join without its `TextOut`s, for the labelling and segment tests; `Text` tests those."""
+
+    def poll(self):
+        return [o for o in super().poll() if not isinstance(o, TextOut)]
+
+    def finish(self):
+        return [o for o in super().finish() if not isinstance(o, TextOut)]
+
+
+@dataclass(frozen=True)
+class PieceUpdate:  # a stand-in engine's update: `AsrUpdate` with the pieces `stream.feed` gave (§4)
+    words: list
+    done_until: int
+    pieces: list
+
+
+def piece(text, start, end, probability=0.9):
+    return join_module.Piece(text, start, end, text.startswith(" "), probability)
 
 
 def word(start, end, text="word"):
@@ -179,6 +203,34 @@ class Finish(unittest.TestCase):
         join.add_activity(activity(2.0, (0.0, 2.0, 0)))
         self.assertEqual(join.finish(), [])
         self.assertEqual((join.speakers, join.segments), ([], []))
+
+
+class Text(unittest.TestCase):
+    def test_each_piece_goes_out_in_the_poll_it_arrives_in_before_any_label(self):
+        join = join_module.Join()
+        p1, p2, p3 = piece(" Hel", 0.1, 0.3), piece("lo", 0.3, 0.5), piece(" the", 0.6, 0.8)
+        hello = Word(0.1, 0.5, "Hello", 0.9)
+        join.add_words(PieceUpdate([], 0, [p1, p2]))
+        join.add_activity(activity(0.0))
+        self.assertEqual(join.poll(), [TextOut(p1), TextOut(p2)])   # no activity yet: text, no label
+        join.add_words(PieceUpdate([hello], round(0.5 * RATE), [p3]))
+        join.add_activity(activity(1.0, (0.0, 1.0, 0)))
+        self.assertEqual(join.poll(), [TextOut(p3), WordsOut(1, "S1", "Speaker 1", [hello])])
+        self.assertEqual(join.poll(), [])   # once each
+
+    def test_finish_sends_the_last_pieces_before_the_last_labels(self):
+        join = join_module.Join()
+        p = piece(" end.", 0.1, 0.4)
+        w = Word(0.1, 0.4, "end.", 0.9)
+        join.add_words(PieceUpdate([w], round(0.4 * RATE), [p]))
+        self.assertEqual(join.finish(), [TextOut(p), WordsOut(1, "S1", "Speaker 1", [w]), SegmentOut(segment("S1", w), 1)])
+
+    def test_an_update_without_pieces_gives_one_piece_per_word(self):
+        join = join_module.Join()
+        w1, w2 = word(0.1, 0.5, "Okay,"), word(0.6, 0.9, "so")
+        join.add_words(asr(w1, w2))
+        self.assertEqual(join.poll(), [TextOut(join_module.Piece(" Okay,", 0.1, 0.5, True, 0.9)),
+                                       TextOut(join_module.Piece(" so", 0.6, 0.9, True, 0.9))])
 
 
 class Memory(unittest.TestCase):

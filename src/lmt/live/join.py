@@ -3,6 +3,9 @@ words and segments, by alignment's words-first rules (P12 leaves them to the liv
 final activity reaches its end, looking only back from it; a segment closes on a speaker change, on `align.breaks`,
 at once after a sentence end, once ASR is done 1 s past it, and at `finish`. Positions are samples at 16 kHz; word
 times are seconds.
+
+Words before labels (design/internal/g4-stage1.md §4): each committed piece goes out as a `TextOut` in the `poll`
+it arrives in, before any label. An update without `pieces` (ASR that commits whole words) gives one piece per word.
 """
 
 from dataclasses import dataclass
@@ -15,6 +18,22 @@ from lmt.transcript import Segment, Speaker, Turn, Word
 RATE = 16000
 KEEP = 2.0  # s: turns that ended this long before the oldest unlabelled word are dropped
 NO_SPEECH = -1  # the internal speaker of words labelled at `finish` when diarization found no speech at all
+
+try:  # the engine interface (design/internal/g4-stage1.md §1, item 3)
+    from lmt.engines import Piece
+except ImportError:  # until it merges, the same shape
+    @dataclass(frozen=True)
+    class Piece:
+        text: str  # starts with " " when it starts a word
+        start: float
+        end: float
+        starts_word: bool
+        probability: float
+
+
+@dataclass(frozen=True)
+class TextOut:       # → a "text" event
+    piece: Piece
 
 
 @dataclass(frozen=True)
@@ -54,8 +73,13 @@ class Join:
         self._open: list[Word] = []            # the open segment's words
         self._speaker = ""                     # its id
         self._out: list[WordsOut | SegmentOut] = []
+        self._text: list[TextOut] = []         # committed pieces since the last poll
 
     def add_words(self, update: AsrUpdate) -> None:
+        pieces = getattr(update, "pieces", None)
+        if pieces is None:
+            pieces = [Piece(" " + w.text, w.start, w.end, True, w.probability) for w in update.words]
+        self._text.extend(TextOut(p) for p in pieces)
         self._pending.extend(update.words)
         self._done_until = max(self._done_until, update.done_until)
 
@@ -71,7 +95,8 @@ class Join:
                 self._turns.append(self._last[p.speaker])
         self._final_until = max(self._final_until, update.final_until)
 
-    def poll(self) -> list[WordsOut | SegmentOut]:
+    def poll(self) -> list[TextOut | WordsOut | SegmentOut]:
+        text, self._text = self._text, []
         while self._pending and self._label(self._pending[0]):
             self._pending.pop(0)
         if (self._open and not self._pending
@@ -79,9 +104,9 @@ class Join:
             self._close()
         self._drop()
         out, self._out = self._out, []
-        return out
+        return text + out
 
-    def finish(self) -> list[WordsOut | SegmentOut]:
+    def finish(self) -> list[TextOut | WordsOut | SegmentOut]:
         self._finished = True
         out = self.poll()
         if self._open:

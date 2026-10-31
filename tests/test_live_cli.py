@@ -276,7 +276,7 @@ def test_from_file_jsonl_is_start_the_events_stop(file_run):
     validator = jsonschema.Draft202012Validator(json.loads(EVENTS_SCHEMA.read_text(encoding="utf-8")))
     for event in events:
         validator.validate(event)
-    assert [e["type"] for e in events] == ["start"] + ["words", "segment"] * 3 + ["stop"]
+    assert [e["type"] for e in events] == ["start"] + ["text", "words", "segment"] * 3 + ["stop"]
     assert events[0]["source"] == {"file": "talk.wav", "live": True}
     assert events[0]["models"] == MODELS
     assert events[-1]["reason"] == "end-of-input"

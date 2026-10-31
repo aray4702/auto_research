@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-31 | developer, #577 | Stage 1's item 5 moves live events 1.1 into the events table under "Commands", as "G4's changes" says: the `text` event, and `models.asr.engine` in `start` |
 | 2026-10-31 | architect, #581 | The Reviewer's findings on #572, merged before they were fixed: live events 1.1's `text` and `words` events carry the same words, in order; exit 6 compares the README's table with every results file present |
 | 2026-10-31 | architect, #578 | Results file 2.0: `full-apple.json` holds the reference clip's two figures (G4-3) and `network_and_files`, G1-13's checks with Apple's engine (G4-7). Approved by the Owner on #578 (1a 2a) |
 | 2026-10-31 | architect, #570 | G4 (#565): `--engine kyutai\|apple` on `transcribe`, `live`, `models download` and `eval`, replacing `--model`; exit 5 when Apple's engine can't run; live events 1.1 add the `text` event, so words go out before their labels; transcript JSON 1.2 adds `models.asr.engine`; results file 2.0 (`engine`, `asr-alone`, the label delays, the `-apple` files). Waiting for the Owner's approval and the answers on #570 |
@@ -74,13 +75,14 @@ Transcribes live from an input device, printing segments as they're recognised, 
 
 **A silent device.** If the device gives exact zeros for its first 3 s, stderr gets one line, `lmt: warning: <device>: no sound for 3 s; the microphone may be blocked (System Settings, Privacy & Security, Microphone)`, and capture goes on. A loopback device is silent while nothing plays, so silence is never an error.
 
-#### Live events, version 1.0
+#### Live events, version 1.1
 
-With `--jsonl`, each line is one event. `t` is the session time in seconds, how much audio had been captured when the event was written. G4 makes this 1.1 ("G4's changes to the commands", below).
+With `--jsonl`, each line is one event. `t` is the session time in seconds, how much audio had been captured when the event was written. Version 1.1 (G4) adds the `text` event and `models.asr.engine` ("G4's changes to the commands", below); a 1.0 reader ignores the `text` events and reads the rest as before.
 
 | `type` | Fields | When |
 | --- | --- | --- |
 | `start` | `schema_version`, `t` (0), `source` (as in the transcript JSON), `models` | Capture starts. |
+| `text` | `t`, `text` (one piece: part of a word, or a whole word, with a leading space when it starts a word), `start`, `end` (the piece's audio, in session time), `starts_word` | Text is committed, before its speaker is known. It is never changed or sent again. |
 | `words` | `t`, `segment` (its number, from 1), `speaker` (`S1`, …), `label`, `words` (each with `start`, `end`, `text`, `probability`) | Words are committed. They're never changed or sent again. |
 | `segment` | `t`, `segment`, `start`, `end`, `speaker`, `text` | A segment is complete. |
 | `stop` | `t`, `reason` (`end-of-input`, `duration`, `signal`) | Capture stops. The final formats follow. |
