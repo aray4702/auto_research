@@ -79,6 +79,8 @@ The product's CI jobs live in [`.github/workflows/product.yml`](.github/workflow
 The table below is rendered from [`results/full.json`](results/full.json), the results of the full evaluation. `lmt eval --set full --update-readme` regenerates it (planned: G1 stage 2 builds the evaluation run). `lmt eval --check-readme` checks that it equals what `results/full.json` renders, and the `readme` job runs that check, so the table can't drift from its results file.
 
 <!-- results:start -->
+**Full sets, `distil-large-v3`** (`results/full.json`)
+
 Measured on Apple M4 (arm64, 16.0 GB, macOS 27.0.1) on 2026-10-30, at commit `47cdcf28e374`, with lmt 0.1.0.
 Models: ASR `distil-large-v3` (`Systran/faster-distil-whisper-large-v3` at `c3058b475261`); diarization `speaker-diarization-3.1` (`pyannote/speaker-diarization-3.1` at `84fd25912480`).
 Two runs of the CI subset gave identical accuracy figures: yes.

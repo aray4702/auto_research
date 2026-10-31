@@ -124,6 +124,23 @@ jobs:
         env:
           LMT_TIER: ${{ needs.changes.outputs.tier }}
         run: python3 -I .github/scripts/check_results.py --results results/full.json --criteria-out criteria-test-2.json
+      # The other results files, once the Owner's runs put them on the branch (#578): results/live.json against
+      # G2-6, results/full-apple.json against G4-3 to G4-6, and results/live-apple.json against G4-6 and G4-8.
+      - name: The Mac's live delays (results/live.json)
+        if: ${{ !cancelled() && hashFiles('results/live.json') != '' }}
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_results.py --results results/live.json --criteria-out criteria-test-4.json
+      - name: Apple's engine's figures (results/full-apple.json)
+        if: ${{ !cancelled() && hashFiles('results/full-apple.json') != '' }}
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_results.py --results results/full-apple.json --criteria-out criteria-test-5.json
+      - name: Apple's engine's live delays (results/live-apple.json)
+        if: ${{ !cancelled() && hashFiles('results/live-apple.json') != '' }}
+        env:
+          LMT_TIER: ${{ needs.changes.outputs.tier }}
+        run: python3 -I .github/scripts/check_results.py --results results/live-apple.json --criteria-out criteria-test-6.json
       # G3-7 on Linux (design/internal/g3-stage1.md §4a): the README's install, from this checkout, into a
       # clean scratch. It runs after a failed pytest too, so its checks stay in the record.
       - name: The one-command install (G3-7, Linux)
