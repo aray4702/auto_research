@@ -38,6 +38,14 @@ def alive(pid):
     return True
 
 
+def stranded(runs, is_alive=alive):
+    """Active runs whose launcher died without recording an end. The launcher outlives its agent until the end
+    record is written, so a run counts as gone only when neither pid is alive (#561). Older start records have
+    only the agent's pid."""
+    return [r for r in usage.active(runs)
+            if r.get("pid") and not any(is_alive(p) for p in (r["pid"], r.get("launcher_pid")) if p)]
+
+
 def sign_off_question(pr, approved):
     """The SR2 question (#150), asked once on the PR. Own lines unchanged: the Coordinator judges, then the builder,
     then the Owner. Own lines changed (on a PR the builder didn't write): the builder, then the Owner."""
@@ -162,14 +170,13 @@ def dispatch_pass(command, dry_run, now=None):
     runs, notices = store.read("runs"), store.read("notices")
 
     # Runs whose launcher died without recording an end.
-    for r in usage.active(runs):
-        if r.get("pid") and not alive(r["pid"]):
-            say(f"record {r['run_id']} as cut off" + (f" and release #{r['item']}" if r.get("item") else ""))
-            if not dry_run:
-                store.append("runs", {"run_id": r["run_id"], "role": r["role"], "item": r.get("item"), "event": "end",
-                                      "at": now.isoformat(), "status": "cut-off"})
-                if r.get("item"):
-                    post.cmd_release(gh, me, r["item"])
+    for r in stranded(runs):
+        say(f"record {r['run_id']} as cut off" + (f" and release #{r['item']}" if r.get("item") else ""))
+        if not dry_run:
+            store.append("runs", {"run_id": r["run_id"], "role": r["role"], "item": r.get("item"), "event": "end",
+                                  "at": now.isoformat(), "status": "cut-off"})
+            if r.get("item"):
+                post.cmd_release(gh, me, r["item"])
     runs = store.read("runs") if not dry_run else runs
     active_items = {r.get("item") for r in usage.active(runs) if r.get("item")}
 

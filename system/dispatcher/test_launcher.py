@@ -306,6 +306,8 @@ class LauncherTest(unittest.TestCase):
             self.assertEqual(run.main(["reviewer", "--task", "Review PR #32.", "--item", "32", "--claim"]), 0)
         events = [(c.args[1]["event"], c.args[1].get("status")) for c in store.append.call_args_list]
         self.assertEqual(events, [("start", None), ("end", "finished")])
+        started = store.append.call_args_list[0].args[1]
+        self.assertEqual((started["pid"], started["launcher_pid"]), (4242, os.getpid()), "the poll watches the launcher too (#561)")
         release.assert_not_called()  # the agent released its own claim; nothing to release
 
     def test_ids_and_task(self):

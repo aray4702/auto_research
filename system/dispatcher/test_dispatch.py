@@ -86,6 +86,17 @@ class SnapshotParsingTest(unittest.TestCase):
         self.assertEqual([(c[0], c[1], c[3]) for c in got], [("architect", 23, "pr-work")])
 
 
+class StrandedRunsTest(unittest.TestCase):
+    def test_a_run_is_cut_off_only_once_its_launcher_and_agent_are_both_gone(self):
+        start = lambda run_id, **pids: {"run_id": run_id, "event": "start", "role": "builder", "item": 1, **pids}  # noqa: E731
+        runs = [start("writing-its-end", pid=10, launcher_pid=11), start("both-gone", pid=20, launcher_pid=21),
+                start("older-record", pid=30), start("agent-running", pid=40, launcher_pid=41),
+                start("ended", pid=50, launcher_pid=51), {"run_id": "ended", "event": "end"}]
+        is_alive = {11, 40, 41}.__contains__
+        self.assertEqual([r["run_id"] for r in dispatch.stranded(runs, is_alive)], ["both-gone", "older-record"],
+                         "the agent has exited but its launcher is still writing the end record (#561)")
+
+
 class CandidatesTest(unittest.TestCase):
     def test_dispatch_order(self):
         s = snap(
