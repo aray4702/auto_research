@@ -1,7 +1,6 @@
 """The demo's handler, in process: `make_server` and `Handler` (design/internal/g3-stage1.md, 2a3's tests)."""
 
 import contextlib
-import dataclasses
 import http.client
 import io
 import shutil
@@ -11,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from lmt import export, transcript
+from lmt import cli, transcript
 from lmt.demo.server import load, make_server
 from lmt.errors import InputError
 from lmt.export import vtt
@@ -28,12 +27,8 @@ SECURITY_HEADERS = {
 
 
 def relabel(path, mapping):
-    """The transcript at `path` with its speakers' labels changed, written as JSON alone. 3c swaps this for
-    `lmt rename -f json`, which writes the same file."""
-    t = transcript.load(path)
-    speakers = tuple(dataclasses.replace(s, label=mapping.get(s.id, s.label)) for s in t.speakers)
-    stem = path.name.removesuffix(".json")
-    export.write(dataclasses.replace(t, speakers=speakers), path.parent, stem, ["json"], overwrite=True)
+    """`lmt rename -f json` on the transcript at `path` with `mapping`'s labels: the JSON alone, written again."""
+    assert cli.main(["rename", "-f", "json", str(path), *(f"{k}={v}" for k, v in mapping.items())]) == 0
 
 
 @pytest.fixture
