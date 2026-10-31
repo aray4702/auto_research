@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import stat
 import tempfile
 import unittest
 from pathlib import Path
@@ -112,6 +113,7 @@ class SchemaTest(unittest.TestCase):
 
     def test_bad_values(self):
         for path, value in [(("schema_version",), "2.0"), (("schema_version",), "1"), (("schema_version",), 1.1),
+                            (("schema_version",), "1.0\n"),
                             (("lmt_version",), None), (("source", "live"), False), (("source", "device"), 3),
                             (("source", "duration"), -1), (("source", "file"), None),
                             (("segments", 0, "start"), -0.001), (("segments", 0, "end"), "1.2"),
@@ -120,14 +122,14 @@ class SchemaTest(unittest.TestCase):
                 self.assertInvalid(with_value(self.doc, path, value))
 
     def test_bad_speaker_id(self):
-        for value in ("S0", "s1", "S01", "S", "1", "Speaker 1", "S1 "):
+        for value in ("S0", "s1", "S01", "S", "1", "Speaker 1", "S1 ", "S1\n"):
             for path in (("speakers", 0, "id"), ("segments", 0, "speaker")):
                 with self.subTest(value=value, path=path):
                     self.assertInvalid(with_value(self.doc, path, value))
 
     def test_bad_label(self):
         for value in ("", " Ana", "Ana ", " Ana", "A<b", "a>b", "{x}", "a=b", "x" * 33, "tab\there",
-                      "\x00", "bell\x07", "del\x7f", "nel\x85x", None):
+                      "\x00", "bell\x07", "del\x7f", "nel\x85x", "Ana\n", None):
             with self.subTest(value=value):
                 self.assertInvalid(with_value(self.doc, ("speakers", 0, "label"), value))
 
@@ -135,6 +137,26 @@ class SchemaTest(unittest.TestCase):
         for value in ("Speaker 1", "José & Ana", "A", "x" * 32, "Dr. Ng (PM)", "Ana  Ng", "李"):
             with self.subTest(value=value):
                 schema.validate(with_value(self.doc, ("speakers", 0, "label"), value))
+
+    def test_no_pattern_ends_with_dollar(self):
+        """Python's `$` also matches before a final newline, which ECMA-262's doesn't (#286)."""
+        def patterns(node):
+            if isinstance(node, dict):
+                for key, value in node.items():
+                    if key == "pattern":
+                        yield value
+                    else:
+                        yield from patterns(value)
+            elif isinstance(node, list):
+                for value in node:
+                    yield from patterns(value)
+
+        found = list(patterns(json.loads(schema.SCHEMA_PATH.read_text(encoding="utf-8"))))
+        self.assertEqual(len(found), 3)
+        for pattern in found:
+            with self.subTest(pattern=pattern):
+                self.assertFalse(pattern.endswith("$"))
+                self.assertTrue(pattern.endswith(r"(?![\s\S])"))
 
     def test_copies_identical(self):
         self.assertEqual((ROOT / "schema" / "transcript.schema.json").read_bytes(), schema.SCHEMA_PATH.read_bytes())
@@ -204,6 +226,27 @@ class WriteTest(unittest.TestCase):
                 with mock.patch.dict(export.RENDERERS, {"srt": fail}), self.assertRaises(type(error)):
                     export.write(small(), self.dir, "m", ["json", "txt", "srt", "vtt"], overwrite=False)
                 self.assertEqual(os.listdir(self.dir), [])
+
+    def umask(self, mask):
+        """Sets the process's umask for this test, restoring the old one after."""
+        self.addCleanup(os.umask, os.umask(mask))
+
+    def test_mode_under_umask_022(self):
+        """What `open(path, "w")` gives a new file, an overwritten 0o600 output included (#286)."""
+        self.umask(0o022)
+        (self.dir / "m.srt").write_text("old")
+        (self.dir / "m.srt").chmod(0o600)
+        paths = export.write(small(), self.dir, "m", list(export.FORMATS), overwrite=True)
+        for path in paths:
+            with self.subTest(path=path.name):
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+
+    def test_mode_under_umask_077(self):
+        self.umask(0o077)
+        paths = export.write(small(), self.dir, "m", list(export.FORMATS), overwrite=False)
+        for path in paths:
+            with self.subTest(path=path.name):
+                self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
 
 if __name__ == "__main__":

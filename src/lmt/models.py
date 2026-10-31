@@ -55,6 +55,7 @@ class Model:
 class Manifest:
     default_asr: str
     models: tuple[Model, ...]
+    default_live_asr: str = None  # load_manifest gives default_asr when the file has none
 
     def get(self, name):
         return next((m for m in self.models if m.name == name), None)
@@ -105,10 +106,12 @@ def load_manifest(path=None) -> Manifest:
     names = [m.name for m in models]
     if len(set(names)) != len(names):
         raise bad("a model name is repeated")
-    manifest = Manifest(data.get("default_asr"), tuple(models))
-    default = manifest.get(manifest.default_asr)
-    if default is None or default.role != "asr":
-        raise bad("default_asr must name an asr model")
+    default_asr = data.get("default_asr")
+    manifest = Manifest(default_asr, tuple(models), data.get("default_live_asr", default_asr))
+    for key in ("default_asr", "default_live_asr"):
+        default = manifest.get(getattr(manifest, key))
+        if default is None or default.role != "asr":
+            raise bad(f"{key} must name an asr model")
     for role in DIARIZATION_ROLES:
         if sum(m.role == role for m in models) != 1:
             raise bad(f"there must be exactly one {role} model")
@@ -123,6 +126,22 @@ def default_models(manifest, asr=None) -> list[Model]:
         choices = ", ".join(m.name for m in manifest.models if m.role == "asr")
         raise UsageError("--model", f"{name!r} isn't an ASR model in the manifest ({choices})")
     return [model] + [m for role in DIARIZATION_ROLES for m in manifest.models if m.role == role]
+
+
+def default_live_asr(manifest) -> Model:
+    """The live default ASR model (design/internal/g2-stage1.md §1, "The live default model")."""
+    return manifest.get(manifest.default_live_asr)
+
+
+def download_defaults(manifest, asr=None) -> list[Model]:
+    """What `lmt models download` fetches and `list` marks DEFAULT: default_models, with the live default
+    right after the default ASR model when it differs and no `asr` is given. Only `lmt models` and the
+    live harness call it, so `lmt transcribe` never ensures a model it doesn't load."""
+    needed = default_models(manifest, asr=asr)
+    live = default_live_asr(manifest)
+    if asr is None and live not in needed:
+        needed.insert(1, live)
+    return needed
 
 
 def model_dir(model) -> Path:
@@ -228,7 +247,7 @@ def ensure(models, offline=False) -> dict[str, Path]:
 def cli_models(args) -> int:
     manifest = load_manifest(MANIFEST_PATH)
     if args.action == "download":
-        download(default_models(manifest, asr=args.model))
+        download(download_defaults(manifest, asr=args.model))
         return 0
     if args.action == "list":
         return _list(manifest, args.bytes)
@@ -236,7 +255,7 @@ def cli_models(args) -> int:
 
 
 def _list(manifest, with_bytes):
-    defaults = {m.name for m in default_models(manifest)}
+    defaults = {m.name for m in download_defaults(manifest)}
     header = ["NAME", "ROLE", "REVISION", "DEFAULT", "STATUS"] + (["BYTES"] if with_bytes else [])
     print("\t".join(header))
     total = 0

@@ -2,6 +2,9 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-31 | architect, #581 | The Reviewer's findings on #572, merged before they were fixed: live events 1.1's `text` and `words` events carry the same words, in order; exit 6 compares the README's table with every results file present |
+| 2026-10-31 | architect, #578 | Results file 2.0: `full-apple.json` holds the reference clip's two figures (G4-3) and `network_and_files`, G1-13's checks with Apple's engine (G4-7). Approved by the Owner on #578 (1a 2a) |
+| 2026-10-31 | architect, #570 | G4 (#565): `--engine kyutai\|apple` on `transcribe`, `live`, `models download` and `eval`, replacing `--model`; exit 5 when Apple's engine can't run; live events 1.1 add the `text` event, so words go out before their labels; transcript JSON 1.2 adds `models.asr.engine`; results file 2.0 (`engine`, `asr-alone`, the label delays, the `-apple` files). Waiting for the Owner's approval and the answers on #570 |
 | 2026-10-29 | architect, #328 | The results file states `rtf`'s basis for each system: the product's from process start to exit, Whisper alone's and pyannote alone's as their stage's time within the product run. Approved by the Owner on #328 (option 1) |
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: exit 130's row covers both `lmt live` and `lmt demo`, and `lmt demo`'s stopping bullet no longer calls it the one command whose Ctrl-C isn't 130; the speaker-name rule needs no new schema version, now that the schema is 1.1 |
 | 2026-10-27 | architect, #83 | Reviewer's findings on #129: `rename` trims a name's outer white space; WebVTT escapes `&` in the voice tag too; `lmt demo` reads the transcript again on each load and needs no `.vtt`; only `lmt eval` needs the `eval` extra |
@@ -73,7 +76,7 @@ Transcribes live from an input device, printing segments as they're recognised, 
 
 #### Live events, version 1.0
 
-With `--jsonl`, each line is one event. `t` is the session time in seconds, how much audio had been captured when the event was written.
+With `--jsonl`, each line is one event. `t` is the session time in seconds, how much audio had been captured when the event was written. G4 makes this 1.1 ("G4's changes to the commands", below).
 
 | `type` | Fields | When |
 | --- | --- | --- |
@@ -145,9 +148,26 @@ Serves a page on this computer that shows a transcript, its speakers and its aud
 
 `lmt --help`, `lmt --version`, which prints `lmt <version>`.
 
+## G4's changes to the commands
+
+G4 (F11, #565) changes the commands above as follows. The tables under "Commands" describe the parser on `main`, which G1-6's test compares with them, so each change moves into its table in the stage-1 PR that makes it (spec, G4 "Stages"): items 3 and 4 for `--engine`, item 5 for the events, item 6 for `lmt eval`. The exit codes, transcript JSON 1.2 and results file 2.0 below already describe G4.
+
+- **`lmt transcribe` and `lmt live`:** `--engine NAME`, default `kyutai`, replaces `--model NAME`. `kyutai` is Kyutai STT 1B on the GPU; `apple` is Apple's on-device recognizer (macOS 26 or later). If Apple's engine can't run on this Mac, the command exits 5 and says why, before any audio is captured (G4-2). One Kyutai model serves both modes, so there is no live default.
+- **`lmt models download [--engine NAME]`**, replacing `[--model NAME]`: without it, downloads Kyutai's model and the diarization models and verifies every file. With `--engine apple`, it builds the helper and asks macOS to install Apple's recognizer for `en-US`, plus the diarization models. It is the only command that asks macOS to install them (G4-7).
+- **`lmt models list [--bytes]`:** after the manifest's models, a row for Apple's engine with its status (supported, installed, the helper built) and the macOS version. `--bytes` gives each model's size on disk, which Q3 bounds at 2.5 GB each (G1-10), and no total; Apple's assets show as managed by macOS.
+- **`lmt eval`:** `--engine NAME`, default `kyutai`, writing `results/<set>.json`; with `apple`, `results/<set>-apple.json`. `--update-readme` works after `--set full` or `--set live`, and both it and `--check-readme` render the table from every results file present (`full`, `full-apple`, `live`, `live-apple`).
+- **`lmt live`'s stdout,** without `--jsonl`: on a terminal, words appear as they're recognised, on a provisional line (with Apple's engine, its volatile text too), and once their speaker is known the line is redrawn as `[HH:MM:SS] Speaker 1: ` with its words. Through a pipe, lines come as in 1.0, as words are labelled.
+- **Live events 1.1** add one event, so words go out before their labels; a 1.0 reader ignores it and reads the rest as before. The `start` event's `models.asr` gains `engine`, and `words` events now mark where a word gets its label, which Q10's label delay is measured at.
+
+| `type` | Fields | When |
+| --- | --- | --- |
+| `text` | `t`, `text` (one piece: part of a word, or a whole word, with a leading space when it starts a word), `start`, `end` (the piece's audio, in session time), `starts_word` | Text is committed, before its speaker is known. It is never changed or sent again. Q10's word delay is measured at the event carrying a word's last piece (spec, G4 "Terms"). Volatile text is never sent. |
+
+The two event types carry the same words: joining the `text` events' pieces at each `starts_word` gives exactly the words of the `words` events, in order, with each word's text its pieces' text joined (without the leading space), its `start` its first piece's and its `end` its last piece's. A word's `words` event comes after the `text` event carrying its last piece. A reader that wants labels can read `words` events alone, as in 1.0; one that wants text first reads `text` events (spec, G2-1).
+
 ## Install and versions (G3, Q5)
 
-- **The install command,** for v1.0: `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0` (#83, question 9). `uv` is the one prerequisite. It fetches a suitable Python itself if there isn't one.
+- **The install command,** for v1.0: `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0` (#83, question 9). `uv` is the one prerequisite. It fetches a suitable Python itself if there isn't one. The product runs on macOS 26 or later, on Apple silicon (§6, #565). Apple's engine also needs Xcode's Command Line Tools, for the Swift compiler that builds its helper on first use; Kyutai, the default, doesn't.
 - **Versions** follow semantic versioning, from 1.0.0. A release's tag is `v<version>`, and its GitHub release holds the wheel, the sdist and `SHA256SUMS`. `lmt --version` and every transcript's `lmt_version` give the version.
 - **Not on PyPI** in v1.0. Publishing there later adds an install command, and doesn't change this one.
 
@@ -160,8 +180,8 @@ Serves a page on this computer that shows a transcript, its speakers and its aud
 | 2 | Usage error: an unknown option, a bad value, conflicting options, or an existing output without `--overwrite`. |
 | 3 | Input or output error: a missing, unreadable, empty, corrupt or unsupported input; an input with no audio track; or an unwritable output directory. For `lmt live`: no input device, an unknown one, or one that can't be opened. A device that gives only silence is a warning, not an error ("A silent device", above). |
 | 4 | No speech found in the input. |
-| 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. |
-| 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from what `results/full.json` renders. A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
+| 5 | Model error: a model is missing in `--offline` mode, a download failed, or a checksum didn't match. Or Apple's engine can't run on this Mac: macOS older than 26, the recognizer unsupported or not installed, recognition denied, or no Swift compiler to build the helper (G4-2). |
+| 6 | Check failed: `lmt eval --check-readme` found that `README.md`'s results table differs from the table rendered from the results files present: `results/full.json`, and since G4 also `full-apple.json`, `live.json` and `live-apple.json` (spec, G1-14). A failure of the check itself (a missing or unreadable file) is 3, and a bug is 1, as for every command. |
 | 130 | Interrupted (Ctrl-C). Partial outputs are deleted. For `lmt live`, the first Ctrl-C is the normal stop (exit 0), and 130 is a second Ctrl-C while saving. `<stem>.txt` and `<stem>.wav` are kept (above). `lmt demo` exits 0 instead, since Ctrl-C is how it stops. |
 
 Every error prints a single line to stderr: `lmt: error: <file or option>: <problem>`. Outputs are written to temporary files and renamed into place only when every format is done. So a failed run leaves no outputs (G1-11), except what a live session keeps ("What a failed session keeps", above).
@@ -183,17 +203,19 @@ All four come from the same transcript. Speakers are shown by their `label`. Tim
 - **WebVTT (`.vtt`):** a `WEBVTT` header, then one cue per segment, with times as `HH:MM:SS.mmm`. The speaker is both a voice tag and visible text, `<v Speaker 1>Speaker 1: text`, since players don't show a voice tag (#83, question 6). `&`, `<` and `>` in text are escaped as `&amp;`, `&lt;` and `&gt;`, and `&` in the voice tag's annotation is escaped as `&amp;` too (a label can't hold `<` or `>`). So `José & Ana` is written `<v José &amp; Ana>José &amp; Ana: text`. Long segments are split as in SRT, counting the visible prefix and not the tag.
 - **JSON (`.json`):** valid against `schema/transcript.schema.json`, as follows.
 
-### Transcript JSON, version 1.1
+### Transcript JSON, version 1.2
+
+Version 1.2 (G4) adds one optional field, `models.asr.engine`: `"kyutai"` or `"apple"`, which every transcript `lmt` writes from G4 on holds. For Kyutai, `models.asr` names its model, repository and revision as before. For Apple's engine, `name` is `"SpeechTranscriber"`, `repository` is `"com.apple.Speech"`, and `revision` is the macOS version and build with the locale, such as `"macOS 26.6.2 (25G…) en_US"`, the closest thing to a pin it has (Q7). A 1.1 reader reads a 1.2 file.
 
 Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case, as in 1.0: in a live session's transcript, it is the base name for `--from-file`, and the session's stem (`--name`) for a device. `source` also holds `"live": true` and, for a device, `"device"`, its name. Both are new optional fields, absent in `transcribe`'s output, which is otherwise unchanged from 1.0. So a 1.0 reader reads a 1.1 file.
 
 ```json
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "lmt_version": "0.1.0",
   "source": {"file": "meeting.m4a", "duration": 3600.125},
   "models": {
-    "asr": {"name": "distil-large-v3", "repository": "Systran/faster-distil-whisper-large-v3", "revision": "<commit hash>"},
+    "asr": {"name": "stt-1b-en_fr", "engine": "kyutai", "repository": "kyutai/stt-1b-en_fr-mlx", "revision": "<commit hash>"},
     "diarization": {"name": "speaker-diarization-3.1", "repository": "pyannote/speaker-diarization-3.1", "revision": "<commit hash>"}
   },
   "speakers": [
@@ -216,14 +238,15 @@ Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case,
 - **No volatile fields:** there are no timestamps or absolute paths (`source.file` is the input's base name). So two runs on the same input and models give the same file (G1-13). A live session from a device is the exception: its `source.file` is its stem, which holds the start time by default. G2 doesn't require two live runs to be identical.
 - **Compatibility:** a minor version only adds optional fields, and readers ignore fields they don't know. A major version changes or removes fields.
 
-## Results file, version 1.0
+## Results file, version 2.0
 
-`results/<set>.json`, written by `lmt eval`:
+`results/<set>.json` for Kyutai and `results/<set>-apple.json` for Apple's engine, written by `lmt eval`. Version 2.0 (G4) adds `engine`, renames `whisper-alone` to `asr-alone`, and adds the label delays; the results files are regenerated with the new engines, so no 1.0 file is read any more.
 
 ```json
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "set": "full",
+  "engine": "kyutai",
   "commit": "<sha>", "dirty": false,
   "date": "2026-10-28T14:00:00-07:00",
   "machine": {"arch": "arm64", "cpu": "Apple M4", "memory_bytes": 17179869184, "os": "macOS 27.0"},
@@ -233,12 +256,16 @@ Version 1.1 (G2) adds live sessions. `source.file` stays a string in every case,
     {"dataset": "AMI full", "system": "product", "wer": 0.212, "der": 0.201,
      "audio_seconds": 32400.0, "wall_seconds": 9720.0, "rtf": 0.30, "peak_rss_bytes": 3100000000}
   ],
-  "determinism": {"runs": 2, "identical": true}
+  "determinism": {"runs": 2, "identical": true},
+  "network_and_files": null
 }
 ```
 
-- **Values:** `system` is `product`, `whisper-alone`, `pyannote-alone` or, in `results/live.json`, `product-live`. A figure that doesn't apply is `null`.
-- **`rtf`'s basis:** for `product`, the spec's RTF, from process start to exit. For `whisper-alone` and `pyannote-alone`, that stage's own time within the same product run: its model's loading and inference, without interpreter start, decoding or export, and, when diarization runs, beside the other stage. So the three aren't like for like.
-- **Live figures** (`results/live.json`, G2-6): `p50_delay_seconds`, `p95_delay_seconds`, `max_delay_seconds`, `matched_words`, `runs` (each run's `p95_delay_seconds` and `behind_seconds`, how far behind real time it was at the end), plus `wer` and `der`.
+- **Values:** `engine` is `kyutai` or `apple`. `system` is `product`, `asr-alone`, `pyannote-alone` or, in the live files and for the reference clip in `full-apple.json`, `product-live`. A figure that doesn't apply is `null`.
+- **The reference clip** (`results/full-apple.json` only, G4-3): two figures with dataset `reference clip`. `product` is `lmt transcribe --engine apple` on it; `product-live` is `lmt live --from-file … --engine apple` on it at real-time pace, scored on the committed words. Each has `wer` (scored as in G1-1), `audio_seconds`, `wall_seconds`, `rtf` and `peak_rss_bytes`; `der` and the live delays are `null`. Kyutai's clip runs are CI's (`test-models`), so `full.json` has no such figures.
+- **`network_and_files`** (G4-7): in `results/full-apple.json`, G1-13's checks run with `--engine apple` on the two-speaker clip: `{"exit": 0, "isolated": true, "connections": [], "other_changes": [], "outputs_equal": true}`. `isolated` is whether the run was under `sandbox-exec` with the network denied; `connections` lists the connection attempts the in-process guard logged; `other_changes` lists every path new, changed or gone under the watched directories (G1-13's), other than the requested outputs; `outputs_equal` is whether the outputs equal those of the same run with the network up. The checks pass when `exit` is 0, `isolated` is true, both lists are empty and `outputs_equal` is true. It is `null` in every other results file: Kyutai's G1-13 runs in CI.
+- **Apple's engine:** `machine.os` holds the macOS version and build, `models.asr` holds Apple's version record (as in the transcript JSON), `determinism` is `null` (G4-6), and `peak_rss_bytes` is `lmt`'s plus the helper's (G4-5).
+- **`rtf`'s basis:** for `product`, the spec's RTF, from process start to exit. For `asr-alone` and `pyannote-alone`, that stage's own time within the same product run: its model's loading and inference, without interpreter start, decoding or export, and, when diarization runs, beside the other stage. So the three aren't like for like.
+- **Live figures** (`results/live.json` and `results/live-apple.json`, G2-6, G4-8): the word delay as `p50_delay_seconds`, `p95_delay_seconds` and `max_delay_seconds`; the label delay as `p50_label_delay_seconds`, `p95_label_delay_seconds` and `max_label_delay_seconds`; `matched_words`; `runs` (each run's `p95_delay_seconds`, `p95_label_delay_seconds` and `behind_seconds`, how far behind real time it was at the end); plus `wer` and `der`.
 - **Timing fields:** `date`, `wall_seconds`, `rtf`, `peak_rss_bytes`, and the live figures' delays and `behind_seconds`. Two runs are compared with these removed (G1-5, G1-12).
 - **`dirty`:** `true` when the working tree had uncommitted changes. A results file that the README's table is rendered from must have `dirty: false`.

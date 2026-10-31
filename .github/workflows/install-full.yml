@@ -1,0 +1,103 @@
+# G3-6, G3-7 and G3-8 on macos-26, the one platform since G4 (#573) (design/internal/g3-stage1.md §5, "install-full"): the README's
+# one-command install, then the full-install sequence against it, each in a clean environment (no cache).
+# Called by product.yml on workflow_dispatch, and by release.yml.
+name: install-full
+
+on:
+  workflow_call:
+    inputs:
+      tier:
+        description: The caller's tier, for the records' `tier` (design/internal/criteria.md §3). Empty gives null.
+        type: string
+        required: false
+        default: ""
+    secrets:
+      HF_TOKEN:
+        description: The Owner's Hugging Face read token, for the gated models (#96). Read only by the full-install step.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  # toolchain.toml's [uv] version, for setup-uv below.
+  uv:
+    runs-on: macos-26
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.uv.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: toolchain.toml
+          sparse-checkout-cone-mode: false
+      - id: uv
+        run: |
+          version=$(python3 -I -c 'import tomllib; print(tomllib.load(open("toolchain.toml", "rb"))["uv"]["version"])')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  install-full:
+    needs: uv
+    strategy:
+      fail-fast: false
+      matrix:
+        # `install` and `full` number each runner's two records, so no two files of a run share a name.
+        include:
+          - os: macos-26
+            platform: macos-arm64
+            install: 3
+            full: 4
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      # A clean environment (spec, G3 "Terms"): no actions/cache, and no enable-cache.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ needs.uv.outputs.version }}
+          enable-cache: false
+      # Only the git source the README's URL is redirected to: nothing in it is synced before the install.
+      # The full history, since --tag-checkout tags its HEAD. actions/checkout writes only under the
+      # workspace, so it is moved to $RUNNER_TEMP/src.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: src
+          fetch-depth: 0
+          persist-credentials: false
+      - run: mv "$GITHUB_WORKSPACE/src" "$RUNNER_TEMP/src"
+      - name: The one-command install (G3-7)
+        env:
+          LMT_TIER: ${{ inputs.tier }}
+        run: >-
+          python3 -I "$RUNNER_TEMP/src/.github/scripts/check_install.py" --platform ${{ matrix.platform }}
+          --scratch "$RUNNER_TEMP/install" --readme "$RUNNER_TEMP/src" --tag-checkout
+          --criteria-out "$GITHUB_WORKSPACE/criteria-install-full-${{ matrix.install }}.json"
+      # The checkout's venv, for tests/subtitle_checks.py, and the ffmpeg CLI, CI's checking tool only.
+      - if: ${{ !cancelled() }}
+        working-directory: ${{ runner.temp }}/src
+        run: uv sync --locked --all-extras
+      - name: The ffmpeg CLI
+        if: ${{ !cancelled() }}
+        run: |
+          command -v ffmpeg || brew install ffmpeg
+          ffmpeg -version | head -n 1
+      # G3-6 and G3-8. It runs after a failed install too, so their checks are recorded as failed.
+      - name: The full-install sequence (G3-6, G3-8)
+        if: ${{ !cancelled() }}
+        working-directory: ${{ runner.temp }}/src
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}   # this step only (#96)
+          LMT_TIER: ${{ inputs.tier }}
+        run: >-
+          uv run --frozen python .github/scripts/check_full_install.py --lmt "$RUNNER_TEMP/install/bin/lmt"
+          --platform ${{ matrix.platform }} --work "$RUNNER_TEMP/work"
+          --criteria-out "$GITHUB_WORKSPACE/criteria-install-full-${{ matrix.full }}.json"
+      # The runner's records (design/internal/criteria.md §3), one artifact per runner; the merge joins the
+      # run's two files into one install-full record. A cancelled run uploads none.
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: criteria-install-full-${{ matrix.platform }}
+          path: criteria-install-full-*.json
+          retention-days: 90
+          if-no-files-found: error

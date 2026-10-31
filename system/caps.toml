@@ -16,8 +16,17 @@ pause_at_seven_day = 0.90
 
 [concurrency]
 # The Owner, 2026-10-28 22:19 PT, for the G1-1 push: "You can use two developers." (#84)
-max_runs = 3
+# The Owner, 2026-10-29 afternoon: "3 developers". One more run in all, so the Reviewer keeps a slot.
+# Builder, managed mode (blueprint §2: "may raise caps short of the Owner's headroom"), 2026-10-29 16:15 PT:
+# four Developers for stage 2's parallel S items; the 5-hour hold and 7-day pause are unchanged.
+# Builder, managed mode, 2026-10-29 20:38 PT: reviews were the bottleneck (six PRs waiting at once). Reviewer runs mostly read, so four can run
+# beside the Developers. The builder keeps Developers at about three, since model tests fill the Mac's CPU.
+max_runs = 7
 max_runs_per_role = 2
+
+[concurrency.per_role]
+developer = 4
+reviewer = 4
 
 [wip]
 max_open_agent_prs = 3
