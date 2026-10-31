@@ -2,6 +2,7 @@
 
 | Date (PT) | By | Change |
 | --- | --- | --- |
+| 2026-10-30 | architect, #169 | The builder's report: the Owner's Mac has Chrome 156 but no chromedriver, and Homebrew disabled the `chromedriver` cask on 2026-09-01 (it fails the macOS Gatekeeper check). No browser or driver may be downloaded (#83, answer 8a), and Gatekeeper isn't to be bypassed; cloud sessions have no Chrome either. So the `browser` job moves from 3d into 3a, at tier 2 as before, without its record. The test of each of 3a, 3b and 3c is now a `workflow_dispatch` gate run on the PR's branch with the `browser` job passing, linked on the PR; a local Mac run is welcome but not required. The step asking the Owner for `brew install --cask google-chrome chromedriver` is removed; `conftest.py`'s Mac fallbacks and its fail-not-skip message stay. The headless `currentTime` check with no sound device is now 3b's first dispatched run. 3d keeps the screenshot script, its test and the `criteria-browser` record, so `product.yml`'s `browser` block is built in a chain, 3a → 3d. G3's criteria are unchanged |
 | 2026-10-30 | architect, #409 | The Owner's answer 1 on #409 (spec G3 "Terms"). 0d's test compares only the fields that don't depend on the machine, through `machine_independent`: the top-level `schema_version`, `lmt_version`, `source`, `models` and `speakers`, `len(segments)`, and each segment's `speaker` in order. Across machines, word times differed by up to 0.58 s and one segment's text differed, so the masked byte comparison (#452) failed on `main` and was reverted (#494); on one machine, three runs were byte-identical. On a mismatch the test still writes the run's file as the `transcript-fixture` artifact. The committed fixture stays the Mac's file from 0c unless a compared field differs. G3's criteria are unchanged |
 | 2026-10-30 | architect, #415 | The builder's report on #485: CI's first real install (gate run 41082832975) failed step 7, 293 of 482 checks, because `uv tool install` chose the runner's Python 3.12.3. That installs the lock's ≥ 3.12 tree (`av` 19.0.2 is the lock's own 3.12 entry, not a fresh resolve), which G1-15 has never vetted: `check_licences.py` knows only 3.11's extension modules, and `av` 19.0.2's new libraries (`libvmaf`) have no entry. `requires-python` becomes `">=3.11,<3.12"`, so the README's command installs the Python CI measures, on any machine, and the `av` and `numpy` pins lose their Python markers (4a1). `check_install.py` step 4 also fails unless the install's Python has `.python-version`'s minor (4a3). The command, `check_readme.py` and step 7 are unchanged: step 7 still checks what actually installed, and the unpinned rest of the tree may move, as the architecture says (4a4). G3's criteria are unchanged |
 | 2026-10-30 | architect, #415 | The Owner's answer 1 on #415: G3-7 checks only for `jiwer`, since `pyannote.audio` 3.4.0 brings `pyannote.metrics` into every plain install (`uv.lock`). `check_install.py` step 5 (4a3) checks `jiwer` alone, with `EVAL_EXTRA = ("jiwer",)`. 0b's import hook still blocks both, since `lmt`'s plain modules mustn't import either |
@@ -23,7 +24,7 @@ This is the detail a Developer or the builder needs to build each of G3 stage 1'
 The design's eight items (0, 1, 2a, 2b, 3, 4a, 4b, 5) were each about 1.5 hours. Each is now split into S items: one Developer (or builder) run and one PR, up to about 45 minutes. A 26th, **6**, marks the registry. The sections below keep their numbers, and each says which S item builds which part.
 - **Every test that checks part of a criterion's "How it's checked" column carries its `criterion` marker, in the same PR** (`design/internal/criteria.md` §1). The table's last column names the tags. A test it doesn't name stays untagged: helpers' and fixtures' own tests, the stubs', and checks of what the spec puts in another job (G3-6 is checked in `install-full`, not by 2b's fakes). A check that isn't pytest writes its own record (§3).
 - **`cli.py` puts a change in tier 3,** and both `rename` and `demo` need subcommands in it. So 0a wires both commands to stub modules at once, as G1's item 1a did. The rename and demo items then never touch `cli.py`: they run at tier 2, and in parallel.
-- **A file that several items build is built in a chain,** never by two open items at once: `rename.py` (0a → 1a → 1b), `demo/server.py` (0a → 2a2 → 2a3 → 2a4), `test_fixture_transcript.py` (0c → 0d), `test_demo_server.py` (2a3 → 3c), `check_full_install.py` (4b1 → 4b2), `pyproject.toml` with `uv.lock` (4a1 → 3a), `tests/test_criteria.py` (4a4 → 5a), and `tests/criteria.toml` with `.github/scripts/test_criteria.py` (3d and 5a → 6).
+- **A file that several items build is built in a chain,** never by two open items at once: `rename.py` (0a → 1a → 1b), `demo/server.py` (0a → 2a2 → 2a3 → 2a4), `test_fixture_transcript.py` (0c → 0d), `test_demo_server.py` (2a3 → 3c), `check_full_install.py` (4b1 → 4b2), `pyproject.toml` with `uv.lock` (4a1 → 3a), `product.yml`'s `browser` block (3a → 3d), `tests/test_criteria.py` (4a4 → 5a), and `tests/criteria.toml` with `.github/scripts/test_criteria.py` (3d and 5a → 6).
 
 | Item | What | Needs (unmerged) | Files it creates or changes | Tier | Its test |
 | --- | --- | --- | --- | --- | --- |
@@ -40,10 +41,10 @@ The design's eight items (0, 1, 2a, 2b, 3, 4a, 4b, 5) were each about 1.5 hours.
 | **2a4** | The command: `cli_demo` and `DemoProcess` (§2a) | 2a3 | `src/lmt/demo/server.py`, `tests/demo_process.py`, `tests/test_demo_process.py` | 2 | In a subprocess: start and stop, the browser opener, loopback only, the errors' exit codes, and G1-13's checks with the guard and the snapshot. `test` job. **Tags:** `G3-4`; the tests of `--audio`, `--port` and `--no-browser` `G1-6` too |
 | **2b1** | `--sample`'s cache: `prepare`, `cache_key` (§2b) | 0a, 0c | `src/lmt/demo/sample.py`, `tests/test_demo_sample.py` | 2 | §2b's first six tests, on fakes. `test` job. **Tags:** the two `offline=True` tests, through `cli.main`, `G1-6` (`--offline`); the rest untagged (G3-6 is `install-full`'s) |
 | **2b2** | `lmt demo --sample` end to end, on fakes (§2b) | 2a4, 2b1 | `tests/test_demo_sample_process.py`, `tests/fixtures/sample_fakes/sitecustomize.py` | 2 | §2b's last test. `test` job. **Tags:** `G1-6` (`--sample`); its `TRANSCRIPT`-with-`--sample` check `G3-4` too |
-| **3a** | Selenium in the lock, the driver, and the page's list (§3) | 2a4; after 4a1 (the lock) | `pyproject.toml` (Selenium, the `browser` marker), `uv.lock`, `toolchain.toml` (`[licences]` entries, if any), `tests/browser/conftest.py`, `tests/browser/test_page.py` | 3 | The inventory posted for both platforms; the PR shows the local `uv run --frozen pytest -m browser` result. **Tags:** `G3-5` |
-| **3b** | Playing from a clicked or keyed segment (G3-5) (§3) | 3a | `tests/browser/test_play.py` | 2 | The local `pytest -m browser` result. **Tags:** `G3-5` |
-| **3c** | The track after a rename (G3-2's Chrome parse), the markup fixture, and the relabel helper (§3) | 3a, 1b | `tests/browser/test_track.py`, `tests/test_demo_server.py` (the helper) | 2 | The local `pytest -m browser` and `pytest` results. **Tags:** the track test `G3-2`, `G3-5`; the markup test `G3-5` |
-| **3d** | The screenshot script and the `browser` job, with its record (§3) | 3b, 3c | `tests/browser/screenshot.py`, `tests/browser/test_screenshot.py`, `.github/workflows/product.yml` (`browser` block), `tests/criteria.toml` (`jobs`), `.github/scripts/test_criteria.py` (the real registry's `jobs`) | 3 | The `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, with every G3-5 check, G3-2's Chrome comparison, the screenshot artifact and the `criteria-browser` record. `test_screenshot.py` untagged (G3-9 is stage 2's) |
+| **3a** | Selenium in the lock, the driver, the page's list, and the `browser` job without its record (§3) | 2a4; after 4a1 (the lock) | `pyproject.toml` (Selenium, the `browser` marker), `uv.lock`, `toolchain.toml` (`[licences]` entries, if any), `tests/browser/conftest.py`, `tests/browser/test_page.py`, `.github/workflows/product.yml` (`browser` block) | 3 | The inventory posted for both platforms; the `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, linked on the PR. **Tags:** `G3-5` |
+| **3b** | Playing from a clicked or keyed segment (G3-5) (§3) | 3a | `tests/browser/test_play.py` | 2 | The `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, linked on the PR: the first run of the headless `currentTime` check with no sound device. **Tags:** `G3-5` |
+| **3c** | The track after a rename (G3-2's Chrome parse), the markup fixture, and the relabel helper (§3) | 3a, 1b | `tests/browser/test_track.py`, `tests/test_demo_server.py` (the helper) | 2 | The `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, linked on the PR; the `test` job with the helper in the PR. **Tags:** the track test `G3-2`, `G3-5`; the markup test `G3-5` |
+| **3d** | The screenshot script, and the `browser` job's screenshot and record steps (§3) | 3b, 3c | `tests/browser/screenshot.py`, `tests/browser/test_screenshot.py`, `.github/workflows/product.yml` (`browser` block: its record and screenshot steps), `tests/criteria.toml` (`jobs`), `.github/scripts/test_criteria.py` (the real registry's `jobs`) | 3 | The `browser` job passing in a `workflow_dispatch` gate run on the PR's branch, with every G3-5 check, G3-2's Chrome comparison, the screenshot artifact and the `criteria-browser` record. `test_screenshot.py` untagged (G3-9 is stage 2's) |
 | **4a1** | The pins (§4a) | — | `pyproject.toml` (pins), `uv.lock`, `tests/test_packaging.py` | 3 | `test_packaging.py`; the lock's eight versions unchanged. `test` job. Untagged (G3-7's check is the install, 4a4) |
 | **4a2** | `## Install` and its README check (§4a) | — | `README.md`, `.github/scripts/check_readme.py`, `.github/scripts/test_check_readme.py` | 1 | `check_install`'s unit tests and `--print-install`; `check_readme.py --root .` passing. `readme` job. **Tags:** `check_install`'s row in `CHECKS` carries `G3-7`, so the `readme` record has it |
 | **4a3** | `check_install.py`, with `--criteria-out` (§4a) | 4a2 | `.github/scripts/check_install.py`, `.github/scripts/test_check_install.py` | 1 | Its unit tests, the record's included. `readme` job |
@@ -70,16 +71,17 @@ The design's eight items (0, 1, 2a, 2b, 3, 4a, 4b, 5) were each about 1.5 hours.
 The path to G3-5 is the longest: 0a, 2a1, 2a3, 2a4, 3a, 3b, 3d, seven merges in a row.
 
 **Parallel-safe,** by the files in the table:
-- **No two items that can be open at once share a file,** except `product.yml`: 0d, 4a4, 3d and 5a each change their own job's block (`test-models`, `test`, `browser`, `install-full`). Git merges different blocks, so they may run in parallel. If two of them conflict, the second updates its branch from `main`. 3d and 5a also each add their job to the registry's `jobs` line, in `tests/criteria.toml` and in `.github/scripts/test_criteria.py`'s real-registry test. That is one line in each, so the second to merge updates its branch from `main` and keeps both jobs.
+- **No two items that can be open at once share a file,** except `product.yml`: 0d, 4a4, 3a and 5a each change their own job's block (`test-models`, `test`, `browser`, `install-full`), and so does G2's 3c4 (`test-models`' `timeout-minutes`, if at all; `g2-stage1.md`). Git merges different blocks, so they may run in parallel. 3d changes the `browser` block after 3a has merged, since it needs 3b and 3c, which need 3a. If two of them conflict, the second updates its branch from `main`. 3d and 5a also each add their job to the registry's `jobs` line, in `tests/criteria.toml` and in `.github/scripts/test_criteria.py`'s real-registry test. That is one line in each, so the second to merge updates its branch from `main` and keeps both jobs.
 - **3a and 4a1** both change `pyproject.toml` and `uv.lock`, and a lock can't be merged by hand. So 3a starts only after 4a1 has merged, since 4a1 is on G3-7's path. If they ever overlap, the second updates its branch from `main` and runs `uv lock` again; it never merges `uv.lock`'s text.
 
-**Every item's local checks:** `uv run --frozen ruff check`, `uv run --frozen pytest`, and `python3 -I system/gate/generic.py --base origin/main`. An item with a `models` test adds `uv run --frozen pytest -m models`, and one with a `browser` test adds `uv run --frozen pytest -m browser`.
+**Every item's local checks:** `uv run --frozen ruff check`, `uv run --frozen pytest`, and `python3 -I system/gate/generic.py --base origin/main`. An item with a `models` test adds `uv run --frozen pytest -m models`. An item with a `browser` test adds `uv run --frozen pytest -m browser` where its machine has Chrome and a matching chromedriver; that run is welcome but not required (§3).
 
 ### How an item's test runs, now that a PR runs tier 1
 
 `.github/scripts/tiers.py` has `PULL_REQUEST_MAX_TIER = 1`: a PR runs only tier 1 (the `readme` and `test` jobs). `test-models` and `browser` run on `main` after the merge, and in a `workflow_dispatch` run, which runs every tier. So, as G1's P6b and P7c do (`g1-stage2.md`):
-- **A `models` or `browser` test** is shown in the PR by the Developer's local run (`uv run --frozen pytest -m models`, or `-m browser`). It is first confirmed in CI on `main`. A failure there is `sev:1`: revert first, as the next Developer item, then fix the cause.
-- **Two items add a job's first Linux check,** where the Mac can't stand in for Linux: 0d (the fixture is checked against Linux's product run) and 3d (the `browser` job, on the runner's headless Chrome). Each gets a `workflow_dispatch` gate run on its PR's branch before it merges. So does 5a, whose `install-full` runs only that way. No Developer run can start one or read its artifacts today: `post.py` has no such command, `post.py gate` shows only the overall result (#218), and `gh run` is denied (#312). So the Developer asks on the item for the builder, who starts the run and posts its result and any artifact the item needs, or passes that to the Owner.
+- **A `models` test** is shown in the PR by the Developer's local run (`uv run --frozen pytest -m models`). It is first confirmed in CI on `main`. A failure there is `sev:1`: revert first, as the next Developer item, then fix the cause.
+- **A `browser` test** is shown by a `workflow_dispatch` gate run on the PR's branch in which the `browser` job passes, linked on the PR: 3a, 3b, 3c and 3d each get one before merging. Neither the Owner's Mac nor a cloud session has a driver (§3, "Why not the Mac"), so the runner's headless Chrome is where these tests are shown. After 3a merges, `main`'s `browser` job runs them too; a failure there is `sev:1`, as above.
+- **0d** added a job's first Linux check, where the Mac can't stand in for Linux (the fixture is checked against Linux's product run), and got a `workflow_dispatch` gate run on its branch. So does 5a, whose `install-full` runs only that way. No Developer run can start one or read its artifacts today: `post.py` has no such command, `post.py gate` shows only the overall result (#218), and `gh run` is denied (#312). So the Developer asks on the item for the builder, who starts the run and posts its result and any artifact the item needs, or passes that to the Owner.
 - **A `test` or `readme` job check** runs in the PR, as before.
 
 **CI cost.** The table this replaced assumed tier-2 and tier-3 runs on each PR. Now a PR's runs are tier 1, about 10 minutes each (architecture, "CI"), and 12 once G3-7's install lands in 4a4. Each merge runs its own tier once on `main`. With the architecture's 4 runs per PR, an upper estimate for stage 1:
@@ -90,9 +92,9 @@ The path to G3-5 is the longest: 0a, 2a1, 2a3, 2a4, 3a, 3b, 3d, seven merges in 
 | `main` runs, tier 3 (0a, 0d, 3a, 3d, 4a1, 4a4, 5a, 5b) | 8 × ≈ 38 | ≈ 300 |
 | `main` runs, tier 2 (0b, 0c, 1a–1c, 2a1–2a4, 2b1, 2b2, 3b, 3c, 6) | 14 × ≈ 26 | ≈ 360 |
 | `main` runs, tier 1 (4a2, 4a3, 4b1, 4b2) | 4 × ≈ 12 | ≈ 50 |
-| `workflow_dispatch` runs (0d, 3d, 5a) | 3 × ≈ 38, plus `install-full`'s ≈ 30 | ≈ 150 |
+| `workflow_dispatch` runs (0d, 3a, 3b, 3c, 3d, 5a) | 6 × ≈ 38, plus `install-full`'s ≈ 30 | ≈ 260 |
 
-That is about 2,000 minutes, against about 1,100 for the eight items: 26 PRs carry more fixed time than eight, and most of the total is the architecture's 4 runs per PR. The Coordinator plans against the 3,000-minute signal with these figures.
+That is about 2,100 minutes, against about 1,100 for the eight items: 26 PRs carry more fixed time than eight, and most of the total is the architecture's 4 runs per PR. The Coordinator plans against the 3,000-minute signal with these figures.
 
 ## What stage 1 takes from G1's stage 2
 
@@ -437,18 +439,20 @@ G3-6 itself, with the real download and models, is 4b1's script in 5a's `install
 ## 3. The browser test
 
 **Its S items:**
-- **3a:** Selenium in the lock and the licence inventory, the `browser` marker, the driver (`tests/browser/conftest.py`), and `tests/browser/test_page.py`: the list, the origin and the console.
+- **3a:** Selenium in the lock and the licence inventory, the `browser` marker, the driver (`tests/browser/conftest.py`), `tests/browser/test_page.py` (the list, the origin and the console), and the `browser` job without its record.
 - **3b:** `tests/browser/test_play.py`: clicking and the keyboard (G3-5).
 - **3c:** `tests/browser/test_track.py`: the track after a rename (G3-2's Chrome parse) and the markup fixture (G3-5), and the relabel helper in `tests/test_demo_server.py`.
-- **3d:** the screenshot script and its test, and the `browser` job, with its first run on the runner.
+- **3d:** the screenshot script and its test, and the `browser` job's screenshot and record steps.
 
-Until 3d's job lands, the `browser` tests run only on the Developer's Mac, as `uv run --frozen pytest -m browser`. The PR of each of 3a to 3c shows that result.
+The `browser` tests run on the runner's headless Chrome, in the `browser` job, from 3a on. The test of each of 3a to 3d is a `workflow_dispatch` gate run on the PR's branch with that job passing, linked on the PR ("How an item's test runs"). A dispatched run runs every tier, so it runs the job though the PR runs tier 1. A local `uv run --frozen pytest -m browser`, on a machine that has Chrome and a matching chromedriver, is welcome in the PR but not required.
+
+**Why not the Mac.** This design first had the Developer's Mac run these tests until 3d, and the Owner install the driver with `brew install --cask google-chrome chromedriver`. Homebrew disabled the `chromedriver` cask on 2026-09-01, since it fails the macOS Gatekeeper check. The Owner's Mac has Chrome but no driver; no browser or driver may be downloaded (#83, answer 8a), and Gatekeeper isn't to be bypassed. Cloud sessions have no Chrome. The runner image provides both ("The driver").
 
 ### First step (3a)
 
 Before the PR, as G1's item 1b did, add `selenium>=4.25` to the `dev` group, `uv lock`, and run `check_licences.py --inventory` on both platforms' installs. Post both tables on the item. Selenium's own tree is expected to bring `urllib3`, `trio`, `trio-websocket`, `outcome`, `sniffio`, `sortedcontainers`, `attrs`, `wsproto`, `h11`, `websocket-client`, `certifi`, `PySocks` and `typing_extensions`, all in the classes the Owner accepted (§7). The wheel also carries the Selenium Manager executable (Apache-2.0), which isn't a shared library, so the bundled-library check doesn't see it. The inventory names it all the same. Anything outside the allow list goes to the Owner in one batch, and the item stops before its PR.
 
-The check that headless Chrome on the runner advances `currentTime` while playing with no sound device was to run through a draft PR's `browser` job. A PR no longer runs tier 2, so it is now 3d's dispatched run. If it fails there, the Developer reports the flags tried on 3d's item before changing anything in G3-5.
+The check that headless Chrome on the runner advances `currentTime` while playing with no sound device was to run through a draft PR's `browser` job, and then through 3d's dispatched run. The runner has no sound device, so it is now 3b's first dispatched run, the first to play audio. If it fails there, the Developer reports the flags tried on 3b's item before changing anything in G3-5.
 
 ### The driver (`tests/browser/conftest.py`, 3a)
 
@@ -463,8 +467,8 @@ service = Service(executable_path=chromedriver_path())
 ```
 
 - **No browser is downloaded** (#83, answer 8a). The runner image provides `google-chrome` and `chromedriver`, at matching versions, with the driver's directory in `CHROMEWEBDRIVER`. With an explicit driver path, Selenium doesn't call Selenium Manager. `conftest.py` also sets `SE_OFFLINE=true` and `SE_AVOID_STATS=true` in `os.environ` (with `setdefault`) before it imports Selenium, so a local run can't download or send usage statistics either. The job sets both as well.
-- **Finding them.** `chrome_binary()` is `shutil.which("google-chrome")`, else, on macOS, `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` if it exists. `chromedriver_path()` is `$CHROMEWEBDRIVER/chromedriver` when the variable is set, else `shutil.which("chromedriver")`. The fallbacks are for the Developer's Mac, whose run can't set an environment variable for one command.
-- **Where Chrome or the driver is missing,** the fixture fails with a message naming what it looked for. It doesn't skip. If the Mac lacks them, the Developer asks the Owner, as P6b did for `ffmpeg`: "3a needs Chrome and chromedriver on the Mac for the browser tests: 1. `brew install --cask google-chrome chromedriver` (recommended), or 2. another install on `PATH`." The PR waits for the answer.
+- **Finding them.** `chrome_binary()` is `shutil.which("google-chrome")`, else, on macOS, `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` if it exists. `chromedriver_path()` is `$CHROMEWEBDRIVER/chromedriver` when the variable is set, else `shutil.which("chromedriver")`. The fallbacks are for a Mac that already has Chrome and a driver, whose run can't set an environment variable for one command.
+- **Where Chrome or the driver is missing,** the fixture fails with a message naming what it looked for. It doesn't skip, so a job without them fails rather than passing empty. No one is asked to install the driver on a Mac ("Why not the Mac"); the fallbacks stay for a machine that already has one.
 - **The marker:** `pyproject.toml`'s `markers` gains `browser: drives headless Chrome (the browser job)`, and `addopts` becomes `-m 'not models and not data and not browser'`.
 - **A served page:** a fixture `page(driver, demo_dir, *args)` starts 2a4's `DemoProcess` and opens its URL. 3a to 3d use it.
 
@@ -476,7 +480,7 @@ On the transcript fixture with its clip, through 2a4's `DemoProcess`.
 - **The list (G3-5):** `#segments .segment` has one button per JSON segment, in order. Each one's `.time`, `.speaker` and `.text` equal the segment's `start` as `HH:MM:SS`, its speaker's label, and its text. `#speakers li` lists each label.
 - **Its own origin, and no errors (G3-5):** `performance.getEntriesByType("navigation")` and `("resource")` each have a `name` starting with the page's origin. `driver.get_log("browser")` has no entry at level `SEVERE`.
 
-**Test of 3a:** the inventory posted on the item for both platforms; the PR shows the local `uv run --frozen pytest -m browser` result with `test_page.py` passing, and the `test` job passes in the PR.
+**Test of 3a:** the inventory posted on the item for both platforms; a `workflow_dispatch` gate run on the PR's branch in which the `browser` job passes `test_page.py`, linked on the PR; and the `test` job passes in the PR.
 
 **`tests/browser/test_play.py` (3b):**
 - **Clicking (G3-5):** for the first, the middle and the last segment, the three indices from `tests/fixtures/segments.py`'s `play_targets` (0c):
@@ -486,7 +490,7 @@ On the transcript fixture with its clip, through 2a4's `DemoProcess`.
   4. Pause the audio before the next segment.
 - **The keyboard (G3-5):** from the page's start, send Tab until the middle segment's button (`play_targets`' second index) has focus (`document.activeElement`), then Enter. The same checks as for a click.
 
-**Test of 3b:** the PR shows the local `pytest -m browser` result with `test_play.py` passing. The Mac has a sound device, so this result doesn't show the runner's case; 3d's dispatched run does.
+**Test of 3b:** a `workflow_dispatch` gate run on the PR's branch in which the `browser` job passes `test_play.py`, linked on the PR. It is the runner's case, headless with no sound device ("First step").
 
 **`tests/browser/test_track.py` (3c):**
 - **The track, after a rename (G3-2, G3-5):**
@@ -500,7 +504,7 @@ On the transcript fixture with its clip, through 2a4's `DemoProcess`.
 
 In `tests/test_demo_server.py`, the `relabel` helper becomes a call to `lmt rename -f json`, now that 1b and 2a3 have landed. The `-f json` keeps the directory free of a `.vtt`, which 2a3's live re-read test asserts (G3-4: "with no `.vtt` beside it").
 
-**Test of 3c:** the PR shows the local `pytest -m browser` result with `test_track.py` passing, and the `test` job passes in the PR with the new helper.
+**Test of 3c:** a `workflow_dispatch` gate run on the PR's branch in which the `browser` job passes `test_track.py`, linked on the PR; and the `test` job passes in the PR with the new helper.
 
 ### The screenshot script (`tests/browser/screenshot.py`, 3d)
 
@@ -515,7 +519,7 @@ uv run --frozen python tests/browser/screenshot.py (--transcript PATH [--audio P
 
 Stage 2 runs it with `--sample` to make `docs/demo.png`. Here `tests/browser/test_screenshot.py` (marked `browser`) runs `main()` on the fixture, into a temporary file, and checks both figures.
 
-### The `browser` job (`product.yml`, 3d)
+### The `browser` job (`product.yml`, 3a and 3d)
 
 ```yaml
 browser:
@@ -531,9 +535,11 @@ browser:
     - astral-sh/setup-uv (pinned SHA), version: <toolchain.toml [uv] version>, enable-cache: true
     - run: uv sync --locked --all-extras
     - run: google-chrome --version && "$CHROMEWEBDRIVER/chromedriver" --version
+    # 3a: `run: uv run --frozen pytest -m browser`. 3d adds the record's option and LMT_TIER:
     - env:
         LMT_TIER: ${{ needs.changes.outputs.tier }}
       run: uv run --frozen pytest -m browser --criteria-out=criteria-browser.json
+    # 3d: the screenshot and the two uploads.
     - run: uv run --frozen python tests/browser/screenshot.py --transcript tests/fixtures/two_speakers.transcript.json --out "$RUNNER_TEMP/demo.png"
     - actions/upload-artifact (pinned SHA), name: demo-screenshot, path: ${{ runner.temp }}/demo.png
     # The job's per-criterion record (design/internal/criteria.md §3); a cancelled run uploads none.
@@ -542,9 +548,9 @@ browser:
         retention-days: 90, if-no-files-found: error
 ```
 
-The artifact lets the Reviewer look at the page without running it. **The record:** the pytest step writes `criteria-browser.json` with 3a to 3c's `G3-5` and `G3-2` tags, and its upload is the job's last step, as `UploadTest` requires. 3d adds `"browser"` to `tests/criteria.toml`'s `jobs` and to `.github/scripts/test_criteria.py`'s `test_real_registry_loads`. #300 says `against_base.py` refuses a change to that file; if it isn't fixed by then, the PR says so for the Reviewer, as G1's P10 does. No model is needed, so the job runs at tier 2 (architecture, "CI"): on `main` after each tier-2 or tier-3 merge, and in every `workflow_dispatch` run. A PR, at tier 1, doesn't run it.
+**3a** adds the job with its steps up to `pytest -m browser`, without `--criteria-out`, `LMT_TIER` or any upload: the job isn't in the registry's `jobs` yet, so `UploadTest` doesn't check it, and a job without its record mustn't be added there. `tiers.py` needs no change: `tests/` is already tier 2 by its paths, `.github/workflows/` tier 3, and a `workflow_dispatch` run runs every tier. **3d** adds the rest. The artifact lets the Reviewer look at the page without running it. **The record:** the pytest step writes `criteria-browser.json` with 3a to 3c's `G3-5` and `G3-2` tags, and its upload is the job's last step, as `UploadTest` requires. 3d adds `"browser"` to `tests/criteria.toml`'s `jobs` and to `.github/scripts/test_criteria.py`'s `test_real_registry_loads`. #300 says `against_base.py` refuses a change to that file; if it isn't fixed by then, the PR says so for the Reviewer, as G1's P10 does. No model is needed, so the job runs at tier 2 (architecture, "CI"): on `main` after each tier-2 or tier-3 merge from 3a on, and in every `workflow_dispatch` run. A PR, at tier 1, doesn't run it.
 
-**Test of 3d:** the local `pytest -m browser` result, with `test_screenshot.py` passing, in the PR. Then, before merging, a `workflow_dispatch` gate run on the PR's branch ("How an item's test runs"), in which the `browser` job passes with every G3-5 check and G3-2's Chrome comparison, on the runner's headless Chrome with no sound device. The builder posts that run's result and its `demo-screenshot` artifact on the item, for the Reviewer.
+**Test of 3d:** before merging, a `workflow_dispatch` gate run on the PR's branch ("How an item's test runs"), linked on the PR, in which the `browser` job passes `test_screenshot.py`, every G3-5 check and G3-2's Chrome comparison, on the runner's headless Chrome with no sound device, and uploads the `criteria-browser` record. The builder posts that run's result and its `demo-screenshot` artifact on the item, for the Reviewer.
 
 ## 4a. Packaging
 
