@@ -2,7 +2,7 @@
 # (design/internal/criteria.md §2). A criterion not listed is checked in CI and not yet complete.
 
 # The product jobs that upload a record (§3).
-jobs = ["readme", "test", "test-models", "eval-ci"]
+jobs = ["readme", "test", "test-models", "eval-ci", "browser"]
 
 # S1-1 to S1-5: check_readme.py makes their checks in full, and the Reviewer read S1-2's wording
 # when S1 closed. S1-4 waits for the evaluation command in the README (g1-stage1.md §1a).
