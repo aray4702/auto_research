@@ -1,4 +1,4 @@
-"""The transcript types, and the JSON's document (design/public-api.md, "Transcript JSON, version 1.1")."""
+"""The transcript types, and the JSON's document (design/public-api.md, "Transcript JSON, version 1.2")."""
 
 import copy
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from lmt import schema
 from lmt.errors import InputError
 
-SCHEMA_VERSION = "1.1"
+SCHEMA_VERSION = "1.2"  # G4: models.asr.engine
 
 
 @dataclass(frozen=True)

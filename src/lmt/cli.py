@@ -11,6 +11,7 @@ import re
 import sys
 
 from lmt import __version__
+from lmt.engines import ENGINES
 from lmt.errors import LmtError, UsageError
 
 FORMATS = ("txt", "srt", "vtt", "json")
@@ -61,7 +62,9 @@ def build_parser():
     t.add_argument("--max-speakers", metavar="N", type=int, help="The greatest number of speakers, from 1 to 20.")
     t.add_argument("--no-diarize", action="store_true",
                    help="Skip diarization: every segment is speaker S1.")
-    t.add_argument("--model", metavar="NAME", help="The ASR model, one of those `lmt models list` shows.")
+    t.add_argument("--engine", metavar="NAME", choices=ENGINES, default=ENGINES[0],
+                   help="The speech engine: kyutai (Kyutai STT 1B) or apple (Apple's recognizer, macOS 26 or "
+                        "later) (default: kyutai).")
     t.add_argument("--offline", action="store_true", help="Never download. Exits 5 if a model is missing.")
     t.add_argument("--overwrite", action="store_true", help="Replace existing outputs.")
     t.add_argument("-v", "--verbose", action="store_true", help="Print each stage's time to stderr.")
@@ -86,7 +89,8 @@ def build_parser():
     lv.add_argument("--duration", metavar="SECONDS", type=float, help="Stop after this much audio.")
     lv.add_argument("--max-speakers", metavar="N", type=int, help="At most N speakers, from 1 to 20.")
     lv.add_argument("--no-diarize", action="store_true", help="Every segment is speaker S1.")
-    lv.add_argument("--model", metavar="NAME", help="The ASR model (default: the manifest's live default).")
+    lv.add_argument("--engine", metavar="NAME", choices=ENGINES, default=ENGINES[0],
+                    help="The speech engine, as for transcribe (default: kyutai).")
     lv.add_argument("--save-audio", action="store_true",
                     help="Also write the audio as <stem>.wav (16 kHz mono, 16-bit).")
     lv.add_argument("--jsonl", action="store_true", help="Print events to stdout, one JSON object per line.")
@@ -100,9 +104,11 @@ def build_parser():
     m.set_defaults(handler="lmt.models:cli_models")
     actions = m.add_subparsers(dest="action", metavar="ACTION", required=True)
     d = actions.add_parser("download", help="Download the default models and verify every file.",
-                           description="Downloads the default models, or the named ASR model plus the "
-                                       "diarization models, and verifies every file.")
-    d.add_argument("--model", metavar="NAME", help="The ASR model to download instead of the default.")
+                           description="Downloads Kyutai's model and the diarization models, and verifies every "
+                                       "file. With --engine apple, builds the helper and asks macOS to install "
+                                       "Apple's recognizer, plus the diarization models.")
+    d.add_argument("--engine", metavar="NAME", choices=ENGINES, default=ENGINES[0],
+                   help="The speech engine to prepare (default: kyutai).")
     ls = actions.add_parser("list", help="List each model in the manifest.",
                             description="Lists each model in the manifest: its name, revision, whether it's "
                                         "the default, and whether it's downloaded and verified.")
@@ -115,12 +121,16 @@ def build_parser():
     e = commands.add_parser("eval", help="Score the product on the evaluation sets (needs lmt[eval]).",
                             description="Scores the product on the evaluation sets. Needs the eval extra.")
     e.add_argument("--set", choices=("ci", "full", "live"), help="The set to score.")
+    e.add_argument("--engine", choices=("kyutai", "apple"), default="kyutai",
+                   help="The speech engine to score (default: kyutai). With apple, the results go to "
+                        "<set>-apple.json.")
     e.add_argument("--out", metavar="DIR", default="results", help="Where the results files go "
                    "(default: results/).")
     e.add_argument("--update-readme", action="store_true",
-                   help="After --set full, regenerate README.md's results table.")
+                   help="After --set full or --set live, regenerate README.md's results table from every "
+                        "results file.")
     e.add_argument("--check-readme", action="store_true",
-                   help="Check README.md's results table against results/full.json. Exits 6 if it differs.")
+                   help="Check README.md's results table against the results files. Exits 6 if it differs.")
     e.set_defaults(handler="lmt.eval.cli:cli_eval")
 
     r = commands.add_parser("rename", help="Give speakers names, then export again.",
@@ -210,10 +220,6 @@ def _validate_live(args):
         raise UsageError("--duration", f"must be a number above 0, not {args.duration:g}")
     if args.name is not None and (not args.name or "/" in args.name or args.name.startswith(".")):
         raise UsageError("--name", f"{args.name!r} isn't a plain file name: not empty, no '/', no leading '.'")
-    if args.model is not None:
-        from lmt import models  # only here, so `lmt --help` loads no handler module
-
-        models.default_models(models.load_manifest(), args.model)  # UsageError naming --model
 
 
 def _validate_eval(args):
@@ -221,8 +227,8 @@ def _validate_eval(args):
         raise UsageError("--set", "give --set or --check-readme")
     if args.set is not None and args.check_readme:
         raise UsageError("--check-readme", "can't be combined with --set")
-    if args.update_readme and args.set != "full":
-        raise UsageError("--update-readme", "only with --set full")
+    if args.update_readme and args.set not in ("full", "live"):
+        raise UsageError("--update-readme", "only with --set full or --set live")
 
 
 def _validate_demo(args):

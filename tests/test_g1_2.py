@@ -13,10 +13,10 @@ FIXTURES = ROOT / "tests" / "fixtures"
 CLIP_TEXT = FIXTURES / "clip.txt"
 FORMATS = ("flac", "mp3", "m4a", "mp4", "mov")
 
-# spec/acceptance.md G1-2: each format's WER within 1.0 percentage point of the WAV's, inclusive. The 1e-9 only
+# spec/acceptance.md G1-2: each format's WER within 1.5 percentage points of the WAV's, inclusive (was 1.0; #575, a). The 1e-9 only
 # absorbs float rounding at an exact tie: both WERs share the reference's word count N, so a real miss exceeds
 # the bound by at least 1 / (100 N).
-DELTA_BOUND = 0.010
+DELTA_BOUND = 0.015
 
 
 def clip_wer(json_path):

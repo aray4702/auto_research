@@ -77,8 +77,8 @@ if sys.argv[1:] == ["demo", "--sample", "--no-browser"]:
         def log_message(self, *args):
             pass
 
-    def stop(*_):
-        raise SystemExit(3 if "exit-3" in modes else 0)
+    def stop(*_):  # at once: no interpreter teardown of the server's threads, which a slow runner stalls in (#573)
+        os._exit(3 if "exit-3" in modes else 0)
 
     signal.signal(signal.SIGTERM, signal.SIG_IGN if "ignore-term" in modes else stop)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
