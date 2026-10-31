@@ -10,6 +10,7 @@ import io
 import re
 import secrets
 import signal
+import socketserver
 import sys
 import threading
 import wave
@@ -71,11 +72,19 @@ def load(transcript: Path, audio: Path | None, audio_option: bool) -> Demo:
     return Demo(transcript=transcript, audio=wav_bytes(samples), token=secrets.token_urlsafe(16))
 
 
+class Server(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer's server_bind looks up socket.getfqdn(host), a reverse DNS lookup that can wait out
+        # resolver timeouts with the network cut (#521); the demo never uses server_name.
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+
+
 def make_server(demo: Demo, port: int) -> ThreadingHTTPServer:
     """The server on 127.0.0.1:`port` (0 for any free one), with `demo` on it and its bound port in
     `demo.port`. A port in use is InputError (exit 3)."""
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        server = Server(("127.0.0.1", port), Handler)
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
             raise InputError(f"--port {port}", "already in use") from None
