@@ -230,6 +230,33 @@ def test_transcript_is_read_again_on_each_request(served, capfd):
     assert get(demo, "transcript.vtt")[0] == 200
 
 
+def test_binds_without_a_reverse_lookup(tmp_path, monkeypatch):
+    # #521: HTTPServer.server_bind's socket.getfqdn waited out resolver timeouts on macOS with the network cut.
+    calls = []
+
+    def getfqdn(*args):
+        calls.append(args)
+        raise AssertionError("socket.getfqdn called")
+
+    monkeypatch.setattr(socket, "getfqdn", getfqdn)
+    shutil.copy(FIXTURES / "two_speakers.transcript.json", tmp_path)
+    shutil.copy(FIXTURES / "two_speakers.wav", tmp_path)
+    with contextlib.redirect_stderr(io.StringIO()):
+        demo = load(tmp_path / "two_speakers.transcript.json", None, False)
+    server = make_server(demo, 0)
+    thread = threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True)
+    thread.start()
+    try:
+        status, headers, _ = get(demo, "")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+    assert status == 200
+    assert headers["Content-Type"] == "text/html; charset=utf-8"
+    assert calls == []
+
+
 def test_a_port_in_use(tmp_path):
     shutil.copy(FIXTURES / "two_speakers.transcript.json", tmp_path)
     shutil.copy(FIXTURES / "two_speakers.wav", tmp_path)
