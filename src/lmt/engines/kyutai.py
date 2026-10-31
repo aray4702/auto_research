@@ -70,11 +70,13 @@ class Engine(engines.Engine):
         self.info = {"name": MODEL, "engine": "kyutai", "repository": model.repository,
                      "revision": model.revision}
 
-    def stream(self) -> "Stream":
-        return Stream(self)
+    rate = RATE  # batch mode decodes straight to 24 kHz (Engine.rate)
 
-    def transcribe(self, samples) -> list:
-        stream = self.stream()
+    def stream(self, rate: int = audio.SAMPLE_RATE) -> "Stream":
+        return Stream(self, rate)
+
+    def transcribe(self, samples, rate: int = audio.SAMPLE_RATE) -> list:
+        stream = self.stream(rate)
         try:
             pieces = stream.feed(samples) + stream.finish()
         finally:
@@ -100,7 +102,7 @@ class Stream(engines.Stream):
     """One pass of the loop. A token from step k, counting the recording's first frame as 0, is a piece at
     max(0, k·0.08 − delay) for 0.08 s, and after step k every piece before (k+1)·0.08 − delay is out."""
 
-    def __init__(self, engine: Engine):
+    def __init__(self, engine: Engine, rate: int = audio.SAMPLE_RATE):
         import mlx.core as mx
         import rustymimi
         from moshi_mlx import models as moshi
@@ -117,9 +119,10 @@ class Stream(engines.Stream):
         self._sampler = _Greedy()
         self._gen = moshi.LmGen(model=engine.lm, max_steps=MAX_STEPS, text_sampler=self._sampler,
                                 audio_sampler=Sampler(temp=0.0, top_k=250), check=False)
-        self._resampler = audio.Resampler(audio.SAMPLE_RATE, 1, out_rate=RATE)
+        self._rate = rate  # the rate fed: 16 kHz from live sources, 24 kHz in batch mode
+        self._resampler = None if rate == RATE else audio.Resampler(rate, 1, out_rate=RATE)
         self._pending = numpy.zeros(0, numpy.float32)  # 24 kHz samples short of a whole frame
-        self._fed = 0  # 16 kHz samples fed: the recording's length so far
+        self._fed = 0  # samples fed, at self._rate: the recording's length so far
         self._closed = False
         self.done_until = 0.0
         self._step = -math.ceil(round(engine.prefix * RATE) / FRAME)  # the silence prefix's steps are < 0
@@ -128,11 +131,12 @@ class Stream(engines.Stream):
     def feed(self, block) -> list[Piece]:
         block = numpy.asarray(block, dtype=numpy.float32).reshape(-1)
         self._fed += len(block)
-        return self._run(self._resampler.push(block))
+        return self._run(block if self._resampler is None else self._resampler.push(block))
 
     def finish(self) -> list[Piece]:
         tail = numpy.zeros(round((self._engine.delay + 1.0) * RATE), numpy.float32)
-        pieces = self._run(numpy.concatenate([self._resampler.flush(), tail]))
+        rest = numpy.zeros(0, numpy.float32) if self._resampler is None else self._resampler.flush()
+        pieces = self._run(numpy.concatenate([rest, tail]))
         self._pending = numpy.zeros(0, numpy.float32)
         return pieces
 
@@ -169,7 +173,7 @@ class Stream(engines.Stream):
             return None
         text = tokenizer.id_to_piece(token)
         probability = math.exp(self._sampler.logprobs.reshape(-1)[token].item())
-        duration = round(self._fed / audio.SAMPLE_RATE, 3)
+        duration = round(self._fed / self._rate, 3)
         start = min(round(max(0.0, k * STEP - self._engine.delay), 3), duration)
         end = min(round(start + STEP, 3), duration)
         return Piece(text.replace("▁", " "), start, end, text.startswith("▁"), probability)

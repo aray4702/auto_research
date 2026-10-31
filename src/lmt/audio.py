@@ -52,8 +52,10 @@ class Resampler:
         return numpy.concatenate(pieces).astype(numpy.float32, copy=False) if pieces else numpy.zeros(0, numpy.float32)
 
 
-def decode(path: str | Path) -> numpy.ndarray:
-    """The first audio stream's samples: float32, mono, 16 kHz, one dimension."""
+def decode(path: str | Path, rate: int = SAMPLE_RATE) -> numpy.ndarray:
+    """The first audio stream's samples: float32, mono, at `rate` (16 kHz by default), one dimension. An engine
+    with its own rate gets its audio decoded straight to it: decoding a 48 kHz AAC file to 16 kHz and then
+    resampling it to Kyutai's 24 kHz cost Kyutai 3.4 points of WER on the reference clip (G1-2, #575)."""
     path = Path(path)
     if not path.exists():
         raise InputError(str(path), "no such file")
@@ -72,7 +74,7 @@ def decode(path: str | Path) -> numpy.ndarray:
     try:
         if not container.streams.audio:
             raise InputError(str(path), "no audio track")
-        resampler = av.AudioResampler(**RESAMPLE)
+        resampler = av.AudioResampler(**{**RESAMPLE, "rate": rate})
         pieces = []
         for frame in container.decode(container.streams.audio[0]):
             pieces.extend(f.to_ndarray().reshape(-1) for f in resampler.resample(frame))

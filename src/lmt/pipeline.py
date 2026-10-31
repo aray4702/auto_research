@@ -49,7 +49,11 @@ def transcribe(path, *, engine="kyutai", offline=False, diarize=True, num_speake
     asr_engine, dirs = _timed(timings, "models", load_models)
 
     def run_asr():
-        return asr_engine.transcribe(samples)
+        # The engine's own rate, decoded from the file again, rather than resampled from 16 kHz (#575, G1-2).
+        rate = getattr(asr_engine, "rate", audio.SAMPLE_RATE)
+        if rate == audio.SAMPLE_RATE:
+            return asr_engine.transcribe(samples)
+        return asr_engine.transcribe(audio.decode(path, rate), rate=rate)
 
     def run_diarize():
         return diarizer.load(dirs).diarize(samples, num_speakers=num_speakers, min_speakers=min_speakers,
