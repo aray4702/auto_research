@@ -70,12 +70,12 @@ def test_the_results_file_holds_the_hand_computed_figures(fake, tmp_path, capsys
     assert results["models"]["diarization"]["name"] == "speaker-diarization-3.1"
 
     figures = {(f["dataset"], f["system"]): f for f in results["figures"]}
-    assert list(figures) == [("LS-ci", "product"), ("LS-ci", "whisper-alone"), ("AMI-ci", "product"),
-                             ("AMI-ci", "whisper-alone"), ("AMI-ci", "pyannote-alone")]
+    assert list(figures) == [("LS-ci", "product"), ("LS-ci", "asr-alone"), ("AMI-ci", "product"),
+                             ("AMI-ci", "asr-alone"), ("AMI-ci", "pyannote-alone")]
     # By hand, as in test_score: LS WER 5/19 for the product and for Whisper alone, whose words are the same;
     # AMI DER 2/17 for the product and for pyannote alone, whose turns are the same. The fake AMI items have
     # no reference words, so no WER there.
-    assert (figures["LS-ci", "product"]["wer"], figures["LS-ci", "whisper-alone"]["wer"]) == (0.263158, 0.263158)
+    assert (figures["LS-ci", "product"]["wer"], figures["LS-ci", "asr-alone"]["wer"]) == (0.263158, 0.263158)
     assert (figures["AMI-ci", "product"]["der"], figures["AMI-ci", "pyannote-alone"]["der"]) == (0.117647, 0.117647)
     for figure in figures.values():
         assert isinstance(figure["rtf"], float) and isinstance(figure["wall_seconds"], float), figure
@@ -86,8 +86,8 @@ def test_the_results_file_holds_the_hand_computed_figures(fake, tmp_path, capsys
     # The alones' times are their stages' within the run: the fake's 0.25 s of ASR and 0.5 s of diarization.
     # Whisper alone on LS-ci: 4 × 0.25 = 1.0 s over 8.0 s, RTF 0.125. On AMI-ci: 2 × 0.25 = 0.5 s over 16.0 s,
     # RTF 0.03125, which rounds to even, 0.031. pyannote alone: 2 × 0.5 = 1.0 s over 16.0 s, 0.0625, to 0.062.
-    assert (figures["LS-ci", "whisper-alone"]["wall_seconds"], figures["LS-ci", "whisper-alone"]["rtf"]) == (1.0, 0.125)
-    assert (figures["AMI-ci", "whisper-alone"]["wall_seconds"], figures["AMI-ci", "whisper-alone"]["rtf"]) == (0.5, 0.031)
+    assert (figures["LS-ci", "asr-alone"]["wall_seconds"], figures["LS-ci", "asr-alone"]["rtf"]) == (1.0, 0.125)
+    assert (figures["AMI-ci", "asr-alone"]["wall_seconds"], figures["AMI-ci", "asr-alone"]["rtf"]) == (0.5, 0.031)
     assert (figures["AMI-ci", "pyannote-alone"]["wall_seconds"], figures["AMI-ci", "pyannote-alone"]["rtf"]) == (1.0, 0.062)
 
     lines = capsys.readouterr().err.splitlines()
@@ -122,7 +122,7 @@ def test_hypotheses_take_each_system_s_timing():
     product = hyps["product", "AMI-ci", "f1"]
     assert (product.text, product.wall_seconds, product.peak_rss_bytes) == (
         "Shall we get started? Yes, the agenda first. Right, item one.", 9.0, 1234)
-    whisper = hyps["whisper-alone", "AMI-ci", "f1"]
+    whisper = hyps["asr-alone", "AMI-ci", "f1"]
     assert (whisper.text, whisper.turns, whisper.wall_seconds, whisper.peak_rss_bytes) == ("Shall we", None, 3.0, None)
     pyannote = hyps["pyannote-alone", "AMI-ci", "f1"]
     assert (pyannote.text, pyannote.wall_seconds, pyannote.peak_rss_bytes) == (None, 4.0, None)
