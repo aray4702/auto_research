@@ -228,6 +228,53 @@ class Failure(unittest.TestCase):
         self.assertEqual(segments, [("Hello.", "Speaker 1")])
 
 
+class EndlessSource:
+    """Blocks of 0.1 s for ever, a little apart, or until `fail_at` blocks, where `blocks()` raises."""
+
+    def __init__(self, fail_at=None):
+        self.position = 0
+        self.reason = None
+        self._fail_at = fail_at
+
+    def blocks(self):
+        while True:
+            if self.position == (self._fail_at or -1) * BLOCK:
+                raise OSError("the device went away")
+            time.sleep(0.005)
+            self.position += BLOCK
+            yield np.zeros(BLOCK)
+
+
+class Shutdown(unittest.TestCase):
+    """After `run_threaded` raises, none of its threads is still running and `on_block` is not called again."""
+
+    def check_shut_down(self, source, asr, diar, error):
+        before = set(threading.enumerate())
+        seen = []
+        with self.assertRaisesRegex(type(error), str(error)):
+            run(source, asr, diar, Sinks(on_block=seen.append))
+        self.assertEqual([t for t in threading.enumerate() if t not in before], [])
+        calls = len(seen)
+        time.sleep(0.1)  # 20 of the source's blocks
+        self.assertEqual(len(seen), calls)
+
+    def test_when_a_worker_fails(self):
+        def fail(n):
+            if n == 2:
+                raise RuntimeError("the ASR broke")
+
+        self.check_shut_down(EndlessSource(), asr_stage(fail), diar_stage(), RuntimeError("the ASR broke"))
+
+    def test_when_a_worker_dies_without_an_exception(self):
+        def die(n):
+            raise SystemExit("the ASR exited")
+
+        self.check_shut_down(EndlessSource(), asr_stage(die), diar_stage(), SystemExit("the ASR exited"))
+
+    def test_when_the_capture_fails(self):
+        self.check_shut_down(EndlessSource(fail_at=5), asr_stage(), diar_stage(), OSError("the device went away"))
+
+
 class Lockstep(unittest.TestCase):
     def test_run_lockstep_fills_stats_with_behind_0(self):
         source = GatedSource([4])
