@@ -1582,3 +1582,4 @@
 {"at": "2026-10-31T17:31:33+00:00", "event": "start", "item": 558, "pid": 38632, "role": "developer", "run_id": "developer-20261031T173125Z", "task": "Item #558 is sev:1: revert first (blueprint \u00a73), then fix the cause."}
 {"at": "2026-10-31T17:40:52+00:00", "event": "start", "item": null, "pid": 40730, "role": "coordinator", "run_id": "coordinator-20261031T174047Z", "task": "Triage these issues: #567."}
 {"at": "2026-10-31T17:40:58+00:00", "event": "start", "item": 567, "pid": 40837, "role": "architect", "run_id": "architect-20261031T174047Z", "task": "Item #567 needs your decision (needs-decision:architect)."}
+{"at": "2026-10-31T17:41:01+00:00", "event": "start", "item": 566, "pid": 40904, "role": "reviewer", "run_id": "reviewer-20261031T174047Z", "task": "Review PR #566."}
