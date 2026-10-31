@@ -27,8 +27,9 @@ eval = ["jiwer>=3.1", "pyannote.metrics>=3.2,<4", "regex", "more-itertools"]   #
 lmt = "lmt.cli:run"
 
 [dependency-groups]
-# The eval extra, so the agents' `uv run --frozen pytest` has it; stage 2's test libraries.
-dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "srt", "webvtt-py"]
+# The eval extra, so the agents' `uv run --frozen pytest` has it; stage 2's test libraries; Selenium for the
+# browser tests (G3 §3), which drives an installed Chrome and never downloads one.
+dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "srt", "webvtt-py", "selenium>=4.25"]
 
 [build-system]
 requires = ["hatchling"]
@@ -54,10 +55,11 @@ torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not models and not data'"
+addopts = "-m 'not models and not data and not browser'"
 markers = [
   "models: needs the default models in LMT_CACHE_DIR (the test-models job)",
   "data: needs the CI subset in LMT_DATA_DIR (the eval-ci job)",
+  "browser: drives headless Chrome (the browser job)",
   "criterion(*ids): the acceptance criteria this test checks (design/internal/criteria.md)",
 ]
 
