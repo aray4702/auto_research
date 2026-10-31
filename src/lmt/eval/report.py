@@ -14,8 +14,10 @@ from pathlib import Path
 from lmt import __version__
 
 TIMING_FIELDS = ("date", "wall_seconds", "rtf", "peak_rss_bytes",
-                 "p50_delay_seconds", "p95_delay_seconds", "max_delay_seconds")
-RUN_TIMING_FIELDS = ("p95_delay_seconds", "behind_seconds")  # in each of a live figure's `runs`
+                 "p50_delay_seconds", "p95_delay_seconds", "max_delay_seconds",
+                 "p50_label_delay_seconds", "p95_label_delay_seconds", "max_label_delay_seconds")
+# in each of a live figure's `runs`
+RUN_TIMING_FIELDS = ("p95_delay_seconds", "p95_label_delay_seconds", "behind_seconds")
 
 
 def build(set_name, figures, models, determinism=None, *, out_dir,

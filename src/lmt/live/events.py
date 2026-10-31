@@ -1,16 +1,17 @@
-"""The live events (design/internal/g2-stage1.md §3a, item 3a2): the join's outputs to stdout, as live events 1.0
-in JSONL (design/public-api.md, "Live events, version 1.0") or as text lines that grow word by word. Every write is
-flushed, so a reader through a pipe gets each one at once. `clock_t` gives the session's time in samples at 16 kHz.
+"""The live events (design/internal/g2-stage1.md §3a, item 3a2): the join's outputs to stdout, as live events 1.1
+in JSONL (design/public-api.md, "Live events, version 1.1" and "G4's changes to the commands"; g4-stage1.md §4)
+or as text lines that grow word by word, as they're labelled. Every write is flushed, so a reader through a pipe
+gets each one at once. `clock_t` gives the session's time in samples at 16 kHz.
 """
 
 import json
 from collections.abc import Callable
 
 from lmt.export.cues import ms
-from lmt.live.join import SegmentOut, WordsOut
+from lmt.live.join import SegmentOut, TextOut, WordsOut
 
 RATE = 16000
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 
 def _stamp(start: float) -> str:
@@ -31,8 +32,14 @@ class EventWriter:
         """`source` is the transcript's, without `duration`."""
         self._event({"type": "start", "schema_version": SCHEMA_VERSION, "t": 0, "source": source, "models": models})
 
-    def emit(self, out: WordsOut | SegmentOut) -> None:
-        if isinstance(out, WordsOut):
+    def emit(self, out: TextOut | WordsOut | SegmentOut) -> None:
+        if isinstance(out, TextOut):
+            if not self._jsonl:
+                return  # text lines come as words are labelled, as in 1.0
+            p = out.piece
+            self._event({"type": "text", "t": self._t(), "text": p.text, "start": round(p.start, 3),
+                         "end": round(p.end, 3), "starts_word": p.starts_word})
+        elif isinstance(out, WordsOut):
             if self._jsonl:
                 self._event({
                     "type": "words", "t": self._t(), "segment": out.segment, "speaker": out.speaker,
