@@ -46,23 +46,22 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # uv first, for the scripts' tests' Python: the product's 3.11, never the image's python3 (Homebrew's 3.15
+      # on macos-26, under which test_check_full_install's demo tests fail and hang; #573).
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
       # Verbose, and with its own limit, so a test that hangs on the runner is named (#573).
       - name: The README checks' own tests
         timeout-minutes: 8
-        run: |
-          python3 --version
-          python3 -I -m unittest discover -v -s .github/scripts -t .github/scripts
+        run: uv run --no-project --python 3.11 -- python -I -m unittest discover -v -s .github/scripts -t .github/scripts
       - name: README checks that need no install (S1-1, S1-2's heading, S1-5)
         if: fromJSON(needs.changes.outputs.tier) < 1
         env:
           LMT_TIER: ${{ needs.changes.outputs.tier }}
         run: python3 -I .github/scripts/check_readme.py --root . --no-install --criteria-out criteria-readme.json
-      # S1-3's Build block runs uv, at toolchain.toml's version (tests/test_toolchain.py).
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-        if: fromJSON(needs.changes.outputs.tier) >= 1
-        with:
-          version: "0.13.6"
-          enable-cache: true
+      # S1-3's Build block runs uv, at toolchain.toml's version (tests/test_toolchain.py): set up above.
       - name: README checks (S1-1 to S1-5)
         if: fromJSON(needs.changes.outputs.tier) >= 1
         env:
