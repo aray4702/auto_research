@@ -12,6 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 CLIP = ROOT / "tests" / "fixtures" / "clip.wav"
+TWO_SPEAKERS = ROOT / "tests" / "fixtures" / "two_speakers.wav"
 SPEC = ROOT / "spec" / "acceptance.md"
 # Exit statuses after which the session ran to its end: 0, 1 (tests failed) and 5 (no tests collected).
 FINISHED = (pytest.ExitCode.OK, pytest.ExitCode.TESTS_FAILED, pytest.ExitCode.NO_TESTS_COLLECTED)
@@ -130,3 +131,75 @@ def clip_run(tmp_path_factory) -> ProductRun:
     out_dir = tmp_path_factory.mktemp("clip_run")
     r = run_lmt(["transcribe", str(CLIP)], cwd=out_dir)
     return ProductRun(r.returncode, r.stdout, r.stderr, out_dir)
+
+
+@pytest.fixture(scope="session")
+def two_speakers_run(tmp_path_factory) -> ProductRun:
+    """The product run on the two-speaker clip, made exactly as `clip_run` is: `lmt transcribe <clip>` with
+    no option, in a fresh directory (design/internal/g1-stage2.md, P5). Once per session."""
+    out_dir = tmp_path_factory.mktemp("two_speakers_run")
+    r = run_lmt(["transcribe", str(TWO_SPEAKERS)], cwd=out_dir)
+    return ProductRun(r.returncode, r.stdout, r.stderr, out_dir)
+
+
+class LiveRun(NamedTuple):
+    returncode: int
+    stdout: str
+    stderr: str
+    isolated: bool  # run without the network (tests/isolation.py)
+    events: list[dict]  # stdout's JSONL, one event per line
+    out_dir: Path  # -o
+    stem: str  # the default --name, read from <stem>.wav
+    connections: list[str]  # the guard's log
+    watched: int  # entries snapshotted before the run
+    new: list[str]
+    changed: list[str]
+    gone: list[str]
+
+
+@pytest.fixture(scope="session")
+def live_run(tmp_path_factory) -> LiveRun:
+    """The shared run (design/internal/g2-stage1.md §3b, item 3b5): `tests/live_lockstep.py live --from-file
+    two_speakers.wav --jsonl --save-audio -o <dir>` in a process of its own, through tests/isolation.py, with
+    fresh HOME, TMPDIR, XDG_CACHE_HOME and working directory, the network guard on, and the watched directories
+    snapshotted before and after, as G1-13's test does. Once per session."""
+    import json
+    import os
+
+    from isolation import Isolated, snapshot, wrap
+
+    from lmt import models
+
+    top = tmp_path_factory.mktemp("live_run")
+    home, tmp, xdg, work, out_dir = (top / name for name in ("home", "tmp", "xdg", "work", "out"))
+    for directory in (home, tmp, xdg, work, out_dir):
+        directory.mkdir()
+    net_log = top / "net.log"  # beside the watched directories, outside every one
+    cache = models.cache_dir()
+    env = {
+        "PATH": os.environ["PATH"],
+        "HOME": str(home),
+        "TMPDIR": str(tmp),
+        "XDG_CACHE_HOME": str(xdg),
+        "LMT_CACHE_DIR": str(cache),
+        "PYTHONPATH": str(ROOT / "tests" / "netguard"),
+        "LMT_NETGUARD_LOG": str(net_log),
+        "LANG": "C.UTF-8",
+    }
+    argv = ["live", "--from-file", str(TWO_SPEAKERS), "--jsonl", "--save-audio", "-o", str(out_dir)]
+    # isolation.run_isolated runs `-m lmt`; lockstep is reached only through tests/live_lockstep.py, so its
+    # command goes through the same wrap.
+    command, isolated = wrap([sys.executable, str(ROOT / "tests" / "live_lockstep.py"), *argv], env=env)
+
+    before = snapshot(home, tmp, xdg, work, out_dir, cache)
+    r = Isolated(subprocess.run(command, env=env, cwd=work, capture_output=True, text=True, check=False), isolated)
+    after = snapshot(home, tmp, xdg, work, out_dir, cache)
+
+    connections = net_log.read_text(encoding="utf-8").splitlines() if net_log.exists() else []
+    events = [json.loads(line) for line in r.stdout.splitlines() if line.strip()]
+    wavs = sorted(out_dir.glob("*.wav"))
+    return LiveRun(r.returncode, r.stdout, r.stderr, r.isolated, events, out_dir,
+                   wavs[0].stem if len(wavs) == 1 else "", connections, len(before),
+                   new=sorted(set(after) - set(before)),
+                   changed=sorted(path for path in set(before) & set(after) if before[path] != after[path]),
+                   gone=sorted(set(before) - set(after)))

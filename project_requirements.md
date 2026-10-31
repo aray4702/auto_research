@@ -15,6 +15,10 @@
 | 1.9     | 2026-10-27 | architect, from the Owner's answers (#83, 22:57 PT) | G3 is due 2026-10-30 for the criteria CI checks and 2026-10-31 for the Owner's readings and the release; v1.0 is G1 and G3, and live mode (G2) follows as v1.1; the short demo, Q5's CI runners, the install command, the published sample audio and the Hugging Face token |
 | 1.10    | 2026-10-28 | architect, from the Owner's answer (#84, answer 1, 13:54 PT) | The goals' dates move. G1: the criteria CI checks are due 2026-10-30, and the checks on the Owner's Mac and the checks by eye 2026-10-31. G2: the criteria CI checks 2026-10-31, and the checks on the Owner's Mac 2026-11-01. G3: the criteria CI checks 2026-10-31, and the Owner's readings and the release 2026-11-01 |
 | 1.11    | 2026-10-28 | architect, from the Owner's decision (#243, 19:40 PT) | Q6 (observability) isn't in v1.0: §5's Q6 row and §6's v1.0 line say so, and §11 records the decision |
+| 1.12    | 2026-10-30 | architect, from the Owner's decision (#123, relayed by the builder, 16:13 PT) | Q2 is relaxed for v0.1, the MVP: real-time factor ≤ 1.0 (faster than real time). 0.5 stays v1.0's target. §5's Q2 row says so, and §11 records the decision |
+| 1.13    | 2026-10-30 | architect, from the Owner's decisions (#123, 16:13 PT; #510, 16:20 PT; both relayed by the builder) | §2: v0.1, the MVP, the offline transcriber: the requirements it must meet, and the criteria that judge F3 and F5 for it. Follows 1.12 (#511, Q2 for v0.1) |
+| 1.14    | 2026-10-31 | architect, from the Owner's decision (#86, 2026-10-30, about 19:30 PT, relayed by the builder) | §2: v0.2, G3 without the release itself: rename (F7), the one-command install (Q5) and the demo (F8), with everything v0.1 meets. The criteria that judge F5, Q4 and Q8 for it. Follows 1.13 (#513, v0.1) |
+| 1.15    | 2026-10-30 | builder, from the Owner's decision (#526, 2026-10-30, about 22:50 PT, in the builder's session: "I will skip G3-8m") | §2: v0.2 is judged without G3-8m, the Owner's clean-account check, which moves to the v1.0 release. F7, F8 and Q5 are judged for v0.2 by their other criteria. Follows 1.14 (#518) |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -83,6 +87,29 @@ measure (or the IDs of the requirements it delivers) and any deadline.
 | G3  | A portfolio-ready release: demo, results and v1.0 | F7, F8; Q5; a tagged v1.0 release whose README leads with the results table and a short demo. The short demo is a screenshot of the demo page on the sample meeting (§7), with the one command that opens it (#83, answer 3a). v1.0 ships G1 and G3; live mode (G2) follows as v1.1 (#83, answer 2a) | 2026-10-31 for the criteria CI checks; 2026-11-01 for the Owner's readings and the release (#84, answer 1) |
 
 
+**v0.1, the MVP** (the Owner on #123, 2026-10-30: "build a MVP first, and then gradually expand the scope"; scope approved on #510: "approve the v0.1 scope"). v0.1 is the offline transcriber, the "must" path for U1 and U3. It must meet F1, F2, F3, F4, F5 and F9, and Q1, Q2 (at a real-time factor ≤ 1.0, #123), Q4, Q7 and Q8. After it come rename (F7), the one-command install (Q5), the demo (F8) and live mode (F6). Two requirements are judged for v0.1 by only part of their criteria (`spec/acceptance.md`, "Releases"):
+
+| ID | Judged for v0.1 by | Moves to a later release |
+| --- | --- | --- |
+| F3 | G1-4 and G1-4m | G3-8 (its subtitles after the full install), to G3's release |
+| F5 | G1-6, the offline commands | G2-7 (`lmt live`), to G2's release; G3-3 (`lmt rename`), to G3's release |
+
+The Owner's readings for v0.1 are recorded on G1's release item for it, #510.
+
+**v0.2** (the Owner, 2026-10-30, about 19:30 PT, relayed by the builder; G3's goal is #86). v0.2 is G3 without the release itself: rename (F7), the one-command install (Q5) and the demo (F8), shipped together because their criteria are coupled. It must meet F7, F8 and Q5, and everything v0.1 meets, with Q2 still at v0.1's bound. F3 is judged in full: its G3-8 part, which v0.1 moved to G3's release, is in v0.2. Q9 isn't in v0.2: of its criteria, G3-4 is in v0.2, but G1-15 isn't. After v0.2 come the v1.0 release (G3-9, G3-10 and the release workflow) and live mode (F6, G2), as v1.1. Six requirements are judged for v0.2 by only part of their criteria (`spec/acceptance.md`, "Releases"):
+
+| ID | Judged for v0.2 by | Moves to a later release |
+| --- | --- | --- |
+| F5 | G1-6 and G3-3 (`lmt rename`) | G2-7 (`lmt live`), to G2's release |
+| Q4 | G1-11 | G2-8 (live mode), to G2's release |
+| Q8 | G1-13 and G3-4 (`lmt demo`) | G2-8 (live mode), to G2's release |
+| F7 | G3-1, G3-2 and G3-3 | G3-8m (the Owner's clean-account check), to the v1.0 release |
+| F8 | G3-4, G3-5, G3-5m and G3-6 | G3-8m, to the v1.0 release |
+| Q5 | G3-2, G3-7 and G3-8 | G3-8m, to the v1.0 release |
+
+G3-8m moves to the v1.0 release by the Owner's decision (#526, 2026-10-30: "I will skip G3-8m"); CI's `install-full` runs the same sequence on clean runners of both platforms with the network cut. The Owner's reading for v0.2, G3-5m, is recorded on G3's release item for it, which the Coordinator opens (`design/internal/criteria.md` §5).
+
+
 ## 3. Use cases
 
 Concrete scenarios, end to end. Each one becomes acceptance scenarios.
@@ -124,7 +151,7 @@ already hold; add only what goes beyond them.
 | ID  | Attribute                                                                    | Target            | Conditions, and where it's measured                   | Priority |
 | --- | ---------------------------------------------------------------------------- | ----------------- | ----------------------------------------------------- | -------- |
 | Q1  | accuracy | Speech recognition: WER ≤ 5 % on LibriSpeech test-clean, and WER ≤ 25 % on AMI. Speaker labels: DER ≤ 25 % on AMI | AMI: the headset-mix recordings, standard test split. WER is scored with `jiwer` after Whisper's English text normalizer. DER is scored with `pyannote.metrics`, with no collar and overlapping speech included. The full sets are measured on the Owner's Mac; CI runs a small fixed subset as a pass/fail check. Compare against Whisper alone and pyannote alone | must |
-| Q2  | performance: latency, throughput, startup | Offline: real-time factor ≤ 0.5 (an hour of audio in 30 minutes or less) | On the Owner's Mac (Apple M4, 16 GB; a device CI doesn't have); CI records its own numbers without failing on them | must |
+| Q2  | performance: latency, throughput, startup | Offline: real-time factor ≤ 1.0 for v0.1, the MVP (an hour of audio in an hour or less), and ≤ 0.5 for v1.0 (an hour of audio in 30 minutes or less) (#123, 2026-10-30) | On the Owner's Mac (Apple M4, 16 GB; a device CI doesn't have); CI records its own numbers without failing on them | must |
 | Q3  | performance: resource use (CPU, memory, power, binary size) | Peak memory ≤ 4 GB; models ≤ 2 GB on disk | A one-hour recording, on the Owner's Mac | should |
 | Q4  | reliability (crash-free rate, recovery time) | Never crashes on bad input: a corrupt, empty, silent or unsupported file gives a clear error | Fuzzed and malformed inputs in CI | must |
 | Q5  | usability and accessibility | Installs with one command; works offline after the first model download; subtitles follow SRT and WebVTT | A clean macOS user account (the Owner's), and the CI runners `ubuntu-24.04` and `macos-15` (#83, answer 10a) | should |
@@ -226,4 +253,5 @@ None open. The Owner answered on #79:
 - the proposed targets and defaults are accepted;
 - the summary (F10) is a non-goal for now;
 - on #82, capturing system audio directly became a non-goal for now;
-- on #243, the Owner accepted v1.0 without Q6 (observability).
+- on #243, the Owner accepted v1.0 without Q6 (observability);
+- on #123 (2026-10-30), the Owner relaxed Q2 for v0.1, the MVP, to a real-time factor ≤ 1.0; 0.5 stays the target for v1.0.

@@ -253,7 +253,10 @@ sha256 = "44b0420506873ae701c23442188985b373540acd9d505718deffedb81cc2b22c"
 
 [[source]]
 id = "ami-ES2004a"
-urls = ["https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004a/audio/ES2004a.Mix-Headset.wav"]
+# The sample meeting (lmt demo --sample, G3-6): this repository's own copy first, Edinburgh's mirror as the fallback,
+# since that host has refused GitHub's macOS runners at times (#529). Both serve the same file, checked by the hash.
+urls = ["https://github.com/aray4702/auto_research/releases/download/sample-data-ami/ES2004a.Mix-Headset.wav",
+        "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2004a/audio/ES2004a.Mix-Headset.wav"]
 sha256 = "3e2560b19bee6952c7c7ce041b0f1ea8a7ea9468044c4eea79d2a2c67e24ab0f"
 size = 33579394                  # 16 kHz, mono, 16-bit, 16,789,675 frames (1,049.4 s)
 licence = "CC-BY-4.0"

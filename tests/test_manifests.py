@@ -137,8 +137,10 @@ class TestAMIFull:
         assert "crop" not in ami
         sources = {s["id"]: s for s in SOURCES["source"]}
         for meeting in AMI_FULL:
-            assert sources[f"ami-{meeting}"]["urls"] == [
-                f"https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{meeting}/audio/{meeting}.Mix-Headset.wav"]
+            edinburgh = f"https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{meeting}/audio/{meeting}.Mix-Headset.wav"
+            # The sample meeting tries this repository's copy first (#529); the others only Edinburgh's.
+            own = [f"https://github.com/aray4702/auto_research/releases/download/sample-data-ami/{meeting}.Mix-Headset.wav"] if meeting == "ES2004a" else []
+            assert sources[f"ami-{meeting}"]["urls"] == [*own, edinburgh]
             assert sources[f"ami-rttm-{meeting}"]["urls"] == [
                 f"{URL_PREFIXES[-1]}only_words/rttms/test/{meeting}.rttm"]
 
