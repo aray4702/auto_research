@@ -97,8 +97,11 @@ class _Abandon(threading.Event):
         self.checked = False
 
     def is_set(self) -> bool:
+        # The event is read before `checked` is set: a second SIGINT between the two then raises rather than only
+        # setting an event already read as clear, which would leave `save` abandoned and the command exiting 0.
+        value = super().is_set()
         self.checked = True
-        return super().is_set()
+        return value
 
 
 class _Signals:
