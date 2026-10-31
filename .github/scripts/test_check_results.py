@@ -220,5 +220,91 @@ class RepositoryTest(Fixture):
         self.assertEqual(len(json.loads(self.out.read_text())["checks"]), len(NAMES))
 
 
+# A set `live` results file (src/lmt/eval/live.py), at #537's figures with the p95 at 14.0 s.
+LIVE_FIXTURE = Path(__file__).resolve().parent / "testdata" / "live.json"  # #537's results/live.json
+LIVE = {
+    "schema_version": "1.0", "set": "live", "commit": "b" * 40, "dirty": False,
+    "date": "2026-10-31T00:30:35-07:00", "machine": GOOD["machine"], "lmt_version": "0.2.0",
+    "models": GOOD["models"],
+    "figures": [{"dataset": "AMI-ci", "system": "product-live", "wer": 0.17, "der": 0.40, "audio_seconds": 900.0,
+                 "wall_seconds": 975.6, "rtf": 1.084, "peak_rss_bytes": None, "p50_delay_seconds": 8.9,
+                 "p95_delay_seconds": 14.0, "max_delay_seconds": 45.8, "matched_words": 928,
+                 "runs": [{"p95_delay_seconds": 13.0, "behind_seconds": 2.5},
+                          {"p95_delay_seconds": 14.5, "behind_seconds": 1.6},
+                          {"p95_delay_seconds": 13.9, "behind_seconds": 2.2}]}],
+    "determinism": None,
+}
+LIVE_NAME = "G2-6 live p95 delay"
+
+
+def live(**values):
+    results = copy.deepcopy(LIVE)
+    results["figures"][0].update(values)
+    return results
+
+
+class LiveTest(Fixture):
+    """G2-6 from results/live.json: the pooled p95 delay ≤ 15.0 s (v0.3), a miss recorded and exit 0."""
+
+    def test_passes_at_14_s(self):
+        self.assertEqual(self.outcomes(LIVE), {LIVE_NAME: "passed"})
+        self.assertIn("PASS G2-6 live p95 delay: pooled p95 delay 14.00 s over 3 runs ≤ 15.00 s", self.stdout)
+
+    def test_bound_is_inclusive_and_fails_above_15_s(self):
+        self.assertEqual(self.outcomes(live(p95_delay_seconds=15.0)), {LIVE_NAME: "passed"})
+        self.assertEqual(self.outcomes(live(p95_delay_seconds=15.01)), {LIVE_NAME: "failed"})
+        self.assertIn("FAIL G2-6 live p95 delay: pooled p95 delay 15.01 s over 3 runs > 15.00 s", self.stdout)
+        self.assertIn("1 missed", self.stdout)
+
+    def test_record_carries_g2_6_and_the_merge_reads_it(self):
+        sys.path.insert(0, str(REPO_ROOT / ".github" / "scripts"))
+        import criteria
+        self.main(LIVE)
+        record = json.loads(self.out.read_text())
+        self.assertEqual([(c["check"], c["criteria"]) for c in record["checks"]],
+                         [(f"check_results.py::{LIVE_NAME}", ["G2-6"])])
+        self.assertTrue(record["complete"])
+        criteria.load_record(self.out, criteria.spec_ids(REPO_ROOT / "spec" / "acceptance.md"), ["test"])
+
+    def test_missing_figures_fail(self):
+        self.assertEqual(self.outcomes(live(p95_delay_seconds=None)), {LIVE_NAME: "failed"})
+        self.assertEqual(self.outcomes(live(runs=LIVE["figures"][0]["runs"][:2])), {LIVE_NAME: "failed"})
+        self.assertEqual(self.outcomes(dict(LIVE, commit=None)), {LIVE_NAME: "failed"})
+        self.assertEqual(self.outcomes(dict(LIVE, dirty=True)), {LIVE_NAME: "failed"})
+
+    def test_placeholder_skips(self):
+        self.assertEqual(self.outcomes(dict(LIVE, figures=[])), {LIVE_NAME: "skipped"})
+        self.assertIn("the Owner's run of lmt eval --set live", self.stdout)
+
+    def test_pr_537_file_passes(self):
+        self.assertEqual(self.outcomes(json.loads(LIVE_FIXTURE.read_text())), {LIVE_NAME: "passed"})
+
+
+class LiveMalformedTest(Fixture):
+    assertMalformed = MalformedTest.assertMalformed
+
+    def test_wrong_set(self):
+        self.assertMalformed(dict(LIVE, set="ci"), says="set is 'ci', not 'full' or 'live'")
+
+    def test_not_json_live(self):
+        self.assertMalformed(raw='{"set": "live"', says="not JSON")
+
+    def test_two_figures(self):
+        results = copy.deepcopy(LIVE)
+        results["figures"].append(results["figures"][0])
+        self.assertMalformed(results, says="holds one object")
+
+    def test_delay_not_a_number(self):
+        self.assertMalformed(live(p95_delay_seconds="14"), says="`p95_delay_seconds` must be a number")
+
+    def test_runs_not_a_list(self):
+        self.assertMalformed(live(runs={}), says="`runs` must be a list")
+
+    def test_run_field_not_a_number(self):
+        runs = copy.deepcopy(LIVE["figures"][0]["runs"])
+        runs[1]["behind_seconds"] = True
+        self.assertMalformed(live(runs=runs), says="run 2: `behind_seconds` must be a number")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "set": "live",
+  "commit": "e5aa1efa15349ba154d9d01515bb4e2b780d99c9",
+  "dirty": false,
+  "date": "2026-10-31T00:30:35-07:00",
+  "machine": {
+    "arch": "arm64",
+    "cpu": "Apple M4",
+    "memory_bytes": 17179869184,
+    "os": "macOS 27.0.1"
+  },
+  "lmt_version": "0.2.0",
+  "models": {
+    "asr": {
+      "name": "distil-large-v3",
+      "repository": "Systran/faster-distil-whisper-large-v3",
+      "revision": "c3058b475261292e64a0412df1d2681c06260fab"
+    },
+    "diarization": {
+      "name": "speaker-diarization-3.1",
+      "repository": "pyannote/speaker-diarization-3.1",
+      "revision": "84fd25912480287da0247647c3d2b4853cb3ee5d"
+    }
+  },
+  "figures": [
+    {
+      "dataset": "AMI-ci",
+      "system": "product-live",
+      "wer": 0.170316,
+      "der": 0.400493,
+      "audio_seconds": 900.0,
+      "wall_seconds": 975.63,
+      "rtf": 1.084,
+      "peak_rss_bytes": null,
+      "p50_delay_seconds": 8.893,
+      "p95_delay_seconds": 14.03,
+      "max_delay_seconds": 45.767,
+      "matched_words": 928,
+      "runs": [
+        {
+          "p95_delay_seconds": 12.979,
+          "behind_seconds": 2.471
+        },
+        {
+          "p95_delay_seconds": 14.454,
+          "behind_seconds": 1.593
+        },
+        {
+          "p95_delay_seconds": 13.903,
+          "behind_seconds": 2.152
+        }
+      ]
+    }
+  ],
+  "determinism": null
+}

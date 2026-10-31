@@ -3,7 +3,8 @@
 Usage: python3 -I .github/scripts/check_results.py [--results results/full.json] [--criteria-out PATH]
 
 Design: design/internal/criteria.md §2 and §3. Reads `lmt eval --set full`'s results file and checks
-G1-8, G1-9, G1-10's memory, G1-12's Mac half and G1-14's figures against spec/acceptance.md. A missed
+G1-8, G1-9, G1-10's memory, G1-12's Mac half and G1-14's figures against spec/acceptance.md; or, given
+`lmt eval --set live`'s file (results/live.json, src/lmt/eval/live.py), checks G2-6's live delay. A missed
 bound is a `failed` check and the script still exits 0: CI never fails on the Mac's figures (G1, "Where
 it runs"). While the file holds no figures (the placeholder, g1-stage1.md §6), every check is `skipped`.
 Exits 3 with one `check_results.py: error:` line, and writes no record, when the file is missing or
@@ -29,6 +30,11 @@ DER_AMI = 0.250        # G1-8: AMI full DER ≤ 25.0 %
 RTF = 1.0              # G1-9: RTF ≤ 1.0 over AMI full, and on the one-hour recording. The Owner relaxed
                        # Q2 for v0.1 on #123 (2026-10-30); 0.50 stays v1.0's target.
 PEAK_RSS = 4.0e9       # G1-10: the one-hour product run's peak resident memory ≤ 4.0 × 10⁹ bytes
+P95_DELAY = 15.0       # G2-6: the pooled p95 live delay ≤ 15.0 s, v0.3's bound (requirements v1.16, #536);
+                       # 3.0 s (Q10) stays the later target.
+LIVE_RUNS = 3          # G2-6: three runs played back in real time
+LIVE_FIELDS = ("wer", "rtf", "p50_delay_seconds", "p95_delay_seconds", "max_delay_seconds", "matched_words")
+LIVE_RUN_FIELDS = ("p95_delay_seconds", "behind_seconds")
 
 # G1-14's table: WER, DER and RTF per set for the product, Whisper alone and pyannote alone. LS full runs
 # without diarization, so it has no pyannote-alone row; each row's figures that apply.
@@ -53,6 +59,13 @@ class Missed(Exception):
     """A check's figure is missing or misses its bound: the check fails."""
 
 
+def number_or_null(path, where, obj, keys):
+    for k in keys:
+        v = obj.get(k)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
+            raise Malformed(f"{path}: {where}: `{k}` must be a number or null")
+
+
 def load(path):
     try:
         data = json.loads(Path(path).read_text())
@@ -62,19 +75,18 @@ def load(path):
         raise Malformed(f"{path}: not JSON: {e}") from None
     if not isinstance(data, dict) or data.get("schema_version") != "1.0":
         raise Malformed(f"{path}: not a version 1.0 results file")
-    if data.get("set") != "full":
-        raise Malformed(f"{path}: set is {data.get('set')!r}, not 'full'")
+    if data.get("set") not in ("full", "live"):
+        raise Malformed(f"{path}: set is {data.get('set')!r}, not 'full' or 'live'")
     figures = data.get("figures")
     if not isinstance(figures, list):
         raise Malformed(f"{path}: `figures` must be a list")
+    if data["set"] == "live":
+        return data, load_live(path, figures)
     rows = {}
     for f in figures:
         if not (isinstance(f, dict) and isinstance(f.get("dataset"), str) and f.get("system") in SYSTEMS):
             raise Malformed(f"{path}: a figure needs `dataset` and a `system` of {', '.join(SYSTEMS)}")
-        for k in FIELDS:
-            v = f.get(k)
-            if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float))):
-                raise Malformed(f"{path}: {f['dataset']} {f['system']}: `{k}` must be a number or null")
+        number_or_null(path, f"{f['dataset']} {f['system']}", f, FIELDS)
         key = (f["dataset"], f["system"])
         if key in rows:
             raise Malformed(f"{path}: {key[0]} {key[1]} appears twice")
@@ -83,6 +95,43 @@ def load(path):
     if determinism is not None and not isinstance(determinism, dict):
         raise Malformed(f"{path}: `determinism` must be an object or null")
     return data, rows
+
+
+def load_live(path, figures):
+    """A live file's one figure, as {"live": figure}; {} for the placeholder."""
+    if not figures:
+        return {}
+    if len(figures) != 1 or not isinstance(figures[0], dict):
+        raise Malformed(f"{path}: a live file's `figures` holds one object")
+    f = figures[0]
+    number_or_null(path, "the live figure", f, FIELDS + LIVE_FIELDS)
+    runs = f.get("runs")
+    if runs is not None:
+        if not isinstance(runs, list) or not all(isinstance(r, dict) for r in runs):
+            raise Malformed(f"{path}: the live figure's `runs` must be a list of objects or null")
+        for i, r in enumerate(runs, 1):
+            number_or_null(path, f"run {i}", r, LIVE_RUN_FIELDS)
+    return {"live": f}
+
+
+def live_delay(data, rows):
+    f = rows["live"]
+    p95 = f.get("p95_delay_seconds")
+    if p95 is None:
+        raise Missed("no pooled p95_delay_seconds")
+    runs = f.get("runs") or []
+    missing = [f"run {i} {k}" for i, r in enumerate(runs, 1) for k in LIVE_RUN_FIELDS if r.get(k) is None]
+    missing += [k for k in RUN_FIELDS if not data.get(k)]
+    if len(runs) != LIVE_RUNS:
+        raise Missed(f"{len(runs)} runs, not {LIVE_RUNS}")
+    if missing:
+        raise Missed("missing: " + ", ".join(missing))
+    if data.get("dirty") is not False:
+        raise Missed("made from a dirty working tree")
+    shown = f"pooled p95 delay {p95:.2f} s over {len(runs)} runs"
+    if p95 > P95_DELAY:
+        raise Missed(f"{shown} > {P95_DELAY:.2f} s")
+    return f"{shown} ≤ {P95_DELAY:.2f} s, from commit {str(data['commit'])[:12]}"
 
 
 def figure(rows, dataset, system, field):
@@ -138,16 +187,19 @@ CHECKS = [
     ("G1-12 two runs identical", ["G1-12"], lambda d, r: determinism(d)),
     ("G1-14 the table's figures", ["G1-14"], table),
 ]
+LIVE_CHECKS = [
+    ("G2-6 live p95 delay", ["G2-6"], live_delay),
+]
 
 
 def run(path):
     """[(check, report line)] for each of CHECKS, in order."""
     data, rows = load(path)
     out = []
-    for name, ids, fn in CHECKS:
+    for name, ids, fn in (LIVE_CHECKS if data["set"] == "live" else CHECKS):
         check = {"check": f"check_results.py::{name}", "criteria": ids}
         if not rows:
-            reason = f"{path} has no figures yet (the Owner's run of lmt eval --set full)"
+            reason = f"{path} has no figures yet (the Owner's run of lmt eval --set {data['set']})"
             out.append((dict(check, outcome="skipped", reason=reason), f"SKIP {name}: {reason}"))
             continue
         try:
