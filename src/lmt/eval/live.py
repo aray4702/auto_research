@@ -20,7 +20,7 @@ from typing import NamedTuple
 
 from lmt import models, transcript
 from lmt.errors import InputError
-from lmt.eval import datasets, report, score
+from lmt.eval import datasets, readme, report, runner, score
 from lmt.transcript import Word
 
 
@@ -159,17 +159,17 @@ def run_once(command: list[str], out_dir: Path, stem: str) -> RunLog:
     )
 
 
-def run_live(wav: Path, work_dir: Path, *, runs=3, command_prefix=None) -> list[RunLog]:
+def run_live(wav: Path, work_dir: Path, *, runs=3, command_prefix=None, engine="kyutai") -> list[RunLog]:
     """Ensure the models `lmt models download` fetches, so no run downloads, then run `lmt live` on `wav`
-    `runs` times, one after another, each writing `run<i>.json` under `work_dir`. `command_prefix` replaces
-    `python -m lmt`, as stage 2's tuning entry point does."""
+    `runs` times, one after another, with `engine`, each writing `run<i>.json` under `work_dir`.
+    `command_prefix` replaces `python -m lmt`, as stage 2's tuning entry point does."""
     models.ensure(models.download_defaults(models.load_manifest()), offline=False)
     prefix = list(command_prefix) if command_prefix is not None else [sys.executable, "-m", "lmt"]
     logs = []
     for i in range(1, runs + 1):
         stem = f"run{i}"
         command = prefix + ["live", "--from-file", str(wav), "--jsonl", "--offline", "-f", "json", "-n", stem,
-                            "-o", str(work_dir), "--overwrite"]
+                            "-o", str(work_dir), "--overwrite", *runner.engine_options(engine)]
         logs.append(run_once(command, Path(work_dir), stem))
     return logs
 
@@ -208,17 +208,21 @@ def figure(item: score.Item, ref_words, logs: Sequence[RunLog]) -> dict:
 
 
 def cli_eval_live(args) -> int:
-    """`lmt eval --set live`: AMI-ci's three runs, in a temporary directory under `--out` that's removed after,
-    pooled into <out>/live.json with the first run's models. Prints the file's path, as `--set ci` does."""
+    """`lmt eval --set live`: AMI-ci's three runs with `--engine`, in a temporary directory under `--out` that's
+    removed after, pooled into <out>/live.json (live-apple.json for Apple's engine) with the first run's models.
+    With `--update-readme`, README.md's table is then rendered from every results file in `--out`. Prints the
+    file's path, as `--set ci` does."""
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     item, ref_words = datasets.live_reference()
     with tempfile.TemporaryDirectory(dir=out_dir, prefix=".lmt-eval-live-") as work_dir:
-        logs = run_live(item.audio, Path(work_dir))
+        logs = run_live(item.audio, Path(work_dir), engine=args.engine)
     results = report.build("live", [figure(item, ref_words, logs)], logs[0].transcript["models"],
-                           determinism=None, out_dir=out_dir)
-    path = out_dir / "live.json"
+                           determinism=None, out_dir=out_dir, engine=args.engine)
+    path = out_dir / report.file_name("live", args.engine)
     report.write(path, results)
+    if args.update_readme:
+        readme.update(Path("README.md"), out_dir)
     print(path)
     return 0
 
