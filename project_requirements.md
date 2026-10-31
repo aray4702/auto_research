@@ -17,6 +17,7 @@
 | 1.11    | 2026-10-28 | architect, from the Owner's decision (#243, 19:40 PT) | Q6 (observability) isn't in v1.0: §5's Q6 row and §6's v1.0 line say so, and §11 records the decision |
 | 1.12    | 2026-10-30 | architect, from the Owner's decision (#123, relayed by the builder, 16:13 PT) | Q2 is relaxed for v0.1, the MVP: real-time factor ≤ 1.0 (faster than real time). 0.5 stays v1.0's target. §5's Q2 row says so, and §11 records the decision |
 | 1.13    | 2026-10-30 | architect, from the Owner's decisions (#123, 16:13 PT; #510, 16:20 PT; both relayed by the builder) | §2: v0.1, the MVP, the offline transcriber: the requirements it must meet, and the criteria that judge F3 and F5 for it. Follows 1.12 (#511, Q2 for v0.1) |
+| 1.14    | 2026-10-31 | architect, from the Owner's decision (#86, 2026-10-30, about 19:30 PT, relayed by the builder) | §2: v0.2, G3 without the release itself: rename (F7), the one-command install (Q5) and the demo (F8), with everything v0.1 meets. The criteria that judge F5, Q4 and Q8 for it. Follows 1.13 (#513, v0.1) |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -93,6 +94,16 @@ measure (or the IDs of the requirements it delivers) and any deadline.
 | F5 | G1-6, the offline commands | G2-7 (`lmt live`), to G2's release; G3-3 (`lmt rename`), to G3's release |
 
 The Owner's readings for v0.1 are recorded on G1's release item for it, #510.
+
+**v0.2** (the Owner, 2026-10-30, about 19:30 PT, relayed by the builder; G3's goal is #86). v0.2 is G3 without the release itself: rename (F7), the one-command install (Q5) and the demo (F8), shipped together because their criteria are coupled. It must meet F7, F8 and Q5, and everything v0.1 meets, with Q2 still at v0.1's bound. F3 is judged in full: its G3-8 part, which v0.1 moved to G3's release, is in v0.2. Q9 isn't in v0.2: of its criteria, G3-4 is in v0.2, but G1-15 isn't. After v0.2 come the v1.0 release (G3-9, G3-10 and the release workflow) and live mode (F6, G2), as v1.1. Three requirements are judged for v0.2 by only part of their criteria (`spec/acceptance.md`, "Releases"):
+
+| ID | Judged for v0.2 by | Moves to a later release |
+| --- | --- | --- |
+| F5 | G1-6 and G3-3 (`lmt rename`) | G2-7 (`lmt live`), to G2's release |
+| Q4 | G1-11 | G2-8 (live mode), to G2's release |
+| Q8 | G1-13 and G3-4 (`lmt demo`) | G2-8 (live mode), to G2's release |
+
+The Owner's readings for v0.2 are recorded on G3's release item for it, which the Coordinator opens (`design/internal/criteria.md` §5).
 
 
 ## 3. Use cases
