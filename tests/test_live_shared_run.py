@@ -54,7 +54,7 @@ def test_g2_4_the_outputs_hold_the_event_streams_words(live_run):
     errors = [e.message for e in jsonschema.Draft202012Validator(
         json.loads(TRANSCRIPT_SCHEMA.read_text(encoding="utf-8"))).iter_errors(doc)]
     assert not errors, errors
-    assert doc["schema_version"] == "1.1"
+    assert doc["schema_version"] == "1.2"
     assert doc["source"]["live"] is True
 
     streamed = [(w, e["speaker"]) for e in run.events if e["type"] == "words" for w in e["words"]]

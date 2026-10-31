@@ -8,7 +8,13 @@ The product doesn't ship model weights. `lmt models download` downloads these mo
 Hugging Face, each at a pinned revision, under its own licence. src/lmt/models.toml records
 each one's revision, files, licence and creators:
 
-- Systran/faster-distil-whisper-large-v3 (speech recognition): MIT License.
+- kyutai/stt-1b-en_fr-mlx (speech recognition, the default): Creative Commons Attribution 4.0
+  International (CC BY 4.0), https://creativecommons.org/licenses/by/4.0/.
+  Attribution: "stt-1b-en_fr-mlx", by Kyutai, published on Hugging Face,
+  https://huggingface.co/kyutai/stt-1b-en_fr-mlx. Quantized to 8 bits when it loads, in memory;
+  the files are used unmodified.
+
+- Systran/faster-distil-whisper-large-v3 (speech recognition, no longer used): MIT License.
   By SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3.
   Model card: https://huggingface.co/Systran/faster-distil-whisper-large-v3
 

@@ -10,6 +10,15 @@ supported-markers = [
     "platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 
+[manifest]
+overrides = [
+    { name = "aiohttp", specifier = ">=3.12" },
+    { name = "huggingface-hub", specifier = "==2.3.0" },
+    { name = "numpy", specifier = "==2.4.6" },
+    { name = "sentencepiece", specifier = "==0.2.2" },
+    { name = "sounddevice", specifier = ">=0.5.6" },
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -551,8 +560,12 @@ dependencies = [
     { name = "faster-whisper" },
     { name = "huggingface-hub" },
     { name = "jsonschema" },
+    { name = "mlx", marker = "sys_platform != 'linux'" },
+    { name = "moshi-mlx", marker = "sys_platform != 'linux'" },
     { name = "numpy" },
     { name = "pyannote-audio" },
+    { name = "rustymimi", marker = "sys_platform != 'linux'" },
+    { name = "sentencepiece" },
     { name = "sounddevice" },
     { name = "torch", version = "2.8.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
     { name = "torch", version = "2.8.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
@@ -586,11 +599,15 @@ requires-dist = [
     { name = "huggingface-hub", specifier = "==2.3.0" },
     { name = "jiwer", marker = "extra == 'eval'", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=4.26" },
+    { name = "mlx", marker = "sys_platform == 'darwin'", specifier = "==0.26.5" },
     { name = "more-itertools", marker = "extra == 'eval'" },
+    { name = "moshi-mlx", marker = "sys_platform == 'darwin'", specifier = "==0.3.0" },
     { name = "numpy", specifier = "==2.4.6" },
     { name = "pyannote-audio", specifier = "==3.4.0" },
     { name = "pyannote-metrics", marker = "extra == 'eval'", specifier = ">=3.2,<4" },
     { name = "regex", marker = "extra == 'eval'" },
+    { name = "rustymimi", marker = "sys_platform == 'darwin'", specifier = "==0.4.1" },
+    { name = "sentencepiece", marker = "sys_platform == 'darwin'", specifier = "==0.2.2" },
     { name = "sounddevice", specifier = ">=0.5.6" },
     { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.8.0" },
     { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.8.0", index = "https://download.pytorch.org/whl/cpu" },
@@ -678,12 +695,55 @@ wheels = [
 ]
 
 [[package]]
+name = "mlx"
+version = "0.26.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mlx-metal" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/69/420613a3f242291451a70f4c9e910bf71de48b588ff3a89dfcd9427392e4/mlx-0.26.5-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:04367b20970a081c4359111c667ba62788592fd66184943c7eff10d660a13fce", size = 518440, upload-time = "2025-07-18T22:28:09.394Z" },
+    { url = "https://files.pythonhosted.org/packages/63/a9/fec899b16b0f8c61eff96e5133e8140359ce4a1bd0e3b8c9df61f00d0c7c/mlx-0.26.5-cp311-cp311-macosx_14_0_arm64.whl", hash = "sha256:aa14defb1c5b330c94e9873d09c90f27d72681970c20c1490457c8a2a51b93e5", size = 491747, upload-time = "2025-07-18T22:28:36.518Z" },
+    { url = "https://files.pythonhosted.org/packages/26/9b/6655f81bf17c9b8a6f461aa7fe801d01d5ec5d76bd9d3339c26d8585e206/mlx-0.26.5-cp311-cp311-macosx_15_0_arm64.whl", hash = "sha256:1e2d90d391c83932dee9a21ce5c95de30a60ce7fdac61143e3a15a4d8e55271d", size = 491752, upload-time = "2025-07-18T22:28:14.801Z" },
+]
+
+[[package]]
+name = "mlx-metal"
+version = "0.26.5"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/e6/85651e73eefee100a4f658dfa2636ff195cd957bc500baad17bbe2040ca6/mlx_metal-0.26.5-py3-none-macosx_13_0_arm64.whl", hash = "sha256:6e58b4ec234bd23d04b817642245832b5a5ac48d06ed26b97b4dc6dba5b40aa3", size = 33521560, upload-time = "2025-07-18T22:30:47.553Z" },
+    { url = "https://files.pythonhosted.org/packages/22/6f/31075f8fb53d906bbc223e47f46b573e54624dea78c039ade2a2a7d1513d/mlx_metal-0.26.5-py3-none-macosx_14_0_arm64.whl", hash = "sha256:d6f6a7d1110562544978d6f87a5bbb47be293d3b85c742043f8f2048e9f387cf", size = 32924152, upload-time = "2025-07-18T22:30:44.347Z" },
+    { url = "https://files.pythonhosted.org/packages/a6/a0/0e01714f94f3b0efe7f90581c4b27becba9df55d15fd562cbd45f3a6dec3/mlx_metal-0.26.5-py3-none-macosx_15_0_arm64.whl", hash = "sha256:f5bd394c7ff6eebaaf8db6d7bd4f8dec96f2d232f08ba641673ab66f22e9727b", size = 32895781, upload-time = "2025-07-18T22:30:22.985Z" },
+]
+
+[[package]]
 name = "more-itertools"
 version = "11.2.1"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/52/b8/c63995bebbb9ac9c059350e0fb8c82c2420c85aeca7d34e40aecf3df9281/more_itertools-11.2.1.tar.gz", hash = "sha256:cbf08fd0af284dc69718b9b76a8e6203df624d70209ea511e4219d350c856f63", size = 154133, upload-time = "2026-10-14T18:50:30.407Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5d/57/3c4b1c6f2e0cc29ba023802458ea3d2a996f87085559e4a5f2192d549532/more_itertools-11.2.1-py3-none-any.whl", hash = "sha256:35a7377edd1dd6608dcb2cdf534ded55ea32d49448875ad042cd3f879fb1ded0", size = 74405, upload-time = "2026-10-14T18:50:29.116Z" },
+]
+
+[[package]]
+name = "moshi-mlx"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "huggingface-hub" },
+    { name = "mlx" },
+    { name = "numpy" },
+    { name = "rustymimi" },
+    { name = "safetensors" },
+    { name = "sentencepiece" },
+    { name = "sounddevice" },
+    { name = "sphn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/34/04/173cf1fc12f73cfc49321e64b45ea1ea15143b49ef570b7171906a45b5a7/moshi_mlx-0.3.0.tar.gz", hash = "sha256:108f0812dfa248cd543de9a46ec11bb2d603387ec3fc92d171157875c783971e", size = 46401, upload-time = "2025-08-04T06:51:02.483Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/75/3c00e7392a7ea80887440da615c300679636f9e6f89da10e1082f4970a95/moshi_mlx-0.3.0-py3-none-any.whl", hash = "sha256:2ec210340df8bf34025df6c272ea3ed618f5c22e176c3513f5dba4e529420621", size = 55777, upload-time = "2025-08-04T06:51:01.522Z" },
 ]
 
 [[package]]
@@ -1206,6 +1266,24 @@ wheels = [
 ]
 
 [[package]]
+name = "rustymimi"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/04/c3/d9a835c6adc96dead5874bf1d97a4e7a2baed7468bb480e538df7d7fabfd/rustymimi-0.4.1.tar.gz", hash = "sha256:0b7c537f25ba83f43643819761942cc299c6457e01f1dbf139a508f84da263e4", size = 77089, upload-time = "2025-02-05T20:52:35.915Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/b4/0c5b29f8da4e907cf23a000e1a41eba5df89fde2c3ce401bda0f86add065/rustymimi-0.4.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:f58ee21ccb983ec2a5453d506767949ab40fd8bc9271c771e79a9fad6f48a2f7", size = 1234841, upload-time = "2025-02-05T20:50:08.329Z" },
+]
+
+[[package]]
+name = "safetensors"
+version = "0.5.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/71/7e/2d5d6ee7b40c0682315367ec7475693d110f512922d582fef1bd4a63adc3/safetensors-0.5.3.tar.gz", hash = "sha256:b6b0d6ecacec39a4fdd99cc19f4576f5219ce858e6fd8dbe7609df0b8dc56965", size = 67210, upload-time = "2025-02-26T09:15:13.155Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b8/3b/11f1b4a2f5d2ab7da34ecc062b0bc301f2be024d110a6466726bec8c055c/safetensors-0.5.3-cp38-abi3-macosx_11_0_arm64.whl", hash = "sha256:21d01c14ff6c415c485616b8b0bf961c46b3b343ca59110d38d744e577f9cce7", size = 418419, upload-time = "2025-02-26T09:15:01.765Z" },
+]
+
+[[package]]
 name = "scikit-learn"
 version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1362,6 +1440,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/2f/33/2ed023e4d46f5043188a8e52c9a7672a67bb47b9e7788eefe5998c854512/speechbrain-1.1.2.tar.gz", hash = "sha256:a49328b61f6e6caa0e01ab4e32bc15b564114953e30718b1379d2e1d764e426a", size = 787909, upload-time = "2026-10-14T23:27:57.157Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/38/c7/e66ed19df444c56a9c6176c153b4b373803384651b455d38ee9fef97db62/speechbrain-1.1.2-py3-none-any.whl", hash = "sha256:9fea4144c917ea58bcf13f17a1a1759179ed7472a30ec8416e7c7c8cf21d9c9a", size = 912709, upload-time = "2026-10-14T23:27:55.83Z" },
+]
+
+[[package]]
+name = "sphn"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b7/94/0957f866030d6071bcfd285977ff3652bacf85e663a634d3172cf47055a7/sphn-0.2.1.tar.gz", hash = "sha256:3b19b1fece67d979d84080458bed545d1f55ddc5abac6ca5deae2672a184c7fe", size = 33477, upload-time = "2026-01-07T12:00:32.277Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6c/4c/cda94a813ef7f41bdb241577b7b51e453b59b8b20b184f6bd73ee2f3bdb8/sphn-0.2.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:a2238bcb66c21322ddc4a9308d7fbd4903175951ee4357cad8056c5e371e447f", size = 1755729, upload-time = "2026-01-07T12:00:26.067Z" },
 ]
 
 [[package]]

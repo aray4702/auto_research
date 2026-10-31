@@ -25,20 +25,18 @@ def _model_info(model) -> dict:
 
 
 def load_stages(args, manifest):
-    """Steps 5 and 6: ensure and load the models, then build the stages, with the settings read through their
-    modules. Returns the ASR stage, the diarizer and the models' field of the transcript and `start`. Tests
-    replace it."""
-    from lmt import asr, diarize
+    """Steps 5 and 6: load the engine (G4-2: before any audio is captured), ensure and load the diarization models,
+    then build the stages, with the settings read through their modules. Returns the ASR stage, the diarizer and the
+    models' field of the transcript and `start`. Tests replace it."""
+    from lmt import diarize, engines
     from lmt.live import asr as live_asr
     from lmt.live import diarize as live_diarize
 
-    asr_model = manifest.get(args.model) if args.model else models.default_live_asr(manifest)
-    needed = [asr_model]
-    if not args.no_diarize:
-        needed += [manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)]
+    engine = engines.load(args.engine, offline=args.offline)
+    needed = [] if args.no_diarize else [manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)]
     dirs = models.ensure(needed, offline=args.offline)
 
-    stage = live_asr.StreamingASR(asr.load(dirs[asr_model.name]), live_asr.DEFAULT_ASR_CONFIG)
+    stage = live_asr.StreamingASR(engine.stream(), engine.word_gap)
     if args.no_diarize:
         diarizer, diarization = live_diarize.NullDiarizer(), None
     else:
@@ -51,7 +49,7 @@ def load_stages(args, manifest):
             embedding = diarize.load_embedding(Path(dirs[diarize.EMBEDDING]))
         diarizer = live_diarize.OnlineDiarizer(segmentation, embedding, config)
         diarization = _model_info(manifest.get(diarize.DIARIZATION))
-    return stage, diarizer, {"asr": _model_info(asr_model), "diarization": diarization}
+    return stage, diarizer, {"asr": dict(engine.info), "diarization": diarization}
 
 
 def _list_devices() -> int:

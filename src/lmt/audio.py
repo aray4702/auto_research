@@ -3,7 +3,8 @@
 Every failure is an InputError naming the file (exit 3). FFmpeg's own log stays off (`av.logging` at its
 default), so a bad input gives stderr only the one `lmt: error:` line. FFmpeg decodes a WAV whose data is
 cut short without an error, so decode checks a WAV's `data` chunk first (design/internal/g1-stage2.md, P1).
-`Resampler` takes pushed float32 blocks through the same settings, `RESAMPLE` (design/internal/g2-stage1.md, 4b).
+`Resampler` takes pushed float32 blocks through the same settings, `RESAMPLE` (design/internal/g2-stage1.md, 4b),
+to 16 kHz or another `out_rate`.
 """
 
 import struct
@@ -20,13 +21,15 @@ RESAMPLE = {"format": "flt", "layout": "mono", "rate": SAMPLE_RATE}
 
 
 class Resampler:
-    """Float32 `(frames, channels)` blocks at `in_rate`, pushed one at a time, to 16 kHz mono float32."""
+    """Float32 `(frames, channels)` blocks at `in_rate`, pushed one at a time, to mono float32 at `out_rate`
+    (16 kHz, or Kyutai's 24 kHz: design/internal/g4-stage1.md §2)."""
 
-    def __init__(self, in_rate: int, channels: int):
+    def __init__(self, in_rate: int, channels: int, out_rate: int = SAMPLE_RATE):
         self.in_rate = in_rate
         self.channels = channels
+        self.out_rate = out_rate
         self._layout = {1: "mono", 2: "stereo"}.get(channels, f"{channels}c")
-        self._resampler = av.AudioResampler(**RESAMPLE)
+        self._resampler = av.AudioResampler(**{**RESAMPLE, "rate": out_rate})
         self._pts = 0
 
     def push(self, samples: numpy.ndarray) -> numpy.ndarray:
