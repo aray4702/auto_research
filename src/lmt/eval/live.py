@@ -100,23 +100,6 @@ def read_events(lines: Sequence[tuple[float, dict]]) -> tuple[list[tuple[Word, f
     return words, stop_arrival - stop["t"]
 
 
-def read_text(lines: Sequence[tuple[float, dict]]) -> list[tuple[Word, float]] | None:
-    """Each word the stream's `text` events commit (live events 1.1), with the arrival of the event carrying its
-    last piece, where the word delay is measured (spec, G4 "Terms"); None for a stream with no `text` event
-    (1.0), whose words are written with their labels. A word runs from a piece that starts one up to the next
-    such piece, and holds the pieces' text without the leading space; probability is 1.0, unused by scoring."""
-    pieces = [(arrival, event) for arrival, event in lines if event.get("type") == "text"]
-    if not pieces:
-        return None
-    words = []  # [start, end, text, arrival] each
-    for arrival, piece in pieces:
-        if piece["starts_word"] or not words:
-            words.append([piece["start"], piece["end"], piece["text"].lstrip(), arrival])
-        else:
-            words[-1][1:] = [piece["end"], words[-1][2] + piece["text"], arrival]
-    return [(Word(start, end, text, 1.0), arrival) for start, end, text, arrival in words]
-
-
 def run_once(command: list[str], out_dir: Path, stem: str) -> RunLog:
     """Run `command` (an `lmt live --jsonl` run writing `<out_dir>/<stem>.json`), stamping each event line with
     time.monotonic() as readline() returns it. Arrivals count from the start event's arrival; `wall_seconds`
@@ -170,34 +153,24 @@ def run_live(wav: Path, work_dir: Path, *, runs=3, command_prefix=None, engine="
 
 def figure(item: score.Item, ref_words, logs: Sequence[RunLog]) -> dict:
     """The runs pooled, in public-api.md's key order: G1's figure for the runs as that many items, then the
-    word delays over every matched word of every run, the label delays likewise, `matched_words` (the word
-    delays'), and each run's p95 word and label delays and `behind_seconds`. The word delay is measured at the
-    `text` event carrying a word's last piece, and the label delay at the `words` event carrying the word
-    (spec, G4 "Terms"); in a stream with no `text` event, both at the `words` event. A delay with no matched
-    word is None."""
+    delays over every matched word of every run, `matched_words`, and each run's p95 delay and
+    `behind_seconds`. A delay with no matched word is None."""
     refs = [RefWord(*w) for w in ref_words]
     hyps = []
-    pooled, pooled_labels = [], []
+    pooled = []
     runs = []
     for log in logs:
         hyp = score.hypothesis_from_transcript(log.transcript)
         hyps.append(replace(hyp, wall_seconds=log.wall_seconds))
-        labelled, behind = read_events(log.lines)
-        text = read_text(log.lines)
-        run_delays = delays(match_words(refs, labelled if text is None else text))
-        run_labels = delays(match_words(refs, labelled))
+        words, behind = read_events(log.lines)
+        run_delays = delays(match_words(refs, words))
         pooled += run_delays
-        pooled_labels += run_labels
-        runs.append({"p95_delay_seconds": _delay(run_delays, 0.95),
-                     "p95_label_delay_seconds": _delay(run_labels, 0.95), "behind_seconds": round(behind, 3)})
+        runs.append({"p95_delay_seconds": _delay(run_delays, 0.95), "behind_seconds": round(behind, 3)})
     return {
         **score._figure(item.dataset, "product-live", [item] * len(logs), hyps),
         "p50_delay_seconds": _delay(pooled, 0.5),
         "p95_delay_seconds": _delay(pooled, 0.95),
         "max_delay_seconds": _delay(pooled, 1.0),
-        "p50_label_delay_seconds": _delay(pooled_labels, 0.5),
-        "p95_label_delay_seconds": _delay(pooled_labels, 0.95),
-        "max_label_delay_seconds": _delay(pooled_labels, 1.0),
         "matched_words": len(pooled),
         "runs": runs,
     }
