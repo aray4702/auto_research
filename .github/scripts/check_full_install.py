@@ -39,14 +39,18 @@ FIRST_URL_LIMIT = 30 * 60  # the first --sample run downloads and transcribes
 TRANSCRIBE_LIMIT = 15 * 60
 RENAME_LIMIT = 2 * 60
 SECOND_URL_LIMIT = 10  # the second --sample run serves the cache, without transcribing again
-PROBE = ("192.0.2.1", 80)  # TEST-NET-1: inside the namespace, connecting to it must fail with ENETUNREACH
+PROBE = ("192.0.2.1", 80)  # TEST-NET-1: connecting to it must fail at once, ENETUNREACH in a namespace, EPERM in a sandbox
 FIXTURE = CHECKOUT / "tests" / "fixtures" / "two_speakers.wav"
 NETGUARD = CHECKOUT / "tests" / "netguard"  # G1's P7a, on every offline lmt command's PYTHONPATH
 RENAME_ARG = "S1=José & Ana"
 # lmt.eval.datasets: sample_meeting's WAV is derived/<dataset>/<meeting>.wav under LMT_DATA_DIR.
 SAMPLE_WAV = "derived/AMI-ci/ES2004a.wav"
 SAMPLE_TRANSCRIPT = "ES2004a.json"  # in LMT_DATA_DIR/sample/<key>/
-# The offline phase's namespace (§4b): bring loopback up, then drop to the runner's user and exec.
+# macOS's sandbox for the offline phase (#573): everything allowed but the network beyond localhost, which the
+# demo's server needs (step 2.4).
+SANDBOX_PROFILE = ("(version 1)(allow default)(deny network*)(allow network-bind (local ip \"localhost:*\"))"
+                   "(allow network-inbound (local ip \"localhost:*\"))(allow network-outbound (remote ip \"localhost:*\"))")
+# The offline phase's namespace on Linux (§4b): bring loopback up, then drop to the runner's user and exec.
 NAMESPACE_SCRIPT = ('ip link set lo up && u=$1 g=$2 && shift 2 && '
                     'exec setpriv --reuid="$u" --regid="$g" --init-groups -- "$@"')
 # Each recorded step's criteria (§4b, "Its record"). 1.2, the snapshot, checks nothing and isn't listed.
@@ -322,10 +326,10 @@ def step_cut_is_real(args):
     try:
         conn = socket.create_connection(PROBE, timeout=2)
     except OSError as e:
-        if e.errno == errno.ENETUNREACH:
+        if e.errno in (errno.ENETUNREACH, errno.EPERM):
             return
         raise StepFailed(f"the namespace has a route out: connecting to {PROBE[0]}:{PROBE[1]} gives "
-                         f"{e or type(e).__name__}, not ENETUNREACH") from None
+                         f"{e or type(e).__name__}, not ENETUNREACH or EPERM") from None
     conn.close()
     raise StepFailed(f"the namespace has a route out: {PROBE[0]}:{PROBE[1]} connects")
 
@@ -377,8 +381,8 @@ OFFLINE = [
 
 
 def offline_steps(platform):
-    """The offline phase's steps. On macOS there's no namespace, so 2.1 doesn't run: the guard is its check."""
-    return [s for s in OFFLINE if not (platform == "macos-arm64" and s[0] == "2.1")]
+    """The offline phase's steps, 2.1 included on both platforms: macOS's sandbox cuts the network (#573)."""
+    return list(OFFLINE)
 
 
 def offline_phase(args):
@@ -425,14 +429,15 @@ def run_offline(args):
 
 def offline_command(lmt, platform, work, *, path=None, uid=None, gid=None):
     """The argv that runs this script's `offline` phase: in its own network namespace as the runner's
-    user on Linux, and with only `env -i` on macOS. No path passes through a shell string."""
+    user on Linux, and under sandbox-exec with the network denied on macOS (#573). No path passes through a
+    shell string."""
     path = os.environ.get("PATH", "") if path is None else path
     phase = ["env", "-i", f"HOME={Path(work) / 'runs' / 'offline' / 'home'}", f"PATH={path}",
              "PYTHONDONTWRITEBYTECODE=1",
              sys.executable, "-I", str(Path(__file__).resolve()), "offline",
              "--lmt", str(lmt), "--platform", platform, "--work", str(work)]
     if platform == "macos-arm64":
-        return phase
+        return ["sandbox-exec", "-p", SANDBOX_PROFILE, *phase]
     uid = os.getuid() if uid is None else uid
     gid = os.getgid() if gid is None else gid
     return ["sudo", "-n", "unshare", "--net", "--", "sh", "-c", NAMESPACE_SCRIPT, "sh", str(uid), str(gid),
