@@ -1,4 +1,4 @@
-# G3-6, G3-7 and G3-8 on both platforms (design/internal/g3-stage1.md §5, "install-full"): the README's
+# G3-6, G3-7 and G3-8 on macos-26, the one platform since G4 (#573) (design/internal/g3-stage1.md §5, "install-full"): the README's
 # one-command install, then the full-install sequence against it, each in a clean environment (no cache).
 # Called by product.yml on workflow_dispatch, and by release.yml.
 name: install-full
@@ -22,7 +22,7 @@ permissions:
 jobs:
   # toolchain.toml's [uv] version, for setup-uv below.
   uv:
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 5
     outputs:
       version: ${{ steps.uv.outputs.version }}
@@ -44,11 +44,7 @@ jobs:
       matrix:
         # `install` and `full` number each runner's two records, so no two files of a run share a name.
         include:
-          - os: ubuntu-24.04
-            platform: linux-x86_64
-            install: 1
-            full: 2
-          - os: macos-15
+          - os: macos-26
             platform: macos-arm64
             install: 3
             full: 4
@@ -83,11 +79,7 @@ jobs:
       - name: The ffmpeg CLI
         if: ${{ !cancelled() }}
         run: |
-          if [ "$RUNNER_OS" = Linux ]; then
-            command -v ffmpeg || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg; }
-          else
-            command -v ffmpeg || brew install ffmpeg
-          fi
+          command -v ffmpeg || brew install ffmpeg
           ffmpeg -version | head -n 1
       # G3-6 and G3-8. It runs after a failed install too, so their checks are recorded as failed.
       - name: The full-install sequence (G3-6, G3-8)
@@ -101,7 +93,7 @@ jobs:
           --platform ${{ matrix.platform }} --work "$RUNNER_TEMP/work"
           --criteria-out "$GITHUB_WORKSPACE/criteria-install-full-${{ matrix.full }}.json"
       # The runner's records (design/internal/criteria.md §3), one artifact per runner; the merge joins the
-      # run's four files into one install-full record. A cancelled run uploads none.
+      # run's two files into one install-full record. A cancelled run uploads none.
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

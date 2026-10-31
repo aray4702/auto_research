@@ -37,7 +37,7 @@ class Hypothesis:  # one system's output on one item
     peak_rss_bytes: int | None = None
 
 
-SYSTEMS = ("product", "whisper-alone", "pyannote-alone")
+SYSTEMS = ("product", "asr-alone", "pyannote-alone")
 
 
 @cache
