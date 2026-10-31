@@ -20,8 +20,9 @@ def test_run_once_stamps_each_event_from_the_start_events_arrival(tmp_path):
     assert [event["type"] for _, event in log.lines] == ["start", "words", "stop"]
     arrivals = [arrival for arrival, _ in log.lines]
     assert arrivals[0] == 0.0
-    assert arrivals[1] == pytest.approx(0.3, abs=0.1)
-    assert arrivals[2] == pytest.approx(0.5, abs=0.1)
+    # The fake writes at 0.3 s and 0.5 s. Never early; a slow runner may be late (0.60 s on macos-26, #573).
+    assert 0.2 <= arrivals[1] < 0.8
+    assert arrivals[1] + 0.1 <= arrivals[2] < 1.2
     assert log.wall_seconds >= arrivals[2]
     assert log.transcript == json.loads((tmp_path / "clip.json").read_text(encoding="utf-8"))
     words, _ = live.read_events(log.lines)
