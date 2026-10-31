@@ -63,6 +63,12 @@ class DenialsTest(unittest.TestCase):
         sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {
             "command": "cat <<'EOF' | python3 -I system/tools/post.py comment 138 --body-file -\nText | with; pipes\nEOF"}})
         self.assertIn(sig, explained, "the rules' cat pipe, #138")
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {
+            "command": "python3 -I system/tools/post.py comment 320 --body-file - <<EOF\nRan `date`.\nEOF"}})
+        self.assertIn(sig, explained, "an unquoted heredoc delimiter, #320")
+        sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {
+            "command": "python3 -I system/tools/post.py comment 320 --body-file - <<'EOF'\nx\nEOF\ndate"}})
+        self.assertNotIn(sig, explained, "a second command after the heredoc is still raised")
         sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "sed -n '1,80p' system/rules.md"}})
         self.assertIn(sig, explained, "sed, which can write files, #184")
         allowed = runner.load_all()["runner"]["common"]["allow"]
