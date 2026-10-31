@@ -1640,3 +1640,4 @@
 {"at": "2026-10-31T21:14:30+00:00", "event": "start", "item": 578, "pid": 8746, "role": "architect", "run_id": "architect-20261031T211424Z", "task": "Item #578 needs your decision (needs-decision:architect)."}
 {"at": "2026-10-31T21:14:32+00:00", "event": "start", "item": 571, "pid": 8800, "role": "reviewer", "run_id": "reviewer-20261031T211424Z", "task": "Review the plan or design on #571."}
 {"at": "2026-10-31T21:14:33+00:00", "event": "start", "item": 589, "pid": 8879, "role": "reviewer", "run_id": "reviewer-20261031T211425Z", "task": "Review PR #589."}
+{"at": "2026-10-31T21:16:23+00:00", "cost_usd": 0.362725, "denials": 0, "denied": [], "event": "end", "five_hour": null, "item": 571, "role": "reviewer", "run_id": "reviewer-20261031T211424Z", "seven_day": 0.57, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 16}
