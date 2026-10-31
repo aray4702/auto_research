@@ -1550,3 +1550,4 @@
 {"at": "2026-10-31T15:25:44+00:00", "event": "start", "item": 369, "pid": 2496, "role": "reviewer", "run_id": "reviewer-20261031T152520Z", "task": "Review PR #369."}
 {"at": "2026-10-31T15:25:47+00:00", "event": "start", "item": 536, "pid": 2595, "role": "reviewer", "run_id": "reviewer-20261031T152521Z", "task": "Review PR #536."}
 {"at": "2026-10-31T15:25:50+00:00", "event": "start", "item": 209, "pid": 2680, "role": "builder", "run_id": "builder-20261031T152519Z", "task": "The Owner answered your question on #209. Act on the answer, then remove needs-decision:owner."}
+{"at": "2026-10-31T15:26:53+00:00", "cost_usd": 0.237049, "denials": 0, "denied": [], "event": "end", "five_hour": null, "item": 536, "role": "reviewer", "run_id": "reviewer-20261031T152521Z", "seven_day": 0.52, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 12}
