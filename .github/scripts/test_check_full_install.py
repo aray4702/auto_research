@@ -305,7 +305,7 @@ class OfflineCommandTest(unittest.TestCase):
             "sudo", "-n", "unshare", "--net", "--", "sh", "-c",
             'ip link set lo up && u=$1 g=$2 && shift 2 && exec setpriv --reuid="$u" --regid="$g" --init-groups -- "$@"',
             "sh", "1001", "118", *[a.replace("{platform}", "linux-x86_64") for a in phase]])
-        self.assertEqual(macos, ["sandbox-exec", "-p", "(version 1)(allow default)(deny network*)",
+        self.assertEqual(macos, ["sandbox-exec", "-p", cfi.SANDBOX_PROFILE,
                                  *[a.replace("{platform}", "macos-arm64") for a in phase]])
 
     def test_linux_defaults_to_the_runners_user(self):

@@ -40,14 +40,18 @@ jobs:
   readme:
     needs: changes
     runs-on: macos-26
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      # Verbose, and with its own limit, so a test that hangs on the runner is named (#573).
       - name: The README checks' own tests
-        run: python3 -I -m unittest discover -s .github/scripts -t .github/scripts
+        timeout-minutes: 8
+        run: |
+          python3 --version
+          python3 -I -m unittest discover -v -s .github/scripts -t .github/scripts
       - name: README checks that need no install (S1-1, S1-2's heading, S1-5)
         if: fromJSON(needs.changes.outputs.tier) < 1
         env:

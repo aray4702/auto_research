@@ -44,8 +44,10 @@ def snapshot(*dirs) -> dict[str, tuple]:
     return entries
 
 
-# Everything allowed but the network: a connect fails with EPERM, and a name lookup fails.
-SANDBOX_PROFILE = "(version 1)(allow default)(deny network*)"
+# Everything allowed but the network beyond this machine: localhost works (the demo's server), any other connect
+# fails with EPERM, and a name lookup fails.
+SANDBOX_PROFILE = ("(version 1)(allow default)(deny network*)(allow network-bind (local ip \"localhost:*\"))"
+                   "(allow network-inbound (local ip \"localhost:*\"))(allow network-outbound (remote ip \"localhost:*\"))")
 
 
 def can_isolate() -> bool:
