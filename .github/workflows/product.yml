@@ -198,6 +198,28 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+  # The browser tests (G3-5, G3-2's Chrome parse) on the runner's headless Chrome and its matching
+  # chromedriver (CHROMEWEBDRIVER); nothing is downloaded (#83, 8a). 3d adds the record and screenshot.
+  browser:
+    needs: changes
+    if: fromJSON(needs.changes.outputs.tier) >= 2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SE_OFFLINE: "true"
+      SE_AVOID_STATS: "true"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - run: uv sync --locked --all-extras
+      - run: google-chrome --version && "$CHROMEWEBDRIVER/chromedriver" --version
+      - run: uv run --frozen pytest -m browser
+
   # The CI subset, cached by the manifests' hash, fetched and verified on every run (design/internal/g1-stage1.md
   # §5a), and `lmt eval --set ci` run twice on it: G1-5's comparison and G1-8c's bounds
   # (design/internal/g1-stage2.md, P2b).

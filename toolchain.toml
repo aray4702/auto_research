@@ -108,6 +108,13 @@ version = "7.36.2"
 licence = "BSD-3-Clause"
 source = "https://pypi.org/project/protobuf/7.36.2/ (protobuf-7.36.2.dist-info/LICENSE)"
 
+# PySocks comes with Selenium (urllib3's socks extra), in the dev group only.
+[[licences.override]]
+distribution = "PySocks"
+version = "1.7.1"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/PySocks/1.7.1/ (PySocks-1.7.1.dist-info/LICENSE)"
+
 [[licences.override]]
 distribution = "python-dateutil"
 version = "3.0.0"
@@ -686,3 +693,12 @@ library = "LLVM's libc++"
 licence = "Apache-2.0 WITH LLVM-exception"
 platforms = ["macos-arm64"]
 source = "https://github.com/llvm/llvm-project/blob/main/libcxx/LICENSE.TXT"
+
+# Licence notes: what this check can't see, and who accepted it.
+# Selenium 4.52.0 (the dev group, for the browser tests; G3 §3, #169) carries the Selenium Manager executable
+# (Apache-2.0), which isn't a shared library, so the check above doesn't read it. Its SBOM,
+# selenium/webdriver/common/selenium-manager.cdx.json in the wheel, lists two licences outside the lists above:
+# Unicode-3.0 (19 components: the ICU4X icu_* crates, litemap, potential_utf, tinystr, writeable, yoke, zerofrom,
+# zerotrie, zerovec and their derives, and unicode-ident's "(MIT OR Apache-2.0) AND Unicode-3.0") and
+# CDLA-Permissive-2.0 (webpki-roots and webpki-root-certs). Accepted for this dev-and-CI-only tool by the Owner,
+# #169, option 1 (2026-10-30). Selenium isn't in the product's install, and neither licence joins the lists above.
