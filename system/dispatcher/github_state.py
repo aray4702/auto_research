@@ -29,10 +29,16 @@ GOAL_TITLE = re.compile(r"^Goal ([A-Z]+\d+):")
 
 
 def requirement_goals(text):
-    """Goal IDs the requirements set: rows of the Goals table with a goal written in, not struck, not G0."""
+    """Goal IDs the requirements set: rows of the Goals table with a goal written in, not struck, not G0.
+    The Goals table is §2's first table; later tables there (a release's scope) list requirements, not goals (#563)."""
     section = text.split("## 2. Goals", 1)[1].split("\n## ", 1)[0] if "## 2. Goals" in text else ""
-    goals = []
+    goals, in_table = [], False
     for line in section.splitlines():
+        if not line.strip().startswith("|"):
+            if in_table:
+                break
+            continue
+        in_table = True
         m = GOAL_ROW.match(line.strip())
         if m and m[1] != "G0" and m[2] and not m[2].startswith("~~"):
             goals.append(m[1])
