@@ -19,8 +19,7 @@ dependencies = [
   "jsonschema>=4.26",                  # lmt.transcript.load validates at run time (G3)
   "sounddevice>=0.5.6",                # lmt live's microphone (G2 4a, #209); imported only by lmt.live.mic
   # Kyutai STT 1B (G4, design/internal/g4-stage1.md §2), on MLX, so the Mac only.
-  "moshi-mlx==0.3.0; sys_platform == 'darwin'",
-  "mlx==0.26.5; sys_platform == 'darwin'",          # moshi-mlx 0.3.0's code is written for 0.26
+  "mlx==0.26.5; sys_platform == 'darwin'",          # lmt._vendor.moshi_mlx (0.3.0) is written for 0.26
   "rustymimi==0.4.1; sys_platform == 'darwin'",       # Mimi, the audio codec
   "sentencepiece==0.2.2; sys_platform == 'darwin'",   # Kyutai's text tokenizer
 ]
@@ -48,16 +47,6 @@ environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
   "sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
-# moshi-mlx 0.3.0 pins these below the versions lmt already locks. Lifting the pins is tested: in the spike's
-# environment, with numpy 2.4.6 and huggingface-hub 2.3.0 forced in, Kyutai gave the same AMI-ci WER (17.27 %)
-# and word delay (p95 0.89 s) (#575, the builder's comment). mlx and rustymimi keep moshi-mlx's own pins.
-override-dependencies = [
-  "numpy==2.4.6",
-  "huggingface-hub==2.3.0",
-  "sentencepiece==0.2.2",
-  "sounddevice>=0.5.6",
-  "aiohttp>=3.12",
-]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
@@ -82,4 +71,4 @@ markers = [
 target-version = "py311"
 line-length = 110
 include = ["src/**/*.py", "tests/**/*.py", ".github/scripts/**/*.py"]  # the product's code, CI's scripts too; system/ isn't the product's
-extend-exclude = ["src/lmt/eval/normalizer"]   # vendored, kept as upstream wrote it
+extend-exclude = ["src/lmt/eval/normalizer", "src/lmt/_vendor"]   # vendored, kept as upstream wrote it
