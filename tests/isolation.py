@@ -1,5 +1,6 @@
 """G1-13's isolation and file compare (design/internal/g1-stage2.md, P7b): a tree's snapshot, and the product run
-in a network namespace with no interface but a down loopback, where the machine allows one."""
+under macOS's sandbox-exec with a profile that denies the network, where the machine allows it (since G4, #573:
+macOS 26 is the one platform, so Linux's network namespace is gone)."""
 
 import hashlib
 import os
@@ -43,11 +44,16 @@ def snapshot(*dirs) -> dict[str, tuple]:
     return entries
 
 
+# Everything allowed but the network: a connect fails with EPERM, and a name lookup fails.
+SANDBOX_PROFILE = "(version 1)(allow default)(deny network*)"
+
+
 def can_isolate() -> bool:
-    """The CI runner: passwordless sudo, with unshare and setpriv on PATH."""
-    if not (shutil.which("unshare") and shutil.which("setpriv") and shutil.which("sudo")):
+    """macOS with sandbox-exec, where a sandbox can be applied (it can't inside another sandbox)."""
+    if sys.platform != "darwin" or not shutil.which("sandbox-exec"):
         return False
-    return subprocess.run(["sudo", "-n", "true"], capture_output=True, check=False).returncode == 0
+    probe = ["sandbox-exec", "-p", SANDBOX_PROFILE, "/usr/bin/true"]
+    return subprocess.run(probe, capture_output=True, check=False).returncode == 0
 
 
 def wrap(command, *, env) -> tuple[list[str], bool]:
@@ -56,8 +62,7 @@ def wrap(command, *, env) -> tuple[list[str], bool]:
     if not can_isolate():
         return list(command), False
     return [
-        "sudo", "-n", "unshare", "--net", "--",
-        "setpriv", f"--reuid={os.getuid()}", f"--regid={os.getgid()}", "--clear-groups", "--",
+        "sandbox-exec", "-p", SANDBOX_PROFILE,
         "env", "-i", *(f"{key}={value}" for key, value in env.items()), *command,
     ], True
 
