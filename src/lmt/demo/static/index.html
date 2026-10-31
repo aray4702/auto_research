@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transcript</title>
+<link rel="icon" href="favicon.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main>
+  <h1>Transcript</h1>
+  <p id="error" role="alert" hidden></p>
+  <audio id="audio" controls preload="auto" src="audio.wav">
+    <track id="track" kind="subtitles" srclang="en" label="Transcript" src="transcript.vtt" default>
+  </audio>
+  <h2>Speakers</h2>
+  <ul id="speakers"></ul>
+  <h2>Segments</h2>
+  <ol id="segments"></ol>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

@@ -108,6 +108,13 @@ version = "7.36.2"
 licence = "BSD-3-Clause"
 source = "https://pypi.org/project/protobuf/7.36.2/ (protobuf-7.36.2.dist-info/LICENSE)"
 
+# PySocks comes with Selenium (urllib3's socks extra), in the dev group only.
+[[licences.override]]
+distribution = "PySocks"
+version = "1.7.1"
+licence = "BSD-3-Clause"
+source = "https://pypi.org/project/PySocks/1.7.1/ (PySocks-1.7.1.dist-info/LICENSE)"
+
 [[licences.override]]
 distribution = "python-dateutil"
 version = "3.0.0"
@@ -573,6 +580,19 @@ licence = "BSD-3-Clause OR GPL-2.0-only"
 platforms = ["linux-x86_64"]
 source = "pillow's LICENSE, section ZSTD"
 
+# sounddevice 0.5.6: PortAudio, on macOS only (Linux's wheel is pure Python and loads the system's libportaudio2).
+# The universal2 wheel also carries Windows builds of PortAudio in the same folder: 3 plain DLLs (MIT) and 3
+# `*-asio.dll` with Steinberg's ASIO SDK. A Mac never loads them, and this check reads only .so and .dylib
+# files; the Owner accepted them as data files in the macOS install (#209, answer 1, 2026-10-30), as answers
+# 3a and 4a on #122 accepted x264 and LAME in av.
+[[licences.library]]
+distribution = "sounddevice"
+files = "_sounddevice_data/portaudio-binaries/libportaudio.dylib"
+library = "PortAudio (V19.7.0)"
+licence = "MIT"
+platforms = ["macos-arm64"]
+source = "https://github.com/spatialaudio/portaudio-binaries (README.md, Copyright), https://github.com/PortAudio/portaudio/blob/master/LICENSE.txt"
+
 # soundfile 0.14.0: libsndfile, with LAME, mpg123, FLAC, Ogg, Vorbis and Opus linked in (their symbols in
 # the binary).
 [[licences.library]]
@@ -673,3 +693,12 @@ library = "LLVM's libc++"
 licence = "Apache-2.0 WITH LLVM-exception"
 platforms = ["macos-arm64"]
 source = "https://github.com/llvm/llvm-project/blob/main/libcxx/LICENSE.TXT"
+
+# Licence notes: what this check can't see, and who accepted it.
+# Selenium 4.52.0 (the dev group, for the browser tests; G3 §3, #169) carries the Selenium Manager executable
+# (Apache-2.0), which isn't a shared library, so the check above doesn't read it. Its SBOM,
+# selenium/webdriver/common/selenium-manager.cdx.json in the wheel, lists two licences outside the lists above:
+# Unicode-3.0 (19 components: the ICU4X icu_* crates, litemap, potential_utf, tinystr, writeable, yoke, zerofrom,
+# zerotrie, zerovec and their derives, and unicode-ident's "(MIT OR Apache-2.0) AND Unicode-3.0") and
+# CDLA-Permissive-2.0 (webpki-roots and webpki-root-certs). Accepted for this dev-and-CI-only tool by the Owner,
+# #169, option 1 (2026-10-30). Selenium isn't in the product's install, and neither licence joins the lists above.

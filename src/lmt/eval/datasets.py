@@ -56,6 +56,7 @@ URL_PREFIXES = (
     "https://www.openslr.org/resources/12/",
     "https://us.openslr.org/resources/12/",
     "https://groups.inf.ed.ac.uk/ami/",
+    "https://github.com/aray4702/auto_research/releases/download/sample-data-ami/",  # the sample's own copy (#529)
     f"https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/{BUT_COMMIT}/",
 )
 ARCHIVE_SUFFIXES = (".zip", ".tar.gz", ".tgz", ".tar")
@@ -798,15 +799,30 @@ def _librispeech(dataset, manifests):
 
 def _ami(dataset, manifests):
     """One item per meeting: its audio (cropped when `crop` is set), its words as ref_text and its RTTM turns."""
-    items = []
-    for i, meeting in enumerate(dataset.meetings):
-        words, turns = _meeting_references(dataset, manifests, i)
-        audio = source_file(manifests.sources[dataset.audio[i]])
-        if dataset.crop is not None:
-            audio = _crop(audio, dataset)
-            words, turns = crop_references(words, turns, dataset.crop)
-        items.append(_item(dataset.name, meeting, audio, words, turns))
-    return items
+    return [_item(dataset.name, meeting, *_cropped_meeting(dataset, manifests, i))
+            for i, meeting in enumerate(dataset.meetings)]
+
+
+def live_reference(name: str = SAMPLE_MEETING) -> tuple[Item, list[tuple[float, float, str]]]:
+    """An ami dataset's first meeting as `fetch` gives it, with the (start, end, text) words its ref_text is
+    made from, in the same order and crop (design/internal/g2-stage1.md §5, item 5d). Only that dataset's own
+    sources are fetched, so `lmt eval --set live` downloads no LibriSpeech."""
+    manifests = load_manifests(MANIFEST_DIR)
+    dataset = manifests.datasets[name]
+    for source_id in _source_ids(dataset, manifests.datasets):
+        fetch_source(manifests.sources[source_id])
+    audio, words, turns = _cropped_meeting(dataset, manifests, 0)
+    return _item(dataset.name, dataset.meetings[0], audio, words, turns), [w for w in words if w[2]]
+
+
+def _cropped_meeting(dataset, manifests, i):
+    """An ami dataset's i-th meeting's audio, words and turns, cropped when `crop` is set."""
+    words, turns = _meeting_references(dataset, manifests, i)
+    audio = source_file(manifests.sources[dataset.audio[i]])
+    if dataset.crop is not None:
+        audio = _crop(audio, dataset)
+        words, turns = crop_references(words, turns, dataset.crop)
+    return audio, words, turns
 
 
 def _meeting_references(dataset, manifests, i):
