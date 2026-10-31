@@ -154,7 +154,7 @@ def test_the_clip_transcribes_within_its_duration(monkeypatch):
 
     monkeypatch.setenv("HF_HUB_OFFLINE", "0")  # so teardown undoes ensure()'s
     manifest = models.load_manifest()
-    model = manifest.get(manifest.default_asr)
+    model = manifest.get("distil-large-v3")  # Whisper's entry, no longer the default; #584 removes this test
     model_dir = models.ensure([model])[model.name]
     samples = audio.decode(CLIP)
     duration = len(samples) / audio.SAMPLE_RATE

@@ -6,9 +6,41 @@
 # against the Hub's own SHA-256; the gated pyannote repositories weren't, as the builder's token request failed.
 
 schema_version = 1
-default_asr = "distil-large-v3"
-default_live_asr = "distil-large-v3"     # lmt live's model: the offline default until G2 stage 2 pins one
+default_asr = "stt-1b-en_fr"             # Kyutai's engine, for both modes (G4)
 
+# Kyutai STT 1B, as published in bf16 (#570, 4a), quantized to 8 bits at load. Pinned by the builder on #575
+# (2026-10-31 14:41 PT); model.safetensors's SHA-256 matches the Hub's own LFS object id.
+[[model]]
+name = "stt-1b-en_fr"
+role = "asr"
+repository = "kyutai/stt-1b-en_fr-mlx"
+revision = "2b995724eef1e964b7ccb6a762b35a665c4abe0d"
+licence = "CC-BY-4.0"
+creators = "Kyutai"
+card = "https://huggingface.co/kyutai/stt-1b-en_fr-mlx"
+gated = false
+
+[[model.file]]
+path = "config.json"
+sha256 = "5e6aee8007000d844152932184fb7c7112d73cb9a4be562a313b6fa2b89a68f9"
+size = 1261
+
+[[model.file]]
+path = "model.safetensors"
+sha256 = "7c21d5adb06f87aaaff2fa34f16dce91a8fe4f1772820453cf3eb0a5285ed129"
+size = 1978423648
+
+[[model.file]]
+path = "mimi-pytorch-e351c8d8@125.safetensors"
+sha256 = "09b782f0629851a271227fb9d36db65c041790365f11bbe5d3d59369cf863f50"
+size = 384644900
+
+[[model.file]]
+path = "tokenizer_en_fr_audio_8000.model"
+sha256 = "cd87dd5d17169151782ac700280ec057e5d658a9afbe238a048ea5ff318cce69"
+size = 120378
+
+# Whisper: no command reaches it since G4; #584 removes it.
 [[model]]
 name = "distil-large-v3"
 role = "asr"                              # asr | diarization | segmentation | embedding

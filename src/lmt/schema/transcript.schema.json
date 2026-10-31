@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Local Meeting Transcriber transcript, version 1.1",
-  "description": "What lmt writes as <stem>.json (design/public-api.md, \"Transcript JSON, version 1.1\"). Readers ignore fields they don't know, so unknown fields are allowed. Segments sorted by start, 0 <= start < end <= source.duration, and speakers that exist are guaranteed by lmt, not stated here.",
+  "title": "Local Meeting Transcriber transcript, version 1.2",
+  "description": "What lmt writes as <stem>.json (design/public-api.md, \"Transcript JSON, version 1.2\"). Readers ignore fields they don't know, so unknown fields are allowed. Segments sorted by start, 0 <= start < end <= source.duration, and speakers that exist are guaranteed by lmt, not stated here.",
   "type": "object",
   "required": ["schema_version", "source", "models", "speakers", "segments"],
   "properties": {
@@ -34,6 +34,7 @@
       "required": ["name", "repository", "revision"],
       "properties": {
         "name": {"type": "string"},
+        "engine": {"enum": ["kyutai", "apple"]},
         "repository": {"type": "string"},
         "revision": {"type": "string"}
       }
