@@ -36,7 +36,7 @@ def test_g2_8_the_live_run_opens_no_connection_and_writes_only_its_outputs(live_
 
     assert run.returncode == 0, run.stderr
     if os.environ.get("CI"):
-        assert run.isolated, "under CI, the run must be isolated (sudo -n unshare --net)"
+        assert run.isolated, "under CI, the run must be isolated (sandbox-exec, network denied)"
     assert not run.connections, f"the run opened connections: {run.connections}"
     assert run.stem, f"not one <stem>.wav: new entries {run.new}"
     assert not run.changed and not run.gone, f"changed {run.changed}, gone {run.gone}"
