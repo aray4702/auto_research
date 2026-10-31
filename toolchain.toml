@@ -356,32 +356,6 @@ licence = "LGPL-3.0-or-later OR GPL-2.0-or-later"
 platforms = ["linux-x86_64"]
 source = "https://www.gnu.org/software/libunistring/manual/libunistring.html#Licenses"
 
-# ctranslate2 4.8.4: its own library, with oneDNN (Apache-2.0) and Intel MKL linked in on Linux (the
-# strings "dnnl_version" and "Intel(R) oneAPI Math Kernel" in the binary), and spdlog (MIT) on both.
-[[licences.library]]
-distribution = "ctranslate2"
-files = "ctranslate2.libs/libctranslate2-*"
-library = "CTranslate2, with oneDNN and Intel MKL"
-licence = "MIT AND Apache-2.0 AND LicenseRef-Intel-Simplified-Software-License"
-platforms = ["linux-x86_64"]
-source = "https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE, https://github.com/uxlfoundation/oneDNN/blob/main/LICENSE, https://www.intel.com/content/www/us/en/developer/articles/license/onemkl-license-faq.html"
-
-[[licences.library]]
-distribution = "ctranslate2"
-files = "ctranslate2/.dylibs/libctranslate2*"
-library = "CTranslate2"
-licence = "MIT"
-platforms = ["macos-arm64"]
-source = "https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE"
-
-[[licences.library]]
-distribution = "ctranslate2"
-files = "ctranslate2.libs/libgomp-*"
-library = "GCC's OpenMP runtime"
-licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
-platforms = ["linux-x86_64"]
-source = "https://gcc.gnu.org/onlinedocs/libgomp/Library-Index.html"
-
 # numpy 2.4.6 and scipy 1.17.1: OpenBLAS (with LAPACK) and the GCC runtimes, per each wheel's LICENSE.txt.
 [[licences.library]]
 distribution = "numpy"
@@ -464,14 +438,6 @@ library = "MLX"
 licence = "MIT"
 platforms = ["macos-arm64"]
 source = "https://github.com/ml-explore/mlx/blob/v0.26.5/LICENSE (mlx-0.26.5.dist-info/licenses/LICENSE)"
-
-[[licences.library]]
-distribution = "onnxruntime"
-files = "onnxruntime/capi/*onnxruntime*"
-library = "ONNX Runtime"
-licence = "MIT"
-platforms = ["linux-x86_64", "macos-arm64"]
-source = "https://github.com/microsoft/onnxruntime/blob/main/LICENSE"
 
 # pillow 13.0.0: per pillow-13.0.0.dist-info/licenses/LICENSE, or upstream's where that file is stale.
 [[licences.library]]
