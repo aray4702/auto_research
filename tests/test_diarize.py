@@ -15,7 +15,7 @@ import torch
 import yaml
 from pyannote.core import Annotation, Segment
 
-from lmt import asr, diarize, models
+from lmt import diarize, models
 from lmt.transcript import Turn
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,7 +93,7 @@ def fake(monkeypatch, tmp_path):
 
 
 def test_settings():
-    assert diarize.THREADS == asr.THREADS
+    assert diarize.THREADS == min(8, os.cpu_count() or 1)
     assert diarize.SEED == 0
 
 

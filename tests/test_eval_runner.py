@@ -14,7 +14,7 @@ import pytest
 from test_pipeline import WORDS, Fakes, wav  # noqa: F401 -- wav is a fixture
 from test_score import FIXTURES, ami_items, ls_items
 
-from lmt import asr, cli, diarize
+from lmt import cli, diarize, engines
 from lmt.errors import InputError
 from lmt.eval import runner, worker
 from lmt.eval.score import SYSTEMS
@@ -171,7 +171,7 @@ def run_dir(tmp_path, monkeypatch):
 
 
 def test_the_worker_records_the_stages_and_exits_with_main_s_code(fakes, wav, run_dir, capsys):  # noqa: F811
-    fake_asr_load, fake_diarize_load = asr.load, diarize.load
+    fake_asr_load, fake_diarize_load = engines.load, diarize.load
     stages = run_dir / "stages.json"
     code = worker.main([str(stages), "transcribe", str(wav)])
     captured = capsys.readouterr()
@@ -184,7 +184,7 @@ def test_the_worker_records_the_stages_and_exits_with_main_s_code(fakes, wav, ru
     assert doc["asr_seconds"] >= 0 and doc["diarize_seconds"] >= 0
     assert "load asr" in fakes.calls and "load diarize" in fakes.calls
     # The wrappers were for the call only.
-    assert (asr.load, diarize.load) == (fake_asr_load, fake_diarize_load)
+    assert (engines.load, diarize.load) == (fake_asr_load, fake_diarize_load)
 
 
 def test_the_worker_without_diarization(fakes, wav, run_dir):  # noqa: F811
