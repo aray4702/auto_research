@@ -8,8 +8,6 @@ license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11,<3.12"
 dependencies = [
   # The eight pinned to uv.lock's versions, without local labels (G3 §4a; tests/test_packaging.py checks them).
-  "faster-whisper==1.2.1",
-  "ctranslate2==4.8.4",
   "pyannote.audio==3.4.0",             # answer 8a
   "torch==2.8.0",                      # direct, so the CPU index applies on Linux (2.8.0+cpu); 2.8 while pyannote.audio 3.x reads audio through torchaudio's I/O
   "torchaudio==2.8.0",
