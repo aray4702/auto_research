@@ -289,10 +289,16 @@ def test_no_input_device(tmp_path, monkeypatch, stages):
 
 @pytest.mark.criterion("G2-5")
 def test_no_input_device_for_real(tmp_path, monkeypatch, stages):
-    """The same through the real `sounddevice`, on the CI runner, which has no input device."""
-    if not os.environ.get("CI"):
-        pytest.skip("runs in CI, whose runner has no input device")
+    """The same through the real `sounddevice`, on a machine with no input device. macos-26's runner has virtual
+    ones (#573), so there it skips, and the stand-in tests above carry G2-5 (ii)."""
     monkeypatch.delitem(sys.modules, "sounddevice", raising=False)
+    from lmt.errors import InputError
+    from lmt.live import mic
+    try:
+        if mic.input_devices():
+            pytest.skip("this machine has an input device")
+    except InputError as e:
+        pytest.skip(str(e))
     code, out, err = run("-o", str(tmp_path), "-n", "m", "--duration", "1")
     assert (code, out, err) == (3, "", "lmt: error: --device: no input device found\n")
     assert files(tmp_path) == []

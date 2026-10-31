@@ -46,8 +46,10 @@ RENAME_ARG = "S1=José & Ana"
 # lmt.eval.datasets: sample_meeting's WAV is derived/<dataset>/<meeting>.wav under LMT_DATA_DIR.
 SAMPLE_WAV = "derived/AMI-ci/ES2004a.wav"
 SAMPLE_TRANSCRIPT = "ES2004a.json"  # in LMT_DATA_DIR/sample/<key>/
-# macOS's sandbox for the offline phase (#573): everything allowed but the network.
-SANDBOX_PROFILE = "(version 1)(allow default)(deny network*)"
+# macOS's sandbox for the offline phase (#573): everything allowed but the network beyond localhost, which the
+# demo's server needs (step 2.4).
+SANDBOX_PROFILE = ("(version 1)(allow default)(deny network*)(allow network-bind (local ip \"localhost:*\"))"
+                   "(allow network-inbound (local ip \"localhost:*\"))(allow network-outbound (remote ip \"localhost:*\"))")
 # The offline phase's namespace on Linux (§4b): bring loopback up, then drop to the runner's user and exec.
 NAMESPACE_SCRIPT = ('ip link set lo up && u=$1 g=$2 && shift 2 && '
                     'exec setpriv --reuid="$u" --regid="$g" --init-groups -- "$@"')
