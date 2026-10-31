@@ -19,6 +19,7 @@
 | 1.13    | 2026-10-30 | architect, from the Owner's decisions (#123, 16:13 PT; #510, 16:20 PT; both relayed by the builder) | §2: v0.1, the MVP, the offline transcriber: the requirements it must meet, and the criteria that judge F3 and F5 for it. Follows 1.12 (#511, Q2 for v0.1) |
 | 1.14    | 2026-10-31 | architect, from the Owner's decision (#86, 2026-10-30, about 19:30 PT, relayed by the builder) | §2: v0.2, G3 without the release itself: rename (F7), the one-command install (Q5) and the demo (F8), with everything v0.1 meets. The criteria that judge F5, Q4 and Q8 for it. Follows 1.13 (#513, v0.1) |
 | 1.15    | 2026-10-30 | builder, from the Owner's decision (#526, 2026-10-30, about 22:50 PT, in the builder's session: "I will skip G3-8m") | §2: v0.2 is judged without G3-8m, the Owner's clean-account check, which moves to the v1.0 release. F7, F8 and Q5 are judged for v0.2 by their other criteria. Follows 1.14 (#518) |
+| 1.16    | 2026-10-31 | builder, from the Owner's decisions (#85, 2026-10-30, about 22:58 PT: live mode before v1.0; 2026-10-31, about 00:20 PT: option 3, ship live mode now with a relaxed delay, then sweep a smaller live model; both in the builder's session) | §2: v0.3 is live mode (F6, Q10), with everything v0.2 meets. Q10 is relaxed for v0.3: p95 delay ≤ 15 s; 3 s stays the target for a later release. F5, Q4 and Q8 are judged in full. The v1.0 release follows v0.3. Follows 1.15 (#530) |
 
 
 The Owner fills this in; it can start rough. Give each goal and requirement an
@@ -109,6 +110,8 @@ The Owner's readings for v0.1 are recorded on G1's release item for it, #510.
 
 G3-8m moves to the v1.0 release by the Owner's decision (#526, 2026-10-30: "I will skip G3-8m"); CI's `install-full` runs the same sequence on clean runners of both platforms with the network cut. The Owner's reading for v0.2, G3-5m, is recorded on G3's release item for it, which the Coordinator opens (`design/internal/criteria.md` §5).
 
+**v0.3** (the Owner on #85, 2026-10-30 and 2026-10-31, in the builder's session: live mode before v1.0, shipped now with a relaxed delay). v0.3 is live mode: `lmt live` transcribes from the microphone, or a file played back in real time, writing segments with speaker labels as they're recognised, and saving the transcript when stopped. It must meet F6 and Q10, and everything v0.2 meets. **Q10 is relaxed for v0.3** to a p95 delay of ≤ 15 s: the first measurement on the Owner's Mac, with the offline model (distil-large-v3) re-run on a sliding window, gave 14.6 s over three runs (p50 9.8 s), keeping pace with real time. 3 s stays the target for a later release, after a sweep that pins a smaller live model. F5, Q4 and Q8 are judged in full in v0.3: G2-7 and G2-8 are in it. The v1.0 release (G3-8m, G3-9, G3-10 and the release workflow, with Q2 at 0.5 and Q3) follows v0.3. The Owner's reading for v0.3, G2-5m, is recorded on G2's release item for it.
+
 
 ## 3. Use cases
 
@@ -159,7 +162,7 @@ already hold; add only what goes beyond them.
 | Q7  | reproducibility beyond the generic (e.g. identical output on every platform) | The same accuracy numbers for the same input, models and machine: pinned model revisions, deterministic decoding | The evaluation harness, run twice | must |
 | Q8  | privacy (what user data is collected, kept and shared; retention; consent) | Audio and transcripts never leave the computer. No telemetry. Nothing is written except the requested outputs and the model cache | Network calls are tested to be none after the models are downloaded | must |
 | Q9  | security (threats to defend against, authentication, encryption) | Models are downloaded only from pinned sources and verified by checksum; untrusted files are parsed safely | — | should |
-| Q10 | performance: live latency (G2) | p95 delay from speech to its text ≤ 3 s | A recorded clip played back as a live stream, on the Owner's Mac | should |
+| Q10 | performance: live latency (G2) | p95 delay from speech to its text ≤ 15 s for v0.3, live mode's first release, and ≤ 3 s for a later release (#85, 2026-10-31) | A recorded clip played back as a live stream, on the Owner's Mac | should |
 
 
 ## 6. Platforms and environments
