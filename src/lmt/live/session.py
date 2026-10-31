@@ -136,23 +136,30 @@ def run_lockstep(source, asr, diarizer, writer, sinks=NO_SINKS, *, source_info: 
 
 
 _STOP = object()  # the capture's last item on each stage's queue
+JOIN = 5.0  # seconds: how long `run_threaded` waits for each of its threads at the end
 
 
-def _capture(source, sinks, inboxes, main) -> None:
+def _capture(source, sinks, inboxes, main, stop) -> None:
+    """Takes the source's blocks to `on_block` and both queues until the source ends or `stop` is set. The stop
+    marker goes on both queues however it ends, so neither worker waits for ever."""
     try:
         for block in source.blocks():
+            if stop.is_set():
+                break
             sinks.on_block(block)
             for inbox in inboxes:
                 inbox.put(block)
+    except BaseException as e:  # noqa: BLE001 -- the main thread raises it (design §3c)
+        main.put(e)
+    finally:
         for inbox in inboxes:
             inbox.put(_STOP)
-    except Exception as e:  # noqa: BLE001 -- the main thread raises it (design §3c)
-        main.put(e)
 
 
-def _work(name, stage, inbox, main) -> None:
+def _work(name, stage, inbox, main, stop) -> None:
     """Feeds every block that has queued up in one `feed`; at the stop marker, flushes. Puts `(name, update,
-    samples processed, last)` on the main queue, or the exception that ended it."""
+    samples processed, last)` on the main queue, or the exception that ended it. Once `stop` is set it feeds
+    nothing more."""
     try:
         processed = 0
         done = False
@@ -163,6 +170,8 @@ def _work(name, stage, inbox, main) -> None:
                     items.append(inbox.get_nowait())
                 except queue.Empty:
                     break
+            if stop.is_set():
+                return
             done = items[-1] is _STOP
             blocks = items[:-1] if done else items
             if blocks:
@@ -171,7 +180,7 @@ def _work(name, stage, inbox, main) -> None:
                 processed += len(samples)
                 main.put((name, update, processed, False))
         main.put((name, stage.flush(), processed, True))
-    except Exception as e:  # noqa: BLE001 -- the main thread raises it (design §3c)
+    except BaseException as e:  # noqa: BLE001 -- the main thread raises it (design §3c)
         main.put(e)
 
 
@@ -198,33 +207,42 @@ def run_threaded(source, asr, diarizer, writer, sinks=NO_SINKS, *, source_info: 
     stages = {"asr": _Timed(asr), "diarization": _Timed(diarizer)}
     inboxes = {name: queue.Queue() for name in stages}
     main = queue.Queue()
+    stop = threading.Event()
     writer.start(source_info, models)
-    threads = [threading.Thread(target=_capture, args=(source, sinks, list(inboxes.values()), main), daemon=True)]
-    threads += [threading.Thread(target=_work, args=(name, stage, inboxes[name], main), daemon=True)
+    threads = [threading.Thread(target=_capture, args=(source, sinks, list(inboxes.values()), main, stop),
+                                daemon=True)]
+    threads += [threading.Thread(target=_work, args=(name, stage, inboxes[name], main, stop), daemon=True)
                 for name, stage in stages.items()]
-    for thread in threads:
-        thread.start()
-
-    processed = dict.fromkeys(stages, 0)
-    running = set(stages)
-    behind = _Behind()
-    while running:
-        try:
-            item = main.get(timeout=TICK)
-        except queue.Empty:
-            item = None
-        if isinstance(item, Exception):
-            raise item
-        if item is not None:
-            name, update, processed[name], last = item
-            if name == "asr":
-                output.join.add_words(update)
-            else:
-                output.join.add_activity(update)
-            output.send(output.join.poll())
-            if last:
-                running.discard(name)
-        behind.see(source.position - min(processed.values()))
+    try:
+        for thread in threads:
+            thread.start()
+        processed = dict.fromkeys(stages, 0)
+        running = set(stages)
+        behind = _Behind()
+        while running:
+            try:
+                item = main.get(timeout=TICK)
+            except queue.Empty:
+                item = None
+            if isinstance(item, BaseException):
+                raise item
+            if item is not None:
+                name, update, processed[name], last = item
+                if name == "asr":
+                    output.join.add_words(update)
+                else:
+                    output.join.add_activity(update)
+                output.send(output.join.poll())
+                if last:
+                    running.discard(name)
+            behind.see(source.position - min(processed.values()))
+    finally:
+        # On any way out, the capture stops taking blocks (and calling `on_block`) and every thread is joined, so
+        # none outlives this call to race the caller's clean-up.
+        stop.set()
+        for thread in threads:
+            if thread.is_alive():
+                thread.join(JOIN)
     output.send(output.join.finish())
     writer.stop(source.reason)
     return output.result(source, SessionStats(stages["asr"].stats(), stages["diarization"].stats(),
