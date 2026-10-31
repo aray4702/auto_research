@@ -5,7 +5,6 @@ given. `-v` is 3c2's.
 """
 
 import json
-import os
 import sys
 import wave
 from pathlib import Path
