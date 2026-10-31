@@ -115,12 +115,16 @@ def build_parser():
     e = commands.add_parser("eval", help="Score the product on the evaluation sets (needs lmt[eval]).",
                             description="Scores the product on the evaluation sets. Needs the eval extra.")
     e.add_argument("--set", choices=("ci", "full", "live"), help="The set to score.")
+    e.add_argument("--engine", choices=("kyutai", "apple"), default="kyutai",
+                   help="The speech engine to score (default: kyutai). With apple, the results go to "
+                        "<set>-apple.json.")
     e.add_argument("--out", metavar="DIR", default="results", help="Where the results files go "
                    "(default: results/).")
     e.add_argument("--update-readme", action="store_true",
-                   help="After --set full, regenerate README.md's results table.")
+                   help="After --set full or --set live, regenerate README.md's results table from every "
+                        "results file.")
     e.add_argument("--check-readme", action="store_true",
-                   help="Check README.md's results table against results/full.json. Exits 6 if it differs.")
+                   help="Check README.md's results table against the results files. Exits 6 if it differs.")
     e.set_defaults(handler="lmt.eval.cli:cli_eval")
 
     r = commands.add_parser("rename", help="Give speakers names, then export again.",
@@ -221,8 +225,8 @@ def _validate_eval(args):
         raise UsageError("--set", "give --set or --check-readme")
     if args.set is not None and args.check_readme:
         raise UsageError("--check-readme", "can't be combined with --set")
-    if args.update_readme and args.set != "full":
-        raise UsageError("--update-readme", "only with --set full")
+    if args.update_readme and args.set not in ("full", "live"):
+        raise UsageError("--update-readme", "only with --set full or --set live")
 
 
 def _validate_demo(args):

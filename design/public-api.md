@@ -103,10 +103,11 @@ Needs the `eval` extra (`lmt[eval]`). No other command does: `lmt demo --sample`
 | --- | --- |
 | `--set ci` | Downloads and caches the CI subset (LS-ci, AMI-ci), scores it, and writes `results/ci.json`. |
 | `--set full` | Runs `--set ci` twice and compares the two runs (G1-12). Then it scores LS full, AMI full and the one-hour recording, and writes `results/full.json`. |
-| `--set live` | Plays AMI-ci three times through `lmt live --from-file … --jsonl` in real time, measures each committed word's delay, scores the live transcript, and writes `results/live.json` (G2-6). |
+| `--set live` | Plays AMI-ci three times through `lmt live --from-file … --jsonl` in real time, measures each committed word's word and label delays, scores the live transcript, and writes `results/live.json` (G2-6). |
+| `--engine NAME` | The engine every system runs with: `kyutai`, the default, writing `results/<set>.json`; or `apple`, writing `results/<set>-apple.json`. |
 | `--out DIR` | Where the results files go. The default is `results/`. |
-| `--update-readme` | After `--set full`, regenerates `README.md`'s results table from `results/full.json`. |
-| `--check-readme` | Writes nothing, and runs no evaluation. Exits 0 if `README.md`'s results table equals what `results/full.json` renders, and 6 if it differs, printing the difference. |
+| `--update-readme` | After `--set full` or `--set live`, regenerates `README.md`'s results table from every results file present (`full`, `full-apple`, `live`, `live-apple`). |
+| `--check-readme` | Writes nothing, and runs no evaluation. Exits 0 if `README.md`'s results table equals what the results files render, and 6 if it differs, printing the difference. |
 
 ### `lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)
 
@@ -155,7 +156,7 @@ G4 (F11, #565) changes the commands above as follows. The tables under "Commands
 - **`lmt transcribe` and `lmt live`:** `--engine NAME`, default `kyutai`, replaces `--model NAME`. `kyutai` is Kyutai STT 1B on the GPU; `apple` is Apple's on-device recognizer (macOS 26 or later). If Apple's engine can't run on this Mac, the command exits 5 and says why, before any audio is captured (G4-2). One Kyutai model serves both modes, so there is no live default.
 - **`lmt models download [--engine NAME]`**, replacing `[--model NAME]`: without it, downloads Kyutai's model and the diarization models and verifies every file. With `--engine apple`, it builds the helper and asks macOS to install Apple's recognizer for `en-US`, plus the diarization models. It is the only command that asks macOS to install them (G4-7).
 - **`lmt models list [--bytes]`:** after the manifest's models, a row for Apple's engine with its status (supported, installed, the helper built) and the macOS version. `--bytes` gives each model's size on disk, which Q3 bounds at 2.5 GB each (G1-10), and no total; Apple's assets show as managed by macOS.
-- **`lmt eval`:** `--engine NAME`, default `kyutai`, writing `results/<set>.json`; with `apple`, `results/<set>-apple.json`. `--update-readme` works after `--set full` or `--set live`, and both it and `--check-readme` render the table from every results file present (`full`, `full-apple`, `live`, `live-apple`).
+- **`lmt eval`:** `--engine NAME`, and `--update-readme` and `--check-readme` over every results file, are in its table above (#578).
 - **`lmt live`'s stdout,** without `--jsonl`: on a terminal, words appear as they're recognised, on a provisional line (with Apple's engine, its volatile text too), and once their speaker is known the line is redrawn as `[HH:MM:SS] Speaker 1: ` with its words. Through a pipe, lines come as in 1.0, as words are labelled.
 - **Live events 1.1** add one event, so words go out before their labels; a 1.0 reader ignores it and reads the rest as before. The `start` event's `models.asr` gains `engine`, and `words` events now mark where a word gets its label, which Q10's label delay is measured at.
 
