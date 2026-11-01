@@ -19,6 +19,11 @@ import json, signal, sys, time, wave
 from pathlib import Path
 args = sys.argv[1:]
 stem, out = args[args.index("-n") + 1], Path(args[args.index("-o") + 1])
+import os
+if os.environ.get("LMT_APP_CHILD"):
+    print(json.dumps({"type": "ready"}), flush=True)
+    if not sys.stdin.readline().startswith("go"):
+        sys.exit(0)
 stopped = []
 signal.signal(signal.SIGINT, lambda *_: stopped.append(1))
 print(json.dumps({"type": "start", "t": 0, "wall": time.time()}), flush=True)
@@ -37,12 +42,13 @@ def served(tmp_path, monkeypatch):
         (tmp_path / "out").mkdir()
         server = lmt_app.make_server(app, 0)
         threading.Thread(target=server.serve_forever, daemon=True).start()
-        servers.append(server)
+        servers.append((server, app))
         return app
 
     servers = []
     yield serve
-    for s in servers:
+    for s, app in servers:
+        app.shutdown()
         s.shutdown()
         s.server_close()
 
@@ -100,10 +106,12 @@ def test_a_session_streams_its_events_saves_and_opens_in_f8_s_page(served, tmp_p
     app = served([sys.executable, str(FAKE)])
     status, body = request(app, "POST", "api/start", body={"engine": "kyutai"})
     assert status == 200, body
+    session = app.session
     got, end = events(app)
-    assert [e["type"] for e in got] == ["start", "words", "stop"]
+    assert [e["type"] for e in got] == ["loading", "loading", "ready", "start", "words", "stop"]
     assert end == {"code": 0, "view": True, "error": None}
-    argv = app.session.proc.args
+    assert session.stem.startswith("live-2") and (tmp_path / "out" / f"{session.stem}.json").is_file()
+    argv = session.proc.args
     assert argv[argv.index("--engine") + 1] == "kyutai" and "--jsonl" in argv and "--save-audio" in argv
     assert argv[argv.index("--from-file") + 1] == "x.wav" and "--offline" in argv
     assert request(app, "GET", "view/")[0] == 200
@@ -121,7 +129,7 @@ def test_stop_sends_one_sigint_and_a_second_start_waits_for_the_first(served):
     assert request(app, "POST", "api/start", body={"engine": "kyutai"})[0] == 409
     assert request(app, "POST", "api/stop", body={})[0] == 200
     got, end = events(app)
-    assert [e["type"] for e in got] == ["start", "stop"] and end["code"] == 0
+    assert [e["type"] for e in got] == ["ready", "start", "stop"] and end["code"] == 0
     assert request(app, "POST", "api/stop", body={})[0] == 409  # nothing running
 
 
@@ -139,9 +147,50 @@ def test_events_reach_the_stream_within_half_a_second_of_being_written(served):
     conn.request("GET", f"/{app.token}/api/events", headers={"Host": f"127.0.0.1:{app.port}"})
     r = conn.getresponse()
     for raw in r:
-        if raw.startswith(b"data: "):
+        if raw.startswith(b"data: ") and b'"wall"' in raw:  # the `start` event, stamped by the stand-in
             arrived = time.time()
             written = json.loads(raw[6:])["wall"]
             break
     request(app, "POST", "api/stop", body={})
     assert arrived - written < 0.5, arrived - written
+
+
+def wait_for(predicate, timeout=15):
+    deadline = time.monotonic() + timeout
+    while not predicate():
+        assert time.monotonic() < deadline, "timed out"
+        time.sleep(0.02)
+
+
+def test_prepare_loads_a_session_ahead_and_writes_nothing_until_start(served, tmp_path):
+    app = served([sys.executable, str(FAKE)])
+    assert request(app, "POST", "api/prepare", body={"engine": "kyutai"})[0] == 200
+    wait_for(lambda: app.session.stage == "ready")
+    state = json.loads(request(app, "GET", "api/state")[1])
+    assert state["running"] is False and state["session"]["stage"] == "ready"
+    assert list((tmp_path / "out").iterdir()) == []  # nothing captured or written while it waits
+    prepared = app.session
+    assert request(app, "POST", "api/start", body={"engine": "kyutai"})[0] == 200
+    assert app.session is prepared  # Start used the session loaded ahead
+    _, end = events(app)
+    assert end["code"] == 0 and end["view"] is True
+
+
+def test_changing_the_engine_cancels_the_waiting_session(served, tmp_path):
+    app = served([sys.executable, str(FAKE)])
+    request(app, "POST", "api/prepare", body={"engine": "kyutai"})
+    first = app.session
+    wait_for(lambda: first.stage == "ready")
+    request(app, "POST", "api/prepare", body={"engine": "apple"})
+    assert app.session is not first and app.session.engine == "apple"
+    wait_for(lambda: first.code is not None)
+    assert first.code == 0 and list((tmp_path / "out").iterdir()) == []
+
+
+def test_after_a_session_the_next_one_is_loaded_ahead(served):
+    app = served([sys.executable, str(FAKE)])
+    request(app, "POST", "api/start", body={"engine": "kyutai"})
+    done = app.session
+    events(app)
+    wait_for(lambda: app.session is not done and app.session.stage == "ready")
+    assert app.session.engine == "kyutai" and not app.session.started

@@ -31,6 +31,8 @@ def app_url(tmp_path, monkeypatch):
 def test_start_shows_labelled_lines_then_the_saved_transcript_opens(driver, app_url):
     driver.get(app_url)
     wait = WebDriverWait(driver, 30)
+    assert driver.title == "Live Meeting Transcription"
+    wait.until(lambda d: d.find_element(By.ID, "loadstage").text == "Ready")  # loaded ahead of Start
     assert driver.find_element(By.ID, "engine").get_attribute("value") == "kyutai"
     driver.find_element(By.ID, "start").click()
     line = wait.until(ec.visibility_of_element_located((By.CSS_SELECTOR, "#lines li")))
