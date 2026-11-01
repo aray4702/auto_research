@@ -54,6 +54,12 @@ Or try it on a sample meeting (AMI ES2004a, CC BY 4.0). The first run downloads 
 lmt demo --sample
 ```
 
+Or transcribe live in a page: `lmt app` opens one where you pick the engine, press Start and speak. The text appears as you speak, and each line gets its speaker a moment later. Stop saves the transcript and opens it in the same page.
+
+```sh
+lmt app
+```
+
 ## Build
 
 Prerequisites:

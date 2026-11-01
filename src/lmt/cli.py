@@ -160,6 +160,22 @@ def build_parser():
     dm.add_argument("--offline", action="store_true",
                     help="Never download. Only --sample's first run needs the network.")
     dm.set_defaults(handler="lmt.demo.server:cli_demo")
+
+    ap = commands.add_parser("app", help="Transcribe live in a local page, and open the transcript there.",
+                             description="Serves a page on this computer that starts and stops live mode, shows "
+                                         "the text as it's spoken and each line's speaker once it's final, and "
+                                         "then opens the saved transcript with its audio.")
+    ap.add_argument("-o", "--output-dir", metavar="DIR", default=".",
+                    help="Where each session's outputs go (default: the current directory).")
+    ap.add_argument("--device", metavar="NAME_OR_INDEX",
+                    help="The input device, as lmt live --list-devices shows it (default: the system's default).")
+    ap.add_argument("--from-file", metavar="FILE",
+                    help="Read FILE instead of a device, at real-time pace, as lmt live does.")
+    ap.add_argument("--port", metavar="N", type=int, default=0,
+                    help="The local port (default: 0, a free port the system picks).")
+    ap.add_argument("--no-browser", action="store_true", help="Print the URL without opening a browser.")
+    ap.add_argument("--offline", action="store_true", help="Never download. Exits 5 if a model is missing.")
+    ap.set_defaults(handler="lmt.demo.app:cli_app")
     return parser
 
 

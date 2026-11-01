@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live transcription</title>
+<link rel="icon" href="favicon.svg">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<main>
+  <h1>Live transcription</h1>
+  <p id="error" role="alert" hidden></p>
+  <form id="controls">
+    <label for="engine">Engine</label>
+    <select id="engine">
+      <option value="kyutai" selected>Kyutai STT 1B (GPU)</option>
+      <option value="apple">Apple's recognizer (Neural Engine)</option>
+    </select>
+    <button type="button" id="start">Start</button>
+    <button type="button" id="stop" disabled>Stop</button>
+    <span id="status" aria-live="polite">Ready</span>
+  </form>
+  <ol id="lines"></ol>
+  <p id="provisional" aria-live="polite"></p>
+  <p id="saved" hidden><a id="view" href="view/">Open the saved transcript</a></p>
+</main>
+<script src="live.js"></script>
+</body>
+</html>
