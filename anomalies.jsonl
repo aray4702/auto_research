@@ -48,3 +48,4 @@
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: rm", "level": "builder", "title": "Recurring permission denial: Bash: rm"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: uv run --frozen pytest", "level": "builder", "title": "Recurring permission denial: Bash: uv run --frozen pytest"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "idle-span:2026-W44", "level": "builder", "title": "Items waited while nothing ran"}
+{"at": "2026-11-01T15:30:03+00:00", "key": "runner:the applied checkout is at 94aae53e8a2356899198a54e5a91a6e21f44b0c3, main is at bdbe234691290d40759b9fdabf5c67477cc2bc5c", "level": "builder", "title": "The runner differs from main"}
