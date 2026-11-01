@@ -46,3 +46,4 @@
 {"at": "2026-11-01T15:30:03+00:00", "key": "outside:Bash: python3 -I .github/scripts/check_results.py [outside]", "level": "builder", "title": "Recurring denial outside the worktree: Bash: python3 -I .github/scripts/check_results.py [outside] \u2014 the rules keep runs inside it"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: python3 -I .github/scripts/tiers.py", "level": "builder", "title": "Recurring permission denial: Bash: python3 -I .github/scripts/tiers.py"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: rm", "level": "builder", "title": "Recurring permission denial: Bash: rm"}
+{"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: uv run --frozen pytest", "level": "builder", "title": "Recurring permission denial: Bash: uv run --frozen pytest"}
