@@ -40,3 +40,4 @@
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: awk", "level": "builder", "title": "Recurring permission denial: Bash: awk"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: cp", "level": "builder", "title": "Recurring permission denial: Bash: cp"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: gh issue", "level": "builder", "title": "Recurring permission denial: Bash: gh issue"}
+{"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: git commit", "level": "builder", "title": "Recurring permission denial: Bash: git commit"}
