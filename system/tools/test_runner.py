@@ -110,6 +110,14 @@ class SettingsTest(unittest.TestCase):
         for role in CONFIG["runner"]["roles"]:
             self.assertIn("Bash(git ls-tree:*)", runner.role_settings(CONFIG, role)["permissions"]["allow"], role)
 
+    def test_every_role_may_run_unit_tests_with_or_without_isolation(self):
+        # Runs type python3 -m unittest as often as the -I form; both run the same tests (#321).
+        for role in CONFIG["runner"]["roles"]:
+            allow = runner.role_settings(CONFIG, role)["permissions"]["allow"]
+            prefixes = [a[len("Bash("):-len(":*)")] for a in allow if a.startswith("Bash(") and a.endswith(":*)")]
+            for cmd in ("python3 -I -m unittest discover -s system -t .", "python3 -m unittest tests.test_cli"):
+                self.assertTrue(any(cmd.startswith(p + " ") for p in prefixes), f"{role}: {cmd}")
+
     def test_every_word_prefix_rule_can_match_a_command(self):
         # A :* rule matches its prefix as whole words, so a prefix ending in "/" matches no script (#41).
         for role in CONFIG["runner"]["roles"]:

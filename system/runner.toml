@@ -33,6 +33,9 @@ allow = [
   "Bash(git range-diff:*)",  # read-only, like git diff: did a PR's own commits change, or only main (#181)
   "Bash(python3 -I system/gate/against_base.py:*)",  # a PR's tests at its head and its base (#139)
   "Bash(python3 -I -m unittest:*)",
+  # Runs reach for it without -I. In a worktree it runs nothing -I's doesn't: discover puts the repo on
+  # sys.path either way, and no rule lets a run set PYTHON* variables first (#321).
+  "Bash(python3 -m unittest:*)",
   "Bash(date:*)", "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)", "Bash(wc:*)", "Bash(grep:*)",
   "Bash(sort:*)", "Bash(diff:*)",
   "Bash(git ls-tree:*)",  # read-only: the files at a commit, as git ls-files can't list another ref's (#179)
