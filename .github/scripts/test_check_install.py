@@ -26,7 +26,7 @@ README = """\
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/). Set `HF_TOKEN` for the models.
 
 ```sh
-uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
+uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0
 ```
 
 ## Build
@@ -182,7 +182,7 @@ class Fake:
 class CommandTest(unittest.TestCase):
     def test_rewrites_the_github_url_to_the_checkout(self):
         with tempfile.TemporaryDirectory() as tmp:
-            command, tag = cin.local_command("uv tool install git+https://github.com/aray4702/auto_research@v1.0.0",
+            command, tag = cin.local_command("uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0",
                                              tmp)
         self.assertEqual(command, f"uv tool install git+file://{Path(tmp).resolve()}@v1.0.0")
         self.assertEqual(tag, "v1.0.0")

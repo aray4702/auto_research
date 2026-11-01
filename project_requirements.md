@@ -35,7 +35,7 @@ system turns each into a question with a recommended answer.
 | Field | Value |
 | --- | --- |
 | Owner's GitHub login | `aray4702` |
-| Repository (`owner/name`) | `aray4702/auto_research` |
+| Repository (`owner/name`) | `aray4702/local_meeting_transcriber` |
 | Visibility and GitHub plan | public; GitHub Free (assumed: the plan isn't readable with the current token, and the Owner didn't object) |
 | Second GitHub account as code owner of protected paths (optional) | `sloan3165`. It must not be logged in where agents run |
 | Time zone for every time written for you | `America/Los_Angeles` (PT) |
@@ -178,7 +178,7 @@ PR, nightly) is sized against your CI limit.
 - **macOS on Apple Silicon:** the only target (the Owner, 2026-10-31, #565): the Owner's Mac, CI's `macos-26` runners (A5), and reviewers reproducing the results (U3). Speed (Q2, Q3, Q10) is measured on the Owner's Mac. The engines use the GPU (Kyutai, through MLX) and the Neural Engine (Apple's). The oldest macOS supported is macOS 26, which Apple's engine needs (the Owner, 2026-10-31, #565)
 - ~~**Linux x86_64, CPU only:** CI, and reviewers reproducing the results (U3). No GPU is assumed anywhere.~~ Dropped with Whisper (2026-10-31, #565): both new engines need Apple silicon.
 - **Ships as** a Python package installable with one command, with semantic versions and GitHub releases.
-  - The command is `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0`, with `uv`, installed by its own installer, as the one prerequisite. Nothing is published beyond GitHub; PyPI could follow later (#83, answer 9a).
+  - The command is `uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0`, with `uv`, installed by its own installer, as the one prerequisite. Nothing is published beyond GitHub; PyPI could follow later (#83, answer 9a).
   - v1.0 is G1 and G3, without Q6 (#243). Live mode (G2) follows as v1.1 (#83, answer 2a).
 
 ## 7. Constraints

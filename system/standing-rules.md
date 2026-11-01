@@ -24,7 +24,7 @@ Each rule records:
   3. the Owner's code-owner account's latest review is APPROVED, on the current head, or carried to it by an SR2 sign-off, or the builder approved the head under SR3;
   4. it's next in the merge queue and up to date with `main`, as for any PR;
   5. it doesn't touch `system/standing-rules.md` or `system/dispatcher/merge_rules.py`, which hold this rule and its check. Those the Owner still merges by hand.
-- **Granted:** by the Owner, 2026-10-27, about 20:43 PT, in the local session: "Standing rule: approve = merge (Recommended)", after asking "let Dispatcher to merge #113 and #103" ([#116](https://github.com/aray4702/auto_research/issues/116)).
+- **Granted:** by the Owner, 2026-10-27, about 20:43 PT, in the local session: "Standing rule: approve = merge (Recommended)", after asking "let Dispatcher to merge #113 and #103" ([#116](https://github.com/aray4702/local_meeting_transcriber/issues/116)).
 
 ### SR2: others judge, before the Owner, whether the Owner's approval still covers a PR that changed since
 
@@ -49,7 +49,7 @@ Each rule records:
   - between 11:22 and 11:29 PT: "For such situation, let coordinator make a judgement and approve first, if coordinator cannot, escalate to builder to make a judgement and approve. if builder cannot, finally escalate to me.";
   - between 11:36 and 11:43 PT: "If the PR's own lines changed or the PR changes the standing rules or plan.py, I will let builder to make a judgement and approve first. If builder cannot, escalate to me."; on the follow-up questions, "Not its own PRs (Recommended)" and, for the standing rules and `plan.py`, "Keep them with me (Recommended)".
   - between 11:47 and 11:54 PT: "update #151 so that changes to plan.py will go to builder first, then me." So the merge queue and these rules' checks moved from `plan.py` to `merge_rules.py`, which SR1 excludes. `plan.py`, now only the dispatch order, is an ordinary protected file under SR1 and SR2.
-  - Item: [#150](https://github.com/aray4702/auto_research/issues/150).
+  - Item: [#150](https://github.com/aray4702/local_meeting_transcriber/issues/150).
 
 ### SR3: the builder approves a protected PR in the Owner's place
 
@@ -73,4 +73,4 @@ Each rule records:
 - **Granted:** by the Owner, 2026-10-28, in the local session:
   - "I will let the other builder to review the approve the PRs of protected files. If builder cannot, escalate to me.";
   - on the follow-up questions, the scope "everthing except blueprint, requirements, standing-rules.md and any change the raises a cap", and the mechanism "Dispatcher enforces it".
-  - Item: [#221](https://github.com/aray4702/auto_research/issues/221).
+  - Item: [#221](https://github.com/aray4702/local_meeting_transcriber/issues/221).

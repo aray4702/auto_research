@@ -1,7 +1,7 @@
 # Who the system acts as, and where its credentials live (locations only, never values).
 # Protected path. Read by system/tools/post.py.
 
-repo = "aray4702/auto_research"
+repo = "aray4702/local_meeting_transcriber"
 owner_login = "aray4702"
 # The Owner's second account: code owner of the protected paths, never used by an agent.
 second_login = "sloan3165"

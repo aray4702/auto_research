@@ -189,7 +189,7 @@ The two event types carry the same words: joining the `text` events' pieces at e
 
 ## Install and versions (G3, Q5)
 
-- **The install command,** for v1.0: `uv tool install git+https://github.com/aray4702/auto_research@v1.0.0` (#83, question 9). `uv` is the one prerequisite. It fetches a suitable Python itself if there isn't one. The product runs on macOS 26 or later, on Apple silicon (§6, #565). Apple's engine also needs Xcode's Command Line Tools, for the Swift compiler that builds its helper on first use; Kyutai, the default, doesn't.
+- **The install command,** for v1.0: `uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0` (#83, question 9). `uv` is the one prerequisite. It fetches a suitable Python itself if there isn't one. The product runs on macOS 26 or later, on Apple silicon (§6, #565). Apple's engine also needs Xcode's Command Line Tools, for the Swift compiler that builds its helper on first use; Kyutai, the default, doesn't.
 - **Versions** follow semantic versioning, from 1.0.0. A release's tag is `v<version>`, and its GitHub release holds the wheel, the sdist and `SHA256SUMS`. `lmt --version` and every transcript's `lmt_version` give the version.
 - **Not on PyPI** in v1.0. Publishing there later adds an install command, and doesn't change this one.
 

@@ -31,7 +31,7 @@ SCRIPTS = Path(__file__).resolve().parent
 REPO = SCRIPTS.parent.parent  # the source of pyproject.toml, uv.lock and toolchain.toml for --wheel
 CHECK_README = SCRIPTS / "check_readme.py"
 LICENCES = SCRIPTS / "check_licences.py"
-GITHUB_URL = "git+https://github.com/aray4702/auto_research@"
+GITHUB_URL = "git+https://github.com/aray4702/local_meeting_transcriber@"
 TOOL = "local-meeting-transcriber"  # the tool's environment, <scratch>/tools/<TOOL>/
 # 4a1's pins, by their names in uv.lock.
 PINNED = ("pyannote-audio", "torch", "torchaudio", "av", "numpy",
