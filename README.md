@@ -89,6 +89,22 @@ The product's CI jobs live in [`.github/workflows/product.yml`](.github/workflow
 
 ## Results
 
+### Quick benchmark: GPU and Neural Engine
+
+A short run on the CI subset, about 8 minutes of audio: LS-ci, 20 LibriSpeech test-clean utterances (162 s), and AMI-ci, the first 300 s of AMI meeting ES2004a (four speakers). It ran on an Apple M4 (16 GB, macOS 27.0.1) on 2026-11-01, at commit `1eaaf1ec61a9`, with lmt 0.2.0, by `lmt eval --set ci` (Kyutai STT 1B, on the GPU) and `lmt eval --set ci --engine apple` (Apple's SpeechTranscriber, on the Neural Engine). Diarization is pyannote's `speaker-diarization-3.1` on the CPU with either engine.
+
+| Set | System | WER, GPU | WER, NPU | DER, GPU | DER, NPU | RTF, GPU | RTF, NPU |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| LS-ci | product | 1.8 % | 0.7 % | — | — | 0.82 | 0.06 |
+| LS-ci | the engine alone | 1.8 % | 0.7 % | — | — | 0.79 | 0.04 |
+| AMI-ci | product | 20.4 % | 14.8 % | 23.6 % | 32.5 % | 0.86 | 0.65 |
+| AMI-ci | the engine alone | 20.4 % | 14.8 % | — | — | 0.72 | 0.01 |
+| AMI-ci | pyannote alone | — | — | 18.1 % | 18.1 % | 0.85 | 0.65 |
+
+RTF is wall-clock time over audio duration, on the same basis as the full-set tables below. On the meeting, pyannote takes most of the time with either engine, so the product's RTF is close to pyannote's alone. The product's DER is higher than pyannote's alone because each word takes its speaker from its timestamps, so it depends on the engine's word timings too. The subset is small, so treat these as indicative. The full-set tables below are the published figures.
+
+### Full sets
+
 The tables below are rendered from the results of the full evaluation on a Mac, one file per engine: [`results/full.json`](results/full.json) for Kyutai STT 1B on the GPU, and `results/full-apple.json` for Apple's recognizer on the Neural Engine, once it exists. `lmt eval --set full --update-readme` measures Kyutai and regenerates them; add `--engine apple` for Apple's. `lmt eval --check-readme` checks that they equal what the results files render, and the `readme` job runs that check, so the tables can't drift from their results files.
 
 <!-- results:start -->
