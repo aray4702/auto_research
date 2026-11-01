@@ -1,5 +1,6 @@
 """The speech engines behind one interface (design/internal/g4-stage1.md §1; design/architecture.md, "Speech
-engines (G4)"). Both take decode's 16 kHz mono float32 and give pieces of text with times; `Words` joins pieces
+engines (G4)"). Each takes mono float32 at its `rate` (batch mode decodes straight to it, and live mode's sources keep a copy
+at it) and gives pieces of text with times; `Words` joins pieces
 into `transcript.Word`s by the spec's rules (G4 "Terms"), the same way in batch and live mode.
 
 `load` imports `lmt.engines.<name>` only when that engine is chosen, so this module stays light: `lmt --help`

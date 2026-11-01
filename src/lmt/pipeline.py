@@ -50,7 +50,7 @@ def transcribe(path, *, engine="kyutai", offline=False, diarize=True, num_speake
 
     def run_asr():
         # The engine's own rate, decoded from the file again, rather than resampled from 16 kHz (#575, G1-2).
-        rate = getattr(asr_engine, "rate", audio.SAMPLE_RATE)
+        rate = asr_engine.rate
         if rate == audio.SAMPLE_RATE:
             return asr_engine.transcribe(samples)
         return asr_engine.transcribe(audio.decode(path, rate), rate=rate)

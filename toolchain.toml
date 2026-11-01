@@ -146,12 +146,6 @@ licence = "BSD-3-Clause"
 source = "https://pypi.org/project/soundfile/0.14.0/ (soundfile-0.14.0.dist-info/LICENSE)"
 
 [[licences.override]]
-distribution = "sphn"
-version = "0.2.1"
-licence = "Apache-2.0"
-source = "https://pypi.org/project/sphn/0.2.1/ (sphn-0.2.1.dist-info/licenses/LICENSE, the Apache License 2.0)"
-
-[[licences.override]]
 distribution = "sympy"
 version = "1.14.0"
 licence = "BSD-3-Clause AND MIT"
