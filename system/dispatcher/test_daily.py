@@ -106,6 +106,20 @@ class DenialsTest(unittest.TestCase):
         compound = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": "ls system | head"}})
         self.assertEqual(len(daily.denials([end(x, denied=[compound]) for x in "abc"], NOW, explained)), 1, "still the one-command rule")
 
+    def test_uv_pip_is_explained_only_while_its_one_install_and_compile_are_all_the_rules_grant(self):
+        explained = runner.load_all()["runner"]["denials"]["explained"]
+        for command in ["uv pip install requests", "MACOSX_DEPLOYMENT_TARGET=14.0 uv pip install --target tmp/x -r r.txt",
+                        "uv pip sync tmp/r.txt", "uv pip uninstall av"]:
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertEqual(sig, "Bash: uv pip", command)
+        self.assertIn("Bash: uv pip", explained, "#323")
+        granted = {"Bash(uv pip compile:*)", "Bash(uv pip install --no-deps --require-hashes --no-build --target:*)"}
+        config = runner.load_all()
+        for role, r in config["runner"]["roles"].items():
+            rules = {a for a in runner.role_settings(config, role)["permissions"]["allow"] if a.startswith("Bash(uv pip")}
+            self.assertLessEqual(rules, granted, f"{role}: a wider uv pip grant could make a denial a real gap")
+            self.assertEqual(bool(rules), r["product_tools"] and "Write" in r["tools"], f"{role}: only writers (#92)")
+
     def test_signatures_keep_the_first_lines_shell_operators_and_no_words(self):
         for command, want in [("cat a.txt | head", "Bash: cat |"), ("cat > notes.md <<'EOF'\nx | y\nEOF", "Bash: cat > <<"),
                               ("cat 'a | b' \"c; d\"", "Bash: cat"), ("cat a.txt 2>/dev/null || ls","Bash: cat > ||"),
