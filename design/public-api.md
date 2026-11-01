@@ -147,6 +147,25 @@ Serves a page on this computer that shows a transcript, its speakers and its aud
 - **The page** needs nothing from the network: no fonts, scripts or styles from elsewhere. The routes it uses, and the page itself, are internal and may change in any version. Only the command and its options are public.
 - **Errors:** a missing or unreadable audio file is an input error (3), naming the file and `--audio`. So are an invalid transcript and a port in use. An audio file whose duration differs from `source.duration` by more than 1 s gets one `lmt: warning:` line, and the page is still served.
 
+### `lmt app` (G5, F12)
+
+Serves a page on this computer that starts and stops live mode, shows the text as it's spoken and each line's speaker once it's final, and then opens the saved transcript with its audio in F8's page.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `-o DIR`, `--output-dir DIR` | the current directory | Where each session's outputs go, as `lmt live`'s `-o`. |
+| `--device NAME_OR_INDEX` | the system's default input | The input device, as `lmt live --list-devices` shows it. |
+| `--from-file FILE` | none | Read `FILE` instead of a device, at real-time pace, as `lmt live` does. |
+| `--port N` | 0, a free port the system picks | The local port. |
+| `--no-browser` | off | Prints the URL without opening a browser. |
+| `--offline` | off | As for `lmt live`. |
+
+- **On start,** it prints the page's URL, `http://127.0.0.1:<port>/<token>/`, then opens it in the default browser.
+- **A session** is `lmt live --jsonl --save-audio` with the engine chosen on the page, in a process of its own. **Stop** sends it one SIGINT, so it saves its outputs as `lmt live` does. One session runs at a time.
+- **It stops** on Ctrl-C or SIGTERM and exits 0, after stopping and saving a running session.
+- **Only this computer can reach it,** as for `lmt demo`: `127.0.0.1` only, the token, the `Host` check. Start and Stop also need the page's own `Origin` (Q8).
+- **The page** and its routes are internal and may change in any version. Only the command and its options are public.
+
 ### Global options
 
 `lmt --help`, `lmt --version`, which prints `lmt <version>`.

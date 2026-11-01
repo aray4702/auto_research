@@ -320,3 +320,28 @@ These are the Architect's proposal. The Coordinator charts the plan. G4 needs tw
 **What can't land today.** Stage 2 can't: it needs stage 1 merged and then about 12–14 hours of the Mac's time. Stage 1 is seven items, most on protected paths that the Owner merges, and item 3 is large; items 1, 2, 4 and 6 can land today, and items 3, 5 and 7 only if each goes through review and the Owner's merge at the first pass. So G4's realistic finish is stage 1 late on 2026-10-31 or on 2026-11-01, and stage 2 on 2026-11-01 (question 5 on #570).
 
 **What G4 supersedes.** v0.3 at the 15 s bound: #536 (requirements v1.16's first draft, replaced by #569), #537 (its measurement of Whisper's live mode, p95 14.0 s), and #541 with its PR #542 (`check_results.py` reading `results/live.json` at 15 s): stage 1's item 6 reads it at G2-6's new targets, and #542's branch (`developer/541-check-live-results`) carries over as prior work. **#538**, the release item for live mode, stays open: the Owner's G2-5m reading on it was on Whisper's live mode, so it is read again on the Kyutai engine at stage 2. **#539**, the version PR, stays held, and its README line on the delay is rewritten from `results/live.json` after stage 2.
+
+## G5: a local web app for both modes
+
+**Goal:** `project_requirements.md` §2, G5. **Measurable outcome:** "F12; Q8 and Q10 hold for it." **Order:** the next milestone, after G4's stage 1 and before its stage 2 (the Owner, 2026-10-31); due 2026-10-31.
+
+### Terms
+
+- **The app:** `lmt app`, a page served on this computer (`design/public-api.md`). A **session** is `lmt live --jsonl --save-audio` in a process of its own, with the engine chosen on the page and the app's source (`--device` or `--from-file`), so it behaves as on the command line. **Stop** sends it one SIGINT, as Ctrl-C does, so it saves its outputs.
+- **The page's stream:** `api/events`, the session's `lmt live` events as server-sent events, in order, then an `end` event with the exit code and whether a transcript was saved.
+
+### Done-check
+
+| ID | Requirement | Criterion | How it's checked | Runs |
+| --- | --- | --- | --- | --- |
+| G5-1 | F12, Q8 | **Local only.** `lmt app` listens on `127.0.0.1` only, under a random token, and answers only a `Host` of `127.0.0.1:<port>` or `localhost:<port>`, as F8's page does (G3-4). Start and Stop are POST only, and only with the page's own `Origin`, so another site can't start the microphone. The page loads nothing from elsewhere (F8's security headers). | Tests in `test` on the server in process, with `tests/fake_live.py` for `lmt live`. | CI |
+| G5-2 | F12, Q10 | **Live text reaches the page.** Each event the session writes is on the page's stream within 0.5 s of being written, so the page shows text within Q10's delays plus 0.5 s. | A test in `test`: a stand-in session stamps its events with the clock, and the test reads the stream. | CI |
+| G5-3 | F12 | **Start, Stop, the engine, the transcript.** Start runs `lmt live` with the chosen engine, `--jsonl`, `--save-audio` and the app's source; a second Start while one runs is 409; Stop is one SIGINT, after which the session saves; an unknown engine is 400. Once it has saved, its transcript and audio open in F8's page under `view/`. | Tests in `test`, as for G5-1. | CI |
+| G5-4 | F12 | **The page in a browser.** In headless Chrome, Start shows each line with its speaker's label as the session's `words` events arrive, and once it ends, the link to the saved transcript, whose page loads. | `pytest -m browser`, with the stand-in session. | CI |
+| G5-1m | F12 | **The Owner's reading.** On the Mac: `lmt app`, Kyutai chosen, Start, about a minute of speech from two people. Text appears as it's spoken and each line gets its speaker soon after; Stop saves; "Open the saved transcript" shows it and plays a clicked line. | The Owner, on G5's release item. | Mac |
+
+**Fresh evidence for closing G5:** a green local CI run on `main` with G5-1 to G5-4 in it, and the Owner's G5-1m reading.
+
+### Stages
+
+One stage, `G5.1`: the server, the page, the command and its tests, in one PR; then the Owner's reading.
