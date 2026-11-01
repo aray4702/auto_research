@@ -291,6 +291,8 @@ class AppleStream:
 class AppleEngine:
     name = "apple"
     word_gap = 0.0  # each final word is complete once it is out
+    rate = 16_000  # the helper reads decode's 16 kHz samples (Engine.rate)
+    peak_rss_bytes = 0
 
     def __init__(self, binary, status):
         self.binary = binary
