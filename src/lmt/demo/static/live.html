@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Live transcription</title>
+<title>Live Meeting Transcription</title>
 <link rel="icon" href="favicon.svg">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <main>
-  <h1>Live transcription</h1>
+  <h1>Live Meeting Transcription</h1>
   <p id="error" role="alert" hidden></p>
   <form id="controls">
     <label for="engine">Engine</label>
@@ -19,8 +19,12 @@
     </select>
     <button type="button" id="start">Start</button>
     <button type="button" id="stop" disabled>Stop</button>
-    <span id="status" aria-live="polite">Ready</span>
+    <span id="status" aria-live="polite">Loading…</span>
   </form>
+  <div id="loading">
+    <progress id="loadbar" max="1" value="0"></progress>
+    <span id="loadstage">Starting…</span>
+  </div>
   <ol id="lines"></ol>
   <p id="provisional" aria-live="polite"></p>
   <p id="saved" hidden><a id="view" href="view/">Open the saved transcript</a></p>
