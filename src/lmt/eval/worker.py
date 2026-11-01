@@ -3,7 +3,7 @@
 
     python -m lmt.eval.worker STAGES_OUT transcribe INPUT [--no-diarize]
 
-It wraps `asr.load` and `diarize.load` for this process only, and the `transcribe` and `diarize` methods of
+It wraps `engines.load` and `diarize.load` for this process only, and the `transcribe` and `diarize` methods of
 what they return. Each wrapper adds its wall time to its stage's seconds, and the two stage wrappers keep
 what they return. It then calls `lmt.cli.main` unchanged, so the product's own code runs; the wrappers only
 observe it. If `main` returns 0, it writes STAGES_OUT, by a temporary file renamed into place:
@@ -24,7 +24,7 @@ import threading
 import time
 from pathlib import Path
 
-from lmt import asr, cli, diarize
+from lmt import cli, diarize, engines
 
 
 class Stages:
@@ -75,14 +75,14 @@ class Stages:
 
 @contextlib.contextmanager
 def observed(stages):
-    """asr.load and diarize.load wrapped until the block ends."""
-    saved = asr.load, diarize.load
-    asr.load = stages.loader("asr", asr.load, "transcribe")
+    """engines.load and diarize.load wrapped until the block ends."""
+    saved = engines.load, diarize.load
+    engines.load = stages.loader("asr", engines.load, "transcribe")
     diarize.load = stages.loader("diarize", diarize.load, "diarize")
     try:
         yield stages
     finally:
-        asr.load, diarize.load = saved
+        engines.load, diarize.load = saved
 
 
 def main(argv=None) -> int:

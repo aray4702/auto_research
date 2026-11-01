@@ -71,7 +71,7 @@ def all_hypotheses() -> dict:
         hyps["product", "AMI-ci", fid] = h
     for uid in ("u1", "u2", "u3", "u4"):
         h = product("ls", uid)
-        hyps["whisper-alone", "LS-ci", uid] = Hypothesis(text=h.text, turns=None)
+        hyps["asr-alone", "LS-ci", uid] = Hypothesis(text=h.text, turns=None)
         hyps["product", "LS-ci", uid] = h
     return hyps
 
@@ -160,7 +160,7 @@ def test_score_gives_one_figure_per_dataset_and_system():
     assert figures == [
         {"dataset": "LS-ci", "system": "product", "wer": 0.263158, "der": None,
          "audio_seconds": 8.0, "wall_seconds": 3.2, "rtf": 0.4, "peak_rss_bytes": 2000},
-        {"dataset": "LS-ci", "system": "whisper-alone", "wer": 0.263158, "der": None,
+        {"dataset": "LS-ci", "system": "asr-alone", "wer": 0.263158, "der": None,
          "audio_seconds": 8.0, "wall_seconds": None, "rtf": None, "peak_rss_bytes": None},
         {"dataset": "AMI-ci", "system": "product", "wer": None, "der": 0.117647,
          "audio_seconds": 16.0, "wall_seconds": 6.0, "rtf": 0.375, "peak_rss_bytes": 3000},
@@ -168,7 +168,7 @@ def test_score_gives_one_figure_per_dataset_and_system():
          "audio_seconds": 16.0, "wall_seconds": None, "rtf": None, "peak_rss_bytes": None},
     ]
     assert all(list(f) == KEYS for f in figures)
-    assert SYSTEMS == ("product", "whisper-alone", "pyannote-alone")
+    assert SYSTEMS == ("product", "asr-alone", "pyannote-alone")
 
 
 def test_one_missing_timing_makes_the_set_s_timing_null():
@@ -180,6 +180,6 @@ def test_one_missing_timing_makes_the_set_s_timing_null():
 
 def test_hypotheses_for_some_items_but_not_all_is_an_error():
     hyps = all_hypotheses()
-    del hyps["whisper-alone", "LS-ci", "u3"]
-    with pytest.raises(ValueError, match="LS-ci, whisper-alone: hypotheses for 3 of 4 items"):
+    del hyps["asr-alone", "LS-ci", "u3"]
+    with pytest.raises(ValueError, match="LS-ci, asr-alone: hypotheses for 3 of 4 items"):
         score(ls_items(), hyps)

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Local Meeting Transcriber live events, version 1.0",
-  "description": "One line of lmt live --jsonl (design/public-api.md, \"Live events, version 1.0\"). A minor version only adds fields or event types, and readers ignore those they don't know, so unknown fields are allowed. start first, stop last and t never falling are guaranteed by lmt, not stated here.",
+  "title": "Local Meeting Transcriber live events, version 1.1",
+  "description": "One line of lmt live --jsonl (design/public-api.md, \"Live events, version 1.1\" and \"G4's changes to the commands\"). A minor version only adds fields or event types, and readers ignore those they don't know, so unknown fields are allowed. start first, stop last, t never falling, and the text events' pieces joining to the words events' words are guaranteed by lmt, not stated here.",
   "oneOf": [
     {
       "type": "object",
@@ -62,6 +62,41 @@
               ]
             }
           }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "type",
+        "t",
+        "text",
+        "start",
+        "end",
+        "starts_word"
+      ],
+      "properties": {
+        "type": {
+          "const": "text"
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "minimum": 0
+        },
+        "starts_word": {
+          "type": "boolean"
         }
       }
     },
@@ -181,6 +216,12 @@
         },
         "revision": {
           "type": "string"
+        },
+        "engine": {
+          "enum": [
+            "kyutai",
+            "apple"
+          ]
         }
       }
     },

@@ -2,11 +2,11 @@
 
 ## What it is
 
-Local Meeting Transcriber turns a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac, so the audio never leaves it, with its accuracy measured and published. It transcribes WAV, MP3, M4A, FLAC and MP4 or MOV audio into text, subtitles and JSON with a speaker label on every line, lets you give the speakers their names, and shows a transcript with its audio in a page on your own computer. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
+Local Meeting Transcriber turns a meeting recording into an accurate transcript with timestamps that says who said what, running entirely on your Mac (Apple silicon, macOS 26 or later), on its GPU or Neural Engine, so the audio never leaves it, with its accuracy measured and published. It transcribes WAV, MP3, M4A, FLAC and MP4 or MOV audio into text, subtitles and JSON with a speaker label on every line, lets you give the speakers their names, and shows a transcript with its audio in a page on your own computer. It is built by this repository's development system, which [`blueprint.md`](blueprint.md) describes. Its requirements are in [`project_requirements.md`](project_requirements.md).
 
 ## Install
 
-You need [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
+You need a Mac with Apple silicon and macOS 26 or later, and [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
 
 ```sh
 uv tool install git+https://github.com/aray4702/auto_research@v0.2.0
@@ -28,6 +28,13 @@ Transcribe a recording. It writes `meeting.txt`, `meeting.srt`, `meeting.vtt` an
 lmt transcribe meeting.m4a
 ```
 
+Two speech engines are built in. Kyutai STT 1B, the default, runs on the Mac's GPU. Apple's own on-device recognizer runs on the Neural Engine; choose it with `--engine apple`, in `lmt transcribe` and `lmt live` alike. It needs the Xcode Command Line Tools (`xcode-select --install`) to build its small Swift helper, and its English speech model, which macOS installs once:
+
+```sh
+lmt models download --engine apple
+lmt transcribe meeting.m4a --engine apple
+```
+
 List the speakers it found, then give them names. Every format is written again with the names.
 
 ```sh
@@ -45,6 +52,12 @@ Or try it on a sample meeting (AMI ES2004a, CC BY 4.0). The first run downloads 
 
 ```sh
 lmt demo --sample
+```
+
+Or transcribe live in a page: `lmt app` opens one where you pick the engine, press Start and speak. The text appears as you speak, and each line gets its speaker a moment later. Stop saves the transcript and opens it in the same page.
+
+```sh
+lmt app
 ```
 
 ## Build
@@ -79,6 +92,8 @@ The product's CI jobs live in [`.github/workflows/product.yml`](.github/workflow
 The table below is rendered from [`results/full.json`](results/full.json), the results of the full evaluation. `lmt eval --set full --update-readme` regenerates it (planned: G1 stage 2 builds the evaluation run). `lmt eval --check-readme` checks that it equals what `results/full.json` renders, and the `readme` job runs that check, so the table can't drift from its results file.
 
 <!-- results:start -->
+**Full sets, `distil-large-v3`** (`results/full.json`)
+
 Measured on Apple M4 (arm64, 16.0 GB, macOS 27.0.1) on 2026-10-30, at commit `47cdcf28e374`, with lmt 0.1.0.
 Models: ASR `distil-large-v3` (`Systran/faster-distil-whisper-large-v3` at `c3058b475261`); diarization `speaker-diarization-3.1` (`pyannote/speaker-diarization-3.1` at `84fd25912480`).
 Two runs of the CI subset gave identical accuracy figures: yes.
@@ -99,4 +114,4 @@ RTF is wall-clock time over audio duration. For the product, it runs from proces
 
 ## Licences
 
-The product is licensed under the MIT License ([`LICENSE`](LICENSE)); [`NOTICE`](NOTICE) gives the licence of each model it downloads. The speech recognition model, [`Systran/faster-distil-whisper-large-v3`](https://huggingface.co/Systran/faster-distil-whisper-large-v3), by SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3, is under the MIT License. The diarization pipeline, [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1), by pyannote (Hervé Bredin and Alexis Plaquet), is under the MIT License. Its segmentation model, [`pyannote/segmentation-3.0`](https://huggingface.co/pyannote/segmentation-3.0), by pyannote (Hervé Bredin and Alexis Plaquet), is under the MIT License. Its speaker embedding model, [`pyannote/wespeaker-voxceleb-resnet34-LM`](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM), by the WeSpeaker project, packaged for pyannote.audio by pyannote, is under CC BY 4.0, with its attribution in [`NOTICE`](NOTICE).
+The product is licensed under the MIT License ([`LICENSE`](LICENSE)); [`NOTICE`](NOTICE) gives the licence of each model it downloads. The speech recognition model, [`kyutai/stt-1b-en_fr-mlx`](https://huggingface.co/kyutai/stt-1b-en_fr-mlx), by Kyutai, is under CC BY 4.0, with its attribution in [`NOTICE`](NOTICE). It also knows French, which `lmt` neither supports nor evaluates. Apple's recognizer is part of macOS: `lmt` downloads and redistributes nothing of it. The diarization pipeline, [`pyannote/speaker-diarization-3.1`](https://huggingface.co/pyannote/speaker-diarization-3.1), by pyannote (Hervé Bredin and Alexis Plaquet), is under the MIT License. Its segmentation model, [`pyannote/segmentation-3.0`](https://huggingface.co/pyannote/segmentation-3.0), by pyannote (Hervé Bredin and Alexis Plaquet), is under the MIT License. Its speaker embedding model, [`pyannote/wespeaker-voxceleb-resnet34-LM`](https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM), by the WeSpeaker project, packaged for pyannote.audio by pyannote, is under CC BY 4.0, with its attribution in [`NOTICE`](NOTICE).
