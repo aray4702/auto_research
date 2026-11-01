@@ -1,6 +1,7 @@
 """Kyutai STT 1B on MLX (design/internal/g4-stage1.md §2; design/architecture.md, "Speech engines (G4)").
 
-One streaming loop serves both modes. Audio is resampled from 16 to 24 kHz, and each whole 1,920-sample (80 ms)
+One streaming loop serves both modes. Audio comes at 24 kHz (decoded or captured straight to it, #575, #603; a
+stream at another rate resamples), and each whole 1,920-sample (80 ms)
 frame goes through Mimi's `encode_step` and `LmGen.step` at temperature 0, which gives at most one text token.
 The model loads only from the verified directory `models.ensure` gives, with the pinned `config.json`, as
 published in bf16 and quantized to 8 bits at load (#570, 4a).
@@ -46,6 +47,8 @@ def status() -> dict:
 
 
 class Engine(engines.Engine):
+
+    rate = RATE  # the input rate it wants: batch decodes straight to it (Engine.rate)
     name = "kyutai"
     word_gap = WORD_GAP
 
@@ -70,8 +73,6 @@ class Engine(engines.Engine):
         self.tokenizer = sentencepiece.SentencePieceProcessor(str(directory / TOKENIZER))
         self.info = {"name": MODEL, "engine": "kyutai", "repository": model.repository,
                      "revision": model.revision}
-
-    rate = RATE  # batch mode decodes straight to 24 kHz (Engine.rate)
 
     def stream(self, rate: int = audio.SAMPLE_RATE) -> "Stream":
         return Stream(self, rate)
