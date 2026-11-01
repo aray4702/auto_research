@@ -71,10 +71,13 @@ class LiveUsageErrorTest(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertUsageError(["--name", value], "--name")
 
-    def test_model_not_an_asr_model_in_the_manifest(self):
-        for value in ("no-such-model", "segmentation-3.0"):
+    def test_engine_not_one_of_the_engines(self):
+        for value in ("whisper", "Kyutai", ""):
             with self.subTest(value=value):
-                self.assertUsageError(["--model", value], "--model")
+                self.assertUsageError(["--engine", value], "--engine")
+
+    def test_the_old_model_option_is_unknown(self):
+        self.assertUsageError(["--model", "distil-large-v3"], "--model")
 
     def test_unknown_option(self):
         self.assertUsageError(["--num-speakers", "2"], "--num-speakers")
@@ -88,17 +91,17 @@ class LiveValidTest(unittest.TestCase):
             "command": "live", "handler": "lmt.live.command:cli_live",
             "output_dir": ".", "name": None, "formats": ["txt", "srt", "vtt", "json"], "device": None,
             "list_devices": False, "from_file": None, "duration": None, "max_speakers": None,
-            "no_diarize": False, "model": None, "save_audio": False, "jsonl": False, "offline": False,
+            "no_diarize": False, "engine": "kyutai", "save_audio": False, "jsonl": False, "offline": False,
             "overwrite": False, "verbose": False,
         })
 
     def test_every_option_valid(self):
         args = parsed("-o", "out", "-n", "meeting", "-f", "json,txt", "--from-file", "a.wav", "--duration", "4.5",
-                      "--max-speakers", "20", "--model", "distil-large-v3", "--save-audio", "--jsonl",
+                      "--max-speakers", "20", "--engine", "apple", "--save-audio", "--jsonl",
                       "--offline", "--overwrite", "-v")
         self.assertEqual((args.output_dir, args.name, args.formats, args.from_file, args.duration),
                          ("out", "meeting", ["json", "txt"], "a.wav", 4.5))
-        self.assertEqual((args.max_speakers, args.model), (20, "distil-large-v3"))
+        self.assertEqual((args.max_speakers, args.engine), (20, "apple"))
         self.assertTrue(all((args.save_audio, args.jsonl, args.offline, args.overwrite, args.verbose)))
 
     def test_device_and_no_diarize(self):
@@ -107,7 +110,7 @@ class LiveValidTest(unittest.TestCase):
 
     def test_list_devices_skips_the_checks(self):
         args = parsed("--list-devices", "-f", "docx", "--max-speakers", "0", "--no-diarize", "--device", "1",
-                      "--from-file", "a.wav", "--duration", "0", "--name", "a/b", "--model", "no-such-model")
+                      "--from-file", "a.wav", "--duration", "0", "--name", "a/b")
         self.assertTrue(args.list_devices)
 
     def test_list_devices_reaches_the_handler(self):

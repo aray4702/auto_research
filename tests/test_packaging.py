@@ -16,7 +16,7 @@ from packaging.version import Version
 import lmt
 
 ROOT = Path(__file__).resolve().parents[1]
-PINNED = ["faster-whisper", "ctranslate2", "pyannote-audio", "torch", "torchaudio", "av", "numpy",
+PINNED = ["pyannote-audio", "torch", "torchaudio", "av", "numpy",
           "huggingface-hub"]
 PLATFORMS = [{"sys_platform": "darwin", "platform_machine": "arm64"},
              {"sys_platform": "linux", "platform_machine": "x86_64"}]
@@ -102,7 +102,7 @@ class PackagingTest(unittest.TestCase):
         problems = pin_problems({"project": {"dependencies": deps}}, lock)
         self.assertIn("av: av>=18 is not one == pin without a local label", problems)
         self.assertIn("numpy 2.4.6 on linux Python 3.11: 0 pins apply", problems)
-        self.assertIn("faster-whisper: not a direct dependency", problems)
+        self.assertIn("pyannote-audio: not a direct dependency", problems)
         self.assertFalse([p for p in problems if p.startswith("torch ")], problems)
         wrong = pin_problems({"project": {"dependencies": ["torch==2.7.1"]}}, lock)
         self.assertIn("torch 2.8.0 on darwin Python 3.11: pinned ==2.7.1", wrong)

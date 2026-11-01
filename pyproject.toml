@@ -8,8 +8,6 @@ license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.11,<3.12"
 dependencies = [
   # The eight pinned to uv.lock's versions, without local labels (G3 §4a; tests/test_packaging.py checks them).
-  "faster-whisper==1.2.1",
-  "ctranslate2==4.8.4",
   "pyannote.audio==3.4.0",             # answer 8a
   "torch==2.8.0",                      # direct, so the CPU index applies on Linux (2.8.0+cpu); 2.8 while pyannote.audio 3.x reads audio through torchaudio's I/O
   "torchaudio==2.8.0",
@@ -18,6 +16,10 @@ dependencies = [
   "huggingface_hub==2.3.0",
   "jsonschema>=4.26",                  # lmt.transcript.load validates at run time (G3)
   "sounddevice>=0.5.6",                # lmt live's microphone (G2 4a, #209); imported only by lmt.live.mic
+  # Kyutai STT 1B (G4, design/internal/g4-stage1.md §2), on MLX, so the Mac only.
+  "mlx==0.26.5; sys_platform == 'darwin'",          # lmt._vendor.moshi_mlx (0.3.0) is written for 0.26
+  "rustymimi==0.4.1; sys_platform == 'darwin'",       # Mimi, the audio codec
+  "sentencepiece==0.2.2; sys_platform == 'darwin'",   # Kyutai's text tokenizer
 ]
 
 [project.optional-dependencies]
@@ -67,4 +69,4 @@ markers = [
 target-version = "py311"
 line-length = 110
 include = ["src/**/*.py", "tests/**/*.py", ".github/scripts/**/*.py"]  # the product's code, CI's scripts too; system/ isn't the product's
-extend-exclude = ["src/lmt/eval/normalizer"]   # vendored, kept as upstream wrote it
+extend-exclude = ["src/lmt/eval/normalizer", "src/lmt/_vendor"]   # vendored, kept as upstream wrote it
