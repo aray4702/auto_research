@@ -86,6 +86,34 @@ class Engine(engines.Engine):
         return engines.words(pieces)
 
 
+class _Gain:
+    """Causal automatic gain control in front of Mimi, per 80 ms frame (the Owner's live demo, 2026-10-31). Kyutai
+    hears nothing in quiet far-field speech from a laptop microphone that Apple's recognizer transcribes; at 6× and
+    more it does. `level` is a peak-hold envelope of frame RMS (instant attack, release RELEASE_S); the gain moves
+    toward clip(TARGET / level, 1, MAX_GAIN), so audio at a normal level is never attenuated, and a frame is never
+    boosted past a peak of 0.99. It reads only earlier frames, so batch and live give the same words. Measured on
+    the M4: the Owner's recording 0 → 23 words; reference clip WER 1.70 → 2.84 %; AMI-ci 20.92 → 20.44 %."""
+
+    TARGET = 0.1
+    MAX_GAIN = 10.0
+    RELEASE_S = 3.0
+
+    def __init__(self):
+        self.level = self.TARGET  # starts at gain 1
+        self.gain = 1.0
+        self._decay = math.exp(-STEP / self.RELEASE_S)
+
+    def __call__(self, frame):
+        want = min(self.MAX_GAIN, max(1.0, self.TARGET / max(self.level, 1e-4)))
+        self.gain = 0.7 * self.gain + 0.3 * want
+        peak = float(numpy.abs(frame).max())
+        if peak * self.gain > 0.99:
+            self.gain = 0.99 / peak
+        out = (frame * self.gain).astype(numpy.float32)
+        self.level = max(float(numpy.sqrt(numpy.mean(frame ** 2))), self.level * self._decay)
+        return out
+
+
 class _Greedy:
     """moshi_mlx's sampler at temperature 0, keeping each step's log-probabilities for the token's probability."""
 
@@ -125,6 +153,7 @@ class Stream(engines.Stream):
         self._rate = rate  # the rate fed: 16 kHz from live sources, 24 kHz in batch mode
         self._resampler = None if rate == RATE else audio.Resampler(rate, 1, out_rate=RATE)
         self._pending = numpy.zeros(0, numpy.float32)  # 24 kHz samples short of a whole frame
+        self._gain = _Gain()
         self._fed = 0  # samples fed, at self._rate: the recording's length so far
         self._closed = False
         self.done_until = 0.0
@@ -164,6 +193,8 @@ class Stream(engines.Stream):
         mx = self._mx
         if self._gen.step_idx >= self._gen.max_steps:
             self._roll()
+        if self._step >= 0:  # the recording's frames, not the silence prefix
+            frame = self._gain(frame)
         tokens = self._mimi.encode_step(frame[None, None, :])
         tokens = mx.array(tokens).transpose(0, 2, 1)[:, :, :self._codebooks]
         token = self._gen.step(tokens[0], None)[0].item()
