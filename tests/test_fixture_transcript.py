@@ -1,5 +1,6 @@
 """The transcript and markup fixtures' own checks, which need no model (design/internal/g3-stage1.md, 0c), and
-the transcript fixture kept equal to Linux's product run in its machine-independent fields, which does (0d)."""
+the transcript fixture kept equal to the Mac's product run in its machine-independent fields, which does (0d;
+regenerated with Kyutai's engine by #575)."""
 
 import json
 import os
@@ -62,7 +63,7 @@ class TranscriptFixtureTest(unittest.TestCase):
 
 @pytest.mark.models
 @pytest.mark.skipif(
-    sys.platform != "linux", reason="the fixture is the product run's on Linux (spec G3, Terms)"
+    sys.platform != "darwin", reason="the fixture is the product run's on the Mac since G4 (#575)"
 )
 def test_the_fixture_matches_the_product_run(two_speakers_run):
     assert two_speakers_run.returncode == 0, two_speakers_run.stderr

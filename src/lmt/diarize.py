@@ -16,10 +16,9 @@ from pathlib import Path
 import numpy
 import yaml
 
-from lmt import asr
 from lmt.transcript import Turn
 
-THREADS = asr.THREADS
+THREADS = min(8, os.cpu_count() or 1)  # fixed per machine (Q7)
 SEED = 0
 
 # The manifest's names of the three pyannote models: the keys of load()'s `dirs`.

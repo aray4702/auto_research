@@ -1,84 +1,68 @@
-"""The live default model in the manifest, and `download_defaults` for `lmt models`
-(design/internal/g2-stage1.md §1, "The live default model")."""
+"""The default models by engine, and `lmt models download --engine` (design/public-api.md, "G4's changes to the
+commands"; design/internal/g4-stage1.md §1-§2): one Kyutai model serves both modes, so there is no live default."""
 
 import pytest
-from test_models import CONFIG, GOOD, fake_manifest, run
+from test_models import fake_manifest, run
 
-from lmt import models
-from lmt.errors import InputError
-
-
-def live_manifest(tmp_path, live="other"):
-    """test_models' fake manifest (default_asr "tiny"), with `default_live_asr = live`, or none."""
-    path = fake_manifest(tmp_path)
-    if live is not None:
-        default = 'default_asr = "tiny"\n'
-        text = path.read_text(encoding="utf-8").replace(default, f'{default}default_live_asr = "{live}"\n')
-        path.write_text(text, encoding="utf-8")
-    return path
+from lmt import engines, models
+from lmt.engines import kyutai
 
 
 def names(found):
     return [m.name for m in found]
 
 
-def test_download_defaults_adds_the_live_default_after_the_default(tmp_path):
-    manifest = models.load_manifest(live_manifest(tmp_path))
-    assert models.default_live_asr(manifest).name == "other"
-    assert names(models.download_defaults(manifest)) == ["tiny", "other", "diar", "seg", "emb"]
-    assert names(models.default_models(manifest)) == ["tiny", "diar", "seg", "emb"]
-
-
-@pytest.mark.parametrize("live", ["tiny", None])
-def test_a_live_default_equal_to_the_default_or_absent_isnt_repeated(tmp_path, live):
-    manifest = models.load_manifest(live_manifest(tmp_path, live))
-    assert models.default_live_asr(manifest).name == "tiny"
+def test_download_defaults_by_engine(tmp_path):
+    manifest = models.load_manifest(fake_manifest(tmp_path))  # default_asr "tiny"
     assert names(models.download_defaults(manifest)) == ["tiny", "diar", "seg", "emb"]
+    assert models.download_defaults(manifest, engine="kyutai") == models.default_models(manifest)
+    assert names(models.download_defaults(manifest, engine="apple")) == ["diar", "seg", "emb"]
 
 
-@pytest.mark.parametrize("asr", ["tiny", "other"])
-def test_a_given_asr_model_holds_no_live_default(tmp_path, asr):
-    manifest = models.load_manifest(live_manifest(tmp_path, "other" if asr == "tiny" else "tiny"))
-    assert models.download_defaults(manifest, asr=asr) == models.default_models(manifest, asr=asr)
-    assert names(models.download_defaults(manifest, asr=asr)) == [asr, "diar", "seg", "emb"]
+def test_a_live_default_in_a_manifest_is_ignored(tmp_path):
+    path = fake_manifest(tmp_path)
+    text = path.read_text(encoding="utf-8").replace('default_asr = "tiny"\n',
+                                                    'default_asr = "tiny"\ndefault_live_asr = "other"\n')
+    path.write_text(text, encoding="utf-8")
+    assert names(models.download_defaults(models.load_manifest(path))) == ["tiny", "diar", "seg", "emb"]
 
 
-def test_models_download_fetches_download_defaults(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(models, "MANIFEST_PATH", live_manifest(tmp_path))
-    fetched = []
-    monkeypatch.setattr(models, "download", lambda found, token=None: fetched.append(found))
-    assert run(["models", "download"], capsys) == (0, "", "")
-    assert fetched == [models.download_defaults(models.load_manifest())]
-    assert names(fetched[0]) == ["tiny", "other", "diar", "seg", "emb"]
+def test_models_download_fetches_kyutai_s_model_and_the_diarization_models(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(models, "MANIFEST_PATH", fake_manifest(tmp_path))
+    fetched, prepared = [], []
+    monkeypatch.setattr(models, "download", lambda found, token=None: fetched.append(names(found)))
+    monkeypatch.setattr(engines, "download", prepared.append)
+    for argv in (["models", "download"], ["models", "download", "--engine", "kyutai"]):
+        assert run(argv, capsys) == (0, "", "")
+    assert (fetched, prepared) == ([["tiny", "diar", "seg", "emb"]] * 2, [])
 
 
-def test_list_bytes_marks_the_live_default_and_counts_it(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(models, "MANIFEST_PATH", live_manifest(tmp_path))
-    monkeypatch.setenv("LMT_CACHE_DIR", str(tmp_path / "cache"))
+def test_models_download_apple_prepares_the_engine_then_the_diarization_models(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(models, "MANIFEST_PATH", fake_manifest(tmp_path))
+    calls = []
+    monkeypatch.setattr(models, "download", lambda found, token=None: calls.append(names(found)))
+    monkeypatch.setattr(engines, "download", calls.append)
+    assert run(["models", "download", "--engine", "apple"], capsys) == (0, "", "")
+    assert calls == ["apple", ["diar", "seg", "emb"]]
+
+
+def test_apple_s_engine_until_item_4_is_not_in_this_build(tmp_path, monkeypatch, capsys):
+    try:
+        engines.module("apple")
+    except ModuleNotFoundError:
+        pass
+    else:
+        pytest.skip("Apple's engine is in this build (#576)")
+    monkeypatch.setattr(models, "MANIFEST_PATH", fake_manifest(tmp_path))
+    monkeypatch.setattr(models, "download", lambda found, token=None: pytest.fail("downloaded"))
+    code, out, err = run(["models", "download", "--engine", "apple"], capsys)
+    assert (code, out, err) == (5, "", "lmt: error: --engine apple: not in this build\n")
+    assert engines.status("apple") == {"name": "apple", "status": "not in this build", "ok": False}
+
+
+def test_the_real_manifest_s_default_is_kyutai_s_pinned_model():
     manifest = models.load_manifest()
-    served = {("tiny", "config.json"): CONFIG, ("tiny", "model.bin"): GOOD, ("other", "model.bin"): b"other\n",
-              ("diar", "config.yaml"): CONFIG, ("seg", "pytorch_model.bin"): b"seg\n",
-              ("emb", "pytorch_model.bin"): b"emb\n"}
-    for (name, path), data in served.items():
-        target = models.model_dir(manifest.get(name)) / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
-
-    code, out, err = run(["models", "list", "--bytes"], capsys)
-    assert (code, err) == (0, "")
-    rows = [line.split("\t") for line in out.splitlines()]
-    assert {row[0]: row[3] for row in rows[1:-1]} == {"tiny": "yes", "other": "yes", "diar": "yes", "seg": "yes",
-                                                      "emb": "yes"}
-    assert rows[-1] == ["total-default", str(sum(len(data) for data in served.values()))]
-
-
-@pytest.mark.parametrize("live", ["diar", "missing"])
-def test_a_live_default_that_isnt_an_asr_model_fails_the_manifest(tmp_path, live):
-    path = live_manifest(tmp_path, live)
-    with pytest.raises(InputError) as e:
-        models.load_manifest(path)
-    assert str(e.value) == f"{path}: default_live_asr must name an asr model"
-
-
-def test_the_real_manifests_live_default():
-    assert models.default_live_asr(models.load_manifest()).name == "distil-large-v3"
+    model = manifest.get(manifest.default_asr)
+    assert (model.name, model.role, model.repository) == (kyutai.MODEL, "asr", "kyutai/stt-1b-en_fr-mlx")
+    assert {f.path for f in model.files} == {kyutai.CONFIG, kyutai.WEIGHTS, kyutai.MIMI, kyutai.TOKENIZER}
+    assert names(models.default_models(manifest))[0] == "stt-1b-en_fr"
