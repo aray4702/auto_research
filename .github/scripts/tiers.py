@@ -3,7 +3,8 @@
 Usage: python3 -I .github/scripts/tiers.py --event EVENT --base BASE --head HEAD
 
 A run started by hand (workflow_dispatch) or by the schedule runs every tier, as does a change
-git can't compute. Writes `tier=<n>` to $GITHUB_OUTPUT and the paths that set it to the step
+git can't compute. A pull request runs tier 1 at most: the model tiers run on main (the Owner,
+2026-10-29, "further cut CI job"), and before pushing, a Developer runs `pytest -m models` locally. Writes `tier=<n>` to $GITHUB_OUTPUT and the paths that set it to the step
 summary. Standard library only.
 """
 
@@ -25,6 +26,7 @@ TIER3_FILES = ("pyproject.toml", "uv.lock", "toolchain.toml", ".python-version",
 # Tier 3: src/lmt/ except TIER3_EXCEPT, TIER3_FILES, or .github/workflows/.
 ALL_TIERS = 3
 EVERY_TIER_EVENTS = ("workflow_dispatch", "schedule")
+PULL_REQUEST_MAX_TIER = 1
 ZEROS = re.compile(r"^0+$")
 
 
@@ -60,7 +62,11 @@ def decide(event, base, head, repo="."):
         return ALL_TIERS, [], f"git can't compute the change {base}...{head}: {r.stderr.strip()}"
     paths = [p for p in r.stdout.splitlines() if p]
     tier = tier_for_paths(paths)
-    return tier, [p for p in paths if tier_for_path(p) == tier], f"{len(paths)} paths changed"
+    why = f"{len(paths)} paths changed"
+    if event == "pull_request" and tier > PULL_REQUEST_MAX_TIER:
+        return PULL_REQUEST_MAX_TIER, [p for p in paths if tier_for_path(p) == tier], \
+            f"{why}; tier {tier} by its paths, but a pull request runs tier {PULL_REQUEST_MAX_TIER} at most (main runs the rest)"
+    return tier, [p for p in paths if tier_for_path(p) == tier], why
 
 
 def main(argv=None):

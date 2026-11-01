@@ -12,7 +12,7 @@ from lmt import cli, models
 from lmt.errors import InputError, ModelError
 
 ROOT = Path(__file__).resolve().parents[1]
-DISK_BOUND = 2.0e9  # G1-10: the default models take ≤ 2.0 × 10⁹ bytes on disk
+DISK_BOUND = 2.5e9  # G1-10 since G4 (#565): each model takes ≤ 2.5 × 10⁹ bytes on disk, counted separately
 LICENCE_NAMES = {"MIT": "MIT License", "CC-BY-4.0": "CC BY 4.0"}  # design §3: MIT or CC-BY-4.0 (answer 13a)
 
 GOOD = b"the model's weights\n"
@@ -129,10 +129,9 @@ def test_notice_and_readme_give_each_models_attribution():
 
 
 @pytest.mark.criterion("G1-10")
-def test_default_models_fit_the_disk_bound():
-    manifest = models.load_manifest()
-    total = sum(f.size for m in models.default_models(manifest) for f in m.files)
-    assert total <= DISK_BOUND, total
+def test_every_model_fits_the_disk_bound():
+    for model in models.load_manifest().models:
+        assert sum(f.size for f in model.files) <= DISK_BOUND, model.name
 
 
 # A fake manifest, with hf_hub_download replaced.
@@ -165,9 +164,9 @@ def test_bad_checksum_exits_5_and_leaves_nothing(hub, capsys):
     assert err.splitlines()[-1] == "lmt: error: org/tiny/model.bin: SHA-256 doesn't match the manifest"
 
 
-@pytest.mark.criterion("G1-15")
+@pytest.mark.criterion("G1-15", "G1-6")
 def test_verify_deletes_a_corrupted_file_and_exits_5(hub, capsys):
-    assert run(["models", "download", "--model", "tiny"], capsys)[0] == 0
+    assert run(["models", "download"], capsys)[0] == 0
     weights = models.model_dir(hub["manifest"].get("tiny")) / "model.bin"
     weights.write_bytes(b"the model's weightz\n")  # same size, other bytes
 
@@ -235,13 +234,23 @@ def test_hf_token_is_passed_and_never_printed(hub, capsys, monkeypatch):
     assert "hf_secret_value" not in out + err
 
 
-def test_unknown_model_is_a_usage_error(hub, capsys):
-    code, _, err = run(["models", "download", "--model", "diar"], capsys)
+@pytest.mark.criterion("G1-6")
+def test_download_fetches_the_default_asr_model_and_the_diarization_models(hub, capsys):
+    code, out, _ = run(["models", "download"], capsys)
+    assert (code, out) == (0, "")
+    assert [c["repo"] for c in hub["calls"]] == ["org/tiny", "org/tiny", "org/diar", "org/seg", "org/emb"]
+    assert not (hub["cache"] / "org" / "other").exists(), "an ASR model no engine uses isn't downloaded"
+
+
+@pytest.mark.parametrize("argv", [["--engine", "whisper"], ["--model", "tiny"]])
+def test_unknown_engine_or_the_old_model_option_is_a_usage_error(hub, capsys, argv):
+    code, _, err = run(["models", "download", *argv], capsys)
     assert code == 2
-    assert err.startswith("lmt: error: --model: 'diar' isn't an ASR model")
+    assert err.startswith(f"lmt: error: {argv[0]}: ")
+    assert hub["calls"] == []
 
 
-@pytest.mark.criterion("G1-10")
+@pytest.mark.criterion("G1-10", "G1-6")
 def test_list_bytes_prints_the_documented_columns_and_total(hub, capsys):
     assert run(["models", "download"], capsys)[0] == 0
     (models.model_dir(hub["manifest"].get("seg")) / "pytorch_model.bin").write_bytes(b"sex\n")
@@ -256,7 +265,6 @@ def test_list_bytes_prints_the_documented_columns_and_total(hub, capsys):
         f"diar\tdiarization\t{rev}\tyes\tverified\t{len(CONFIG)}",
         f"seg\tsegmentation\t{rev}\tyes\tmismatch\t0",
         f"emb\tembedding\t{rev}\tyes\tverified\t4",
-        f"total-default\t{len(CONFIG) + len(GOOD) + len(CONFIG) + 4}",
     ]
     assert (models.model_dir(hub["manifest"].get("seg")) / "pytorch_model.bin").exists(), "list never deletes"
 
@@ -296,8 +304,7 @@ def test_default_models_are_verified_and_fit_the_disk_bound(capsys):
     assert code == 0, err
     rows = [line.split("\t") for line in out.splitlines()]
     assert rows[0] == ["NAME", "ROLE", "REVISION", "DEFAULT", "STATUS", "BYTES"]
-    defaults = [r for r in rows[1:-1] if r[3] == "yes"]
-    assert len(defaults) == 4
+    defaults = [r for r in rows[1:] if r[3] == "yes"]
+    assert [r[0] for r in defaults] == [m.name for m in models.default_models(models.load_manifest())]
     assert all(r[4] == "verified" for r in defaults), defaults
-    assert rows[-1][0] == "total-default"
-    assert 0 < int(rows[-1][1]) <= DISK_BOUND, rows[-1]
+    assert all(0 < int(r[5]) <= DISK_BOUND for r in defaults), defaults

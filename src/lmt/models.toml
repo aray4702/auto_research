@@ -6,43 +6,41 @@
 # against the Hub's own SHA-256; the gated pyannote repositories weren't, as the builder's token request failed.
 
 schema_version = 1
-default_asr = "distil-large-v3"
+default_asr = "stt-1b-en_fr"             # Kyutai's engine, for both modes (G4)
 
+# Kyutai STT 1B, as published in bf16 (#570, 4a), quantized to 8 bits at load. Pinned by the builder on #575
+# (2026-10-31 14:41 PT); model.safetensors's SHA-256 matches the Hub's own LFS object id.
 [[model]]
-name = "distil-large-v3"
-role = "asr"                              # asr | diarization | segmentation | embedding
-repository = "Systran/faster-distil-whisper-large-v3"
-revision = "c3058b475261292e64a0412df1d2681c06260fab"
-licence = "MIT"
-creators = "SYSTRAN, converting Hugging Face's distil-whisper/distil-large-v3"
-card = "https://huggingface.co/Systran/faster-distil-whisper-large-v3"
+name = "stt-1b-en_fr"
+role = "asr"
+repository = "kyutai/stt-1b-en_fr-mlx"
+revision = "2b995724eef1e964b7ccb6a762b35a665c4abe0d"
+licence = "CC-BY-4.0"
+creators = "Kyutai"
+card = "https://huggingface.co/kyutai/stt-1b-en_fr-mlx"
 gated = false
 
 [[model.file]]
 path = "config.json"
-sha256 = "90c55f775cc4e0bb17293d0bf12f96557a486f20dea886fabd8e6075a3588b21"
-size = 2690
+sha256 = "5e6aee8007000d844152932184fb7c7112d73cb9a4be562a313b6fa2b89a68f9"
+size = 1261
 
 [[model.file]]
-path = "model.bin"
-sha256 = "b79368e19b6623813609431a6e5ee309a71506701ebc49fd7820e692dec7c5f5"
-size = 1512927867
+path = "model.safetensors"
+sha256 = "7c21d5adb06f87aaaff2fa34f16dce91a8fe4f1772820453cf3eb0a5285ed129"
+size = 1978423648
 
 [[model.file]]
-path = "preprocessor_config.json"
-sha256 = "7ccc62c6f2765af1f3b46c00c9b5894426835a05021c8b9c01eecb6dfb542711"
-size = 340
+path = "mimi-pytorch-e351c8d8@125.safetensors"
+sha256 = "09b782f0629851a271227fb9d36db65c041790365f11bbe5d3d59369cf863f50"
+size = 384644900
 
 [[model.file]]
-path = "tokenizer.json"
-sha256 = "6d8cbd7cd0d8d5815e478dac67b85a26bbe77c1f5e0c6d76d1ce2abc0e5f21ca"
-size = 2480617
+path = "tokenizer_en_fr_audio_8000.model"
+sha256 = "cd87dd5d17169151782ac700280ec057e5d658a9afbe238a048ea5ff318cce69"
+size = 120378
 
-[[model.file]]
-path = "vocabulary.json"
-sha256 = "c69260f2ab26d659b7c398f9a2b2b48ed0df16c3b47d7326782fd9cba71690c1"
-size = 1068114
-
+# Whisper: no command reaches it since G4; #584 removes it.
 [[model]]
 name = "speaker-diarization-3.1"
 role = "diarization"

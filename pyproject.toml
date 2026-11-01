@@ -1,17 +1,25 @@
 [project]
 name = "local-meeting-transcriber"
-version = "0.1.0"
+version = "0.2.0"
 description = "Offline, speaker-labelled meeting transcription that runs entirely on your Mac."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 dependencies = [
-  "faster-whisper>=1.1",
-  "pyannote.audio>=3.3,<4",            # answer 8a
-  "torch>=2.5,<2.9",                   # direct, so the CPU index applies on Linux; <2.9 while pyannote.audio 3.x reads audio through torchaudio's I/O
-  "torchaudio>=2.5,<2.9",
-  "huggingface_hub>=0.25",
+  # The eight pinned to uv.lock's versions, without local labels (G3 §4a; tests/test_packaging.py checks them).
+  "pyannote.audio==3.4.0",             # answer 8a
+  "torch==2.8.0",                      # direct, so the CPU index applies on Linux (2.8.0+cpu); 2.8 while pyannote.audio 3.x reads audio through torchaudio's I/O
+  "torchaudio==2.8.0",
+  "av==18.1.0",
+  "numpy==2.4.6",
+  "huggingface_hub==2.3.0",
+  "jsonschema>=4.26",                  # lmt.transcript.load validates at run time (G3)
+  "sounddevice>=0.5.6",                # lmt live's microphone (G2 4a, #209); imported only by lmt.live.mic
+  # Kyutai STT 1B (G4, design/internal/g4-stage1.md §2), on MLX, so the Mac only.
+  "mlx==0.26.5; sys_platform == 'darwin'",          # lmt._vendor.moshi_mlx (0.3.0) is written for 0.26
+  "rustymimi==0.4.1; sys_platform == 'darwin'",       # Mimi, the audio codec
+  "sentencepiece==0.2.2; sys_platform == 'darwin'",   # Kyutai's text tokenizer
 ]
 
 [project.optional-dependencies]
@@ -21,8 +29,9 @@ eval = ["jiwer>=3.1", "pyannote.metrics>=3.2,<4", "regex", "more-itertools"]   #
 lmt = "lmt.cli:run"
 
 [dependency-groups]
-# The eval extra, so the agents' `uv run --frozen pytest` has it; stage 2's test libraries.
-dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "jsonschema", "srt", "webvtt-py"]
+# The eval extra, so the agents' `uv run --frozen pytest` has it; stage 2's test libraries; Selenium for the
+# browser tests (G3 §3), which drives an installed Chrome and never downloads one.
+dev = ["pytest", "ruff", "local-meeting-transcriber[eval]", "srt", "webvtt-py", "selenium>=4.25"]
 
 [build-system]
 requires = ["hatchling"]
@@ -48,10 +57,11 @@ torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not models and not data'"
+addopts = "-m 'not models and not data and not browser'"
 markers = [
   "models: needs the default models in LMT_CACHE_DIR (the test-models job)",
   "data: needs the CI subset in LMT_DATA_DIR (the eval-ci job)",
+  "browser: drives headless Chrome (the browser job)",
   "criterion(*ids): the acceptance criteria this test checks (design/internal/criteria.md)",
 ]
 
@@ -59,4 +69,4 @@ markers = [
 target-version = "py311"
 line-length = 110
 include = ["src/**/*.py", "tests/**/*.py", ".github/scripts/**/*.py"]  # the product's code, CI's scripts too; system/ isn't the product's
-extend-exclude = ["src/lmt/eval/normalizer"]   # vendored, kept as upstream wrote it
+extend-exclude = ["src/lmt/eval/normalizer", "src/lmt/_vendor"]   # vendored, kept as upstream wrote it

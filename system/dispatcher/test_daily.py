@@ -74,6 +74,18 @@ class DenialsTest(unittest.TestCase):
         allowed = runner.load_all()["runner"]["common"]["allow"]
         self.assertFalse([a for a in allowed if a.startswith("Bash(sed")], "the explanation holds only while sed is denied")
 
+    def test_uv_run_python_c_is_explained_only_while_no_role_may_run_it(self):
+        config = runner.load_all()
+        explained = config["runner"]["denials"]["explained"]
+        for command in ("uv run --frozen python -c 'import lmt'", "uv run python -c 'print(1)'"):
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertIn(sig, explained, "it runs any code, the denied commands included (#92, #324)")
+        for role in config["runner"]["roles"]:
+            allow = runner.role_settings(config, role)["permissions"]["allow"]
+            granted = [a for a in allow if a in ("Bash(uv run:*)", "Bash(uv run --frozen:*)")
+                       or a.startswith(("Bash(uv run python", "Bash(uv run --frozen python")) and "-m " not in a]
+            self.assertEqual(granted, [], f"{role}: the explanation holds only while uv runs no code it is handed")
+
     def test_file_tools_are_explained_only_while_every_role_has_them_without_limit(self):
         config = runner.load_all()["runner"]
         for tool in ("Glob", "Grep", "Read"):
@@ -153,6 +165,20 @@ class DenialsTest(unittest.TestCase):
             sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
             self.assertEqual(sig, want, command)
             self.assertNotIn(token, sig)
+
+    def test_a_uv_run_signature_names_what_it_runs(self):
+        token = "gh" + "p_" + "A1b2" * 9
+        for command, want in [("uv run --frozen pytest tests/test_cli.py -k transcribe", "Bash: uv run --frozen pytest"),
+                              ("uv run pytest -q", "Bash: uv run pytest"),
+                              (f"uv run --frozen python -c \"print('{token}')\"", "Bash: uv run --frozen python -c"),
+                              ("uv run --frozen python -m lmt.eval.datasets fetch ci", "Bash: uv run --frozen python -m lmt.eval.datasets"),
+                              ("uv run --frozen python scripts/hash_clip.py tests/fixtures/clip.wav", "Bash: uv run --frozen python scripts/hash_clip.py"),
+                              (f"uv run --with {token} pytest", "Bash: uv run"), (f"uv run --frozen {token.upper()}", "Bash: uv run --frozen"),
+                              ("uv run --frozen pytest -q 2>&1", "Bash: uv run --frozen pytest >"), ("uv run", "Bash: uv run"),
+                              ("uv pip install requests", "Bash: uv pip")]:
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertEqual(sig, want, command)
+            self.assertNotIn(token.lower(), sig.lower())
 
     def test_a_first_word_that_isnt_a_command_is_recorded_by_its_shape(self):
         token = "gh" + "p_" + "A1b2" * 9

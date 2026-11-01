@@ -8,6 +8,7 @@
 | 2026-10-28 | architect, #82 | Merged `main` (G3, #129) into #125: the table test's skip and the `cli.py` exception also cover G3's `lmt rename` and `lmt demo`, which G3's items add |
 | 2026-10-28 | architect, #206 | §1a's `pyproject.toml` gains the wheel's `packages` and ruff's `include`, as #188 built them (the Owner's answer 1 on #188); `.github/scripts/` joins `include` in #222 |
 | 2026-10-29 | architect, #123 | §5b's open points for the Developer: the two-speaker clip's rule is `g1-stage2.md`'s (#304); `pin --write-members`; LS full's own source and every-utterance form; AMI full as one dataset with per-meeting lists; the one-hour recording as a `concat` dataset of AMI full |
+| 2026-10-31 | builder, #529 | The sample meeting (`ami-ES2004a`) is also served from this repository's pre-release `sample-data-ami`, tried before Edinburgh's mirror, which refused GitHub's macOS runners at times (the Owner: "host it here"). `URL_PREFIXES` gains that one release's download path; the file's size and SHA-256 are unchanged and checked as before |
 
 This is the detail a Developer needs to build each of G1 stage 1's items in one run. It works inside `spec/acceptance.md` G1, `design/architecture.md` and `design/public-api.md`, and the Owner's answers 1a–14a on #81 and #105. Where this file and those disagree, they win, and this file is the one to fix. The Reviewer reviews this file. The Architect changes it.
 
@@ -575,7 +576,7 @@ main(argv) -> int                                 # python -m lmt.eval.datasets 
 
 ### Tests
 
-- `tests/test_manifests.py`: every source has a 64-hex SHA-256, a positive size and at least one URL, and every member has a SHA-256. Every URL starts with one of `https://www.openslr.org/resources/12/`, `https://us.openslr.org/resources/12/`, `https://groups.inf.ed.ac.uk/ami/`, or `https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/<the pinned commit>/`, so the manifests name only LibriSpeech and AMI sources (G1-7's manifest half). Every dataset's source ids resolve. LS-ci has 20 utterances.
+- `tests/test_manifests.py`: every source has a 64-hex SHA-256, a positive size and at least one URL, and every member has a SHA-256. Every URL starts with one of `https://www.openslr.org/resources/12/`, `https://us.openslr.org/resources/12/`, `https://groups.inf.ed.ac.uk/ami/`, `https://raw.githubusercontent.com/BUTSpeechFIT/AMI-diarization-setup/<the pinned commit>/`, or, for the sample meeting only, `https://github.com/aray4702/auto_research/releases/download/sample-data-ami/` (#529), so the manifests name only LibriSpeech and AMI sources (G1-7's manifest half). Every dataset's source ids resolve. LS-ci has 20 utterances.
 - `tests/test_datasets.py` (no network): `urllib.request.urlopen` replaced, serving small files. A good file is cached and verified; a bad one exits 3 and leaves nothing in the cache; the second URL is used when the first fails; archive members are extracted and checked. The AMI recipes run on a two-speaker words fixture: the order, missing start times, `punc` and the midpoint crop.
 - One test marked `data`: after `fetch("ci")`, LS-ci has 20 items with references, and AMI-ci has one 300-second item with words and turns. All are verified.
 
