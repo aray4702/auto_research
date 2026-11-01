@@ -78,3 +78,61 @@ def test_each_update_carries_the_pieces_committed_in_it():
     updates = [stage.feed([0.0] * 1600), stage.feed([0.0] * 6400), stage.feed([0.0] * 3200), stage.flush()]
     assert [p.text for u in updates for p in u.pieces] == [" a", " b", "c"]
     assert updates[0].pieces == [piece(" a", 0.0)] and updates[0].words == []  # shown before it's complete
+
+
+def test_the_tap_hands_out_the_engine_rate_audio_in_order_and_drops_it():
+    """The source's copy at the ASR engine's rate (#603): `take(until)` up to `until`, then the rest at the end."""
+    import numpy
+
+    from lmt.live.source import AsrTap
+
+    tap = AsrTap(24000)
+    tap.put(numpy.arange(5, dtype=numpy.float32))
+    tap.put(numpy.arange(5, 8, dtype=numpy.float32))
+    assert tap.take(3).tolist() == [0, 1, 2]
+    assert tap.take(3).tolist() == []          # nothing new up to 3
+    assert tap.take(100).tolist() == [3, 4, 5, 6, 7]
+    tap.put(numpy.ones(2, dtype=numpy.float32))
+    assert tap.take(None).tolist() == [1, 1]
+
+
+def test_an_attached_stage_takes_the_file_at_its_rate_for_the_same_span(tmp_path):
+    """FileSource with asr_rate: each 0.1 s block at 16 kHz comes with the same 0.1 s at 24 kHz, decoded from the
+    file, and the stage's stream gets exactly the file's 24 kHz samples (#603)."""
+    import wave
+
+    import numpy
+
+    from lmt import audio
+    from lmt.live.source import FileSource, lockstep
+
+    path = tmp_path / "tone.wav"
+    t = numpy.arange(48000) / 48000
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(48000)
+        w.writeframes((numpy.sin(2 * numpy.pi * 440 * t) * 8000).astype("<i2").tobytes())
+
+    class Recorder:
+        done_until = 0.0
+
+        def __init__(self):
+            self.got = []
+
+        def feed(self, block):
+            self.got.append(numpy.asarray(block))
+            return []
+
+        def finish(self):
+            return []
+
+        def close(self):
+            pass
+
+    stream = Recorder()
+    stage = StreamingASR(stream, 0.24, 24000)
+    source = FileSource(path, paced=False)
+    stage.attach(source)
+    for _ in lockstep(source, stage):
+        pass
+    assert all(len(b) == 2400 for b in stream.got[:-1]) or stream.got[-1].size == 0
+    assert numpy.array_equal(numpy.concatenate(stream.got), audio.decode(path, 24000))
