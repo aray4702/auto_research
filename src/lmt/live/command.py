@@ -36,7 +36,10 @@ def load_stages(args, manifest):
     needed = [] if args.no_diarize else [manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)]
     dirs = models.ensure(needed, offline=args.offline)
 
-    stage = live_asr.StreamingASR(engine.stream(), engine.word_gap)
+    rate = getattr(engine, "rate", RATE)  # Kyutai's 24 kHz: the stream takes it from the source (#603)
+    stream = engine.stream(rate) if rate != RATE else engine.stream()
+    stage = (live_asr.StreamingASR(stream, engine.word_gap) if rate == RATE
+             else live_asr.StreamingASR(stream, engine.word_gap, rate))
     if args.no_diarize:
         diarizer, diarization = live_diarize.NullDiarizer(), None
     else:
@@ -159,6 +162,8 @@ def cli_live(args) -> int:
 
     manifest = models.load_manifest()  # steps 5 and 6
     asr, diarizer, models_info = load_stages(args, manifest)
+    if hasattr(asr, "attach"):
+        asr.attach(source)  # before capture starts: the ASR side's audio at the engine's rate (#603)
 
     abandon = _Abandon()
     signals = _Signals(source, abandon)
