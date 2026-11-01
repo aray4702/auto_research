@@ -129,6 +129,9 @@ class CandidatesTest(unittest.TestCase):
                 "| G0  | the starting point (§0) | its done-check |  |\n| ~~S1~~ | ~~seed~~ | ~~x~~ | none |\n"
                 "| G1  | Transcribe calls | WER < 10 % | 2026-12-01 |\n| G2  |  |  |  |\n\n## 3. Use cases\n| U1 | x |\n")
         self.assertEqual(github_state.requirement_goals(text), ["G1"])
+        scoped = text.replace("\n\n## 3.", "\n**v0.1**, its scope:\n\n| ID | Judged for v0.1 by | Moves to |\n| --- | --- | --- |\n"
+                              "| F3 | G1-4 | G3-8 |\n\n## 3.")
+        self.assertEqual(github_state.requirement_goals(scoped), ["G1"], "a release's scope table lists requirements, not goals (#563)")
         s = snap()
         s["new_goals"] = ["G1"]
         got = plan.candidates(s, set(), IDENTITY)
