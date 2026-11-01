@@ -80,6 +80,18 @@ class DenialsTest(unittest.TestCase):
                        or a.startswith(("Bash(uv run python", "Bash(uv run --frozen python")) and "-m " not in a]
             self.assertEqual(granted, [], f"{role}: the explanation holds only while uv runs no code it is handed")
 
+    def test_python3_c_is_explained_only_while_no_role_may_run_it(self):
+        config = runner.load_all()
+        explained = config["runner"]["denials"]["explained"]
+        for command in ("python3 -I -c 'import tomllib'", "python3 -c 'print(1)'"):
+            sig = usage.denial_signature({"tool_name": "Bash", "tool_input": {"command": command}})
+            self.assertIn(sig, explained, "it runs any code, the denied commands included (#318)")
+        for role in config["runner"]["roles"]:
+            allow = runner.role_settings(config, role)["permissions"]["allow"]
+            granted = [a for a in allow if a in ("Bash(python3:*)", "Bash(python3 -I:*)")
+                       or a.startswith(("Bash(python3 -c", "Bash(python3 -I -c"))]
+            self.assertEqual(granted, [], f"{role}: the explanation holds only while python3 runs no code it is handed")
+
     def test_file_tools_are_explained_only_while_every_role_has_them_without_limit(self):
         config = runner.load_all()["runner"]
         for tool in ("Glob", "Grep", "Read"):
