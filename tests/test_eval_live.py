@@ -153,3 +153,36 @@ def test_read_events_rejects(change, problem):
     assert caught.value.exit_code == 3
     assert caught.value.subject == "lmt live"
     assert problem in caught.value.problem
+
+
+def text(arrival, piece, start, end, starts_word=None):
+    starts_word = piece.startswith(" ") if starts_word is None else starts_word
+    return (arrival, {"type": "text", "t": arrival, "text": piece, "start": start, "end": end,
+                      "starts_word": starts_word})
+
+
+def test_read_text_joins_pieces_into_words_at_the_arrival_of_each_words_last_piece():
+    lines = [log_lines(1)[0],
+             text(0.9, " O", 0.5, 0.58), text(1.0, "kay,", 0.58, 0.8),
+             text(1.2, " so", 0.9, 1.0),
+             text(1.6, " let", 1.1, 1.3), log_lines(1)[1], text(2.4, "'s", 1.3, 1.4),
+             log_lines(1)[-1]]
+    assert live.read_text(lines) == [
+        (Word(0.5, 0.8, "Okay,", 1.0), 1.0), (Word(0.9, 1.0, "so", 1.0), 1.2), (Word(1.1, 1.4, "let's", 1.0), 2.4),
+    ]
+    assert live.read_events(lines)[0] == live.read_events(log_lines(1)[:2] + log_lines(1)[-1:])[0]  # 1.0 reader
+
+
+def test_read_text_a_first_piece_without_starts_word_starts_a_word_and_a_1_0_stream_has_none():
+    assert live.read_text([text(1.0, "ing", 0.5, 0.6), text(1.1, " so", 0.7, 0.8)]) == [
+        (Word(0.5, 0.6, "ing", 1.0), 1.0), (Word(0.7, 0.8, "so", 1.0), 1.1)]
+    assert live.read_text(log_lines(1)) == []
+
+
+def test_the_word_delay_is_at_the_text_and_the_label_delay_at_the_words_events():
+    refs = ref_words()
+    lines = [log_lines(1)[0], text(1.0, " okay", 0.5, 0.8), text(1.3, " so", 0.9, 1.0), log_lines(1)[1],
+             log_lines(1)[-1]]
+    labelled, _ = live.read_events(lines)
+    assert rounded(live.delays(live.match_words(refs, live.read_text(lines)))) == [0.2, 0.3]
+    assert rounded(live.delays(live.match_words(refs, labelled))) == [1.5, 1.3]

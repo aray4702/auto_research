@@ -36,7 +36,7 @@ def test_g2_8_the_live_run_opens_no_connection_and_writes_only_its_outputs(live_
 
     assert run.returncode == 0, run.stderr
     if os.environ.get("CI"):
-        assert run.isolated, "under CI, the run must be isolated (sudo -n unshare --net)"
+        assert run.isolated, "under CI, the run must be isolated (sandbox-exec, network denied)"
     assert not run.connections, f"the run opened connections: {run.connections}"
     assert run.stem, f"not one <stem>.wav: new entries {run.new}"
     assert not run.changed and not run.gone, f"changed {run.changed}, gone {run.gone}"
@@ -54,7 +54,7 @@ def test_g2_4_the_outputs_hold_the_event_streams_words(live_run):
     errors = [e.message for e in jsonschema.Draft202012Validator(
         json.loads(TRANSCRIPT_SCHEMA.read_text(encoding="utf-8"))).iter_errors(doc)]
     assert not errors, errors
-    assert doc["schema_version"] == "1.1"
+    assert doc["schema_version"] == "1.2"
     assert doc["source"]["live"] is True
 
     streamed = [(w, e["speaker"]) for e in run.events if e["type"] == "words" for w in e["words"]]

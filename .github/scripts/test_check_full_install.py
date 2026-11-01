@@ -77,8 +77,8 @@ if sys.argv[1:] == ["demo", "--sample", "--no-browser"]:
         def log_message(self, *args):
             pass
 
-    def stop(*_):
-        raise SystemExit(3 if "exit-3" in modes else 0)
+    def stop(*_):  # at once: no interpreter teardown of the server's threads, which a slow runner stalls in (#573)
+        os._exit(3 if "exit-3" in modes else 0)
 
     signal.signal(signal.SIGTERM, signal.SIG_IGN if "ignore-term" in modes else stop)
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -305,7 +305,8 @@ class OfflineCommandTest(unittest.TestCase):
             "sudo", "-n", "unshare", "--net", "--", "sh", "-c",
             'ip link set lo up && u=$1 g=$2 && shift 2 && exec setpriv --reuid="$u" --regid="$g" --init-groups -- "$@"',
             "sh", "1001", "118", *[a.replace("{platform}", "linux-x86_64") for a in phase]])
-        self.assertEqual(macos, [a.replace("{platform}", "macos-arm64") for a in phase])
+        self.assertEqual(macos, ["sandbox-exec", "-p", cfi.SANDBOX_PROFILE,
+                                 *[a.replace("{platform}", "macos-arm64") for a in phase]])
 
     def test_linux_defaults_to_the_runners_user(self):
         argv = cfi.offline_command("/s/bin/lmt", "linux-x86_64", "/w")
@@ -330,11 +331,13 @@ class OfflineStepsTest(FakeTest):
         self.assertEqual(json.loads((self.fake.work / "offline.json").read_text())["steps"], [
             {"step": s, "name": n, "problem": None} for s, n, _ in cfi.OFFLINE])
 
-    def test_macos_has_no_probe(self):
+    def test_macos_probes_in_its_sandbox(self):
+        self.fake.probe = OSError(errno.EPERM, "Operation not permitted")  # sandbox-exec's refusal (#573)
         code, out = self.fake.main(platform="macos-arm64")
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.fake.probed, [])
-        self.assertEqual([line.split()[1] for line in out.splitlines()][3:], ["2.2", "2.3", "2.4", "2.5"])
+        self.assertEqual(self.fake.probed, [(("192.0.2.1", 80), 2)])
+        self.assertEqual([line.split()[1] for line in out.splitlines()][3:], ["2.1", "2.2", "2.3", "2.4", "2.5"])
+        self.assertEqual(self.fake.phase_argv[:2], ["sandbox-exec", "-p"])
         self.assertNotIn("sudo", self.fake.phase_argv)
 
     def test_the_probe_connecting_fails(self):
@@ -349,7 +352,7 @@ class OfflineStepsTest(FakeTest):
         self.fake.probe = TimeoutError("timed out")
         code, out = self.fake.main()
         self.assertEqual(code, 1)
-        self.assertIn("the namespace has a route out: connecting to 192.0.2.1:80 gives timed out, not ENETUNREACH",
+        self.assertIn("the namespace has a route out: connecting to 192.0.2.1:80 gives timed out, not ENETUNREACH or EPERM",
                       out)
 
     def test_transcribe_misses_its_limit(self):
@@ -364,8 +367,14 @@ class OfflineStepsTest(FakeTest):
         def check_srt(path):
             raise AssertionError(f"{path}: no cue")
 
-        with mock.patch.object(Fake, "stubs", lambda fake: mock.patch.object(
-                cfi, "subtitle_checkers", lambda: (check_srt, lambda path: None))):
+        stubs = Fake.stubs
+
+        def failing_srt(fake):  # the fake's stubs, the probe's included, with this check_srt over them
+            stack = stubs(fake)
+            stack.enter_context(mock.patch.object(cfi, "subtitle_checkers", lambda: (check_srt, lambda path: None)))
+            return stack
+
+        with mock.patch.object(Fake, "stubs", failing_srt):
             code, out = self.fake.main(platform="macos-arm64")
         self.assertEqual(code, 1)
         self.assertIn("FAIL 2.2 offline transcribe\n  - check_srt fails on <work>/out/two_speakers.srt: ", out)
@@ -482,17 +491,19 @@ class OuterCheckTest(FakeTest):
                               f"{code}", out)
 
     def test_not_the_offline_steps(self):
-        code, out, record = self.run_with(0, self.steps(platform="macos-arm64"))  # no 2.1 on Linux
+        steps = [s for s in self.steps() if s["step"] != "2.1"]  # a list without 2.1
+        code, out, record = self.run_with(0, steps)
         self.assertEqual(code, 1)
         self.assertEqual([c[2] for c in self.offline_checks(record)], ["failed"] * 5)
         self.assertIn("offline.json doesn't list the offline steps (the phase exits 0)", out)
 
-    def test_no_2_1_check_on_macos(self):
+    def test_macos_records_2_1(self):  # sandbox-exec cuts the network, so 2.1 runs on macOS too (#573)
         code, out, record = self.run_with(0, self.steps(platform="macos-arm64"), platform="macos-arm64")
         self.assertEqual(code, 0, out)
         self.assertEqual([c["check"] for c in record["checks"]], [
             "check_full_install.py::macos-arm64 1.1 models download",
             "check_full_install.py::macos-arm64 1.3 the first --sample run",
+            "check_full_install.py::macos-arm64 2.1 the cut is real",
             "check_full_install.py::macos-arm64 2.2 offline transcribe",
             "check_full_install.py::macos-arm64 2.3 offline rename",
             "check_full_install.py::macos-arm64 2.4 the second --sample run",
