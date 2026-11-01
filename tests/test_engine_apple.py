@@ -287,3 +287,15 @@ class TestPieces:
         assert stream.done_until == max(line["end"] for line in recorded("transcribe-clip.jsonl")
                                         if line["type"] == "final")
         assert stream.volatile is None  # the recording ends on a final result
+
+
+def test_apple_engine_has_the_engine_interface_s_attributes():
+    """The pipeline reads `rate` (and the harness `peak_rss_bytes`) from every engine (#575, #608)."""
+    from lmt import engines
+    from lmt.engines import apple
+
+    for name in ("name", "word_gap", "rate", "peak_rss_bytes"):
+        assert hasattr(apple.AppleEngine, name) or name in apple.AppleEngine.__init__.__code__.co_names, name
+    assert apple.AppleEngine.rate == 16_000
+    assert {a for a in vars(engines.Engine) if not a.startswith("_") and not callable(getattr(engines.Engine, a))} \
+        <= {a for a in dir(apple.AppleEngine)} | {"info"}
