@@ -274,7 +274,8 @@ def daily_pass(dry_run, now=None, collect=None):
     gh = post.GitHub(identity["repo"])
     me = ("dispatcher", f"dispatcher-{now:%Y%m%dT%H%M%SZ}")
     store = state.Store(runner.home(config) / "state", f"https://github.com/{identity['repo']}.git")
-    runs, raised = store.read("runs"), {a["key"] for a in store.read("anomalies")}
+    runs, anomalies = store.read("runs"), store.read("anomalies")
+    raised = {a["key"] for a in anomalies}
     week = now - timedelta(days=7)
     history = [r for r in runs if datetime.fromisoformat(r["at"]) < week]
     snap = github_state.snapshot(gh, identity)
@@ -305,7 +306,7 @@ def daily_pass(dry_run, now=None, collect=None):
 
     open_items = {i["number"] for i in snap["issues"] if not any(x.startswith("record:") for x in i["labels"])}
     explained = config["runner"].get("denials", {}).get("explained", [])
-    found = (daily.denials(runs, now, explained) +daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
+    found = (daily.denials(runs, now, explained, anomalies) + daily.bumpy(runs, now, open_items) + daily.new_failures(runs, now, history)
              + daily.review_rounds(snap["prs"], identity["reviewer_app"]["bot_login"], config["caps"]["wip"]["max_review_rounds"])
              + daily.cost_per_item(runs, now, closed_at) + flow.bottlenecks(flows, now) + flow.idle_waits(flows, now, identity["time_zone"])
              + daily.watch_list(watch["body"] if watch else "", {**daily.metrics(runs, now, max(waits)), **flow.metrics(flows, now)}))

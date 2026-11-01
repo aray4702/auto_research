@@ -31,6 +31,22 @@ class DenialsTest(unittest.TestCase):
         self.assertIn("one command at a time", got[0][2])
         self.assertEqual(daily.denials(runs[:2], NOW), [], "2 runs are not yet a pattern")
 
+    def test_runs_already_raised_under_another_kind_dont_raise_it_again_and_three_later_runs_do(self):
+        sig = "Bash: python3 > ;"
+        runs = [end(x, denied=[sig], hours_ago=10) for x in "abc"]
+        before = [{"key": f"denial:{sig}", "at": (NOW - timedelta(hours=9)).isoformat()}]  # #183, before #147 sorted it as compound
+        self.assertEqual(daily.denials(runs, NOW, raised=before), [], "#322 raised #183's three runs again")
+        self.assertEqual(daily.denials(runs, NOW, raised=[{"key": "denial:Bash: gh pr", "at": before[0]["at"]}])[0][0],
+                         f"compound:{sig}", "another signature's raise doesn't count")
+        later = runs + [end(x, denied=[sig], hours_ago=2) for x in "def"]
+        got = daily.denials(later, NOW, raised=before)
+        self.assertEqual([k for k, *_ in got], [f"compound:{sig} since {before[0]['at']}"], "a new key, so it's raised again")
+        self.assertIn("runs this week: d, e, f.", got[0][3])
+        self.assertIn("didn't hold", got[0][3])
+        again = before + [{"key": got[0][0], "at": (NOW - timedelta(hours=1)).isoformat()}]
+        self.assertEqual(daily.denials(later, NOW, raised=again), [], "nor are those raised a third time")
+        self.assertEqual(daily.denials(runs, NOW, raised=[{"key": f"denial:{sig}"}])[0][0], f"compound:{sig}", "a record with no time")
+
     def test_a_path_outside_the_worktree_is_raised_as_outside_not_a_gap(self):
         wt = "/Users/x/runs/reviewer-1"
         for command, want in [("git diff --no-index /Users/x/runs/system/a.md a.md", "Bash: git diff [outside]"),
