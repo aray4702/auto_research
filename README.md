@@ -89,27 +89,12 @@ The product's CI jobs live in [`.github/workflows/product.yml`](.github/workflow
 
 ## Results
 
-The table below is rendered from [`results/full.json`](results/full.json), the results of the full evaluation. `lmt eval --set full --update-readme` regenerates it (planned: G1 stage 2 builds the evaluation run). `lmt eval --check-readme` checks that it equals what `results/full.json` renders, and the `readme` job runs that check, so the table can't drift from its results file.
+The tables below are rendered from the results of the full evaluation on a Mac, one file per engine: [`results/full.json`](results/full.json) for Kyutai STT 1B on the GPU, and `results/full-apple.json` for Apple's recognizer on the Neural Engine, once it exists. `lmt eval --set full --update-readme` measures Kyutai and regenerates them; add `--engine apple` for Apple's. `lmt eval --check-readme` checks that they equal what the results files render, and the `readme` job runs that check, so the tables can't drift from their results files.
 
 <!-- results:start -->
-**Full sets, `distil-large-v3`** (`results/full.json`)
+**Full sets, Kyutai STT 1B** (`results/full.json`)
 
-Measured on Apple M4 (arm64, 16.0 GB, macOS 27.0.1) on 2026-10-30, at commit `47cdcf28e374`, with lmt 0.1.0.
-Models: ASR `distil-large-v3` (`Systran/faster-distil-whisper-large-v3` at `c3058b475261`); diarization `speaker-diarization-3.1` (`pyannote/speaker-diarization-3.1` at `84fd25912480`).
-Two runs of the CI subset gave identical accuracy figures: yes.
-
-| Set | System | WER | DER | RTF |
-| --- | --- | ---: | ---: | ---: |
-| LS full | product | 2.3 % | — | 0.88 |
-| LS full | whisper-alone | 2.3 % | — | 0.77 |
-| AMI full | product | 24.3 % | 23.5 % | 0.84 |
-| AMI full | whisper-alone | 24.3 % | — | 0.20 |
-| AMI full | pyannote-alone | — | 18.8 % | 0.84 |
-| one-hour | product | 33.7 % | 30.9 % | 0.89 |
-| one-hour | whisper-alone | 33.7 % | — | 0.24 |
-| one-hour | pyannote-alone | — | 24.4 % | 0.89 |
-
-RTF is wall-clock time over audio duration. For the product, it runs from process start to exit, model loading included. Whisper alone and pyannote alone come from that same run: each is its own stage's model loading and inference, without start-up, decoding or export, and, with diarization on, while the other stage runs beside it. So the three RTFs aren't like for like.
+No full-set results yet. The Owner's run of `lmt eval --set full` fills this table (G1 stage 3).
 <!-- results:end -->
 
 ## Licences
