@@ -18,6 +18,11 @@ def piece(text, start, starts_word=None, probability=0.9):
                  probability)
 
 
+def dropped(update):
+    """The update without its pieces, which the tests below check separately."""
+    return AsrUpdate(update.words, update.done_until)
+
+
 def test_pieces_join_into_words_with_the_lowest_probability():
     pieces = [piece(" Hel", 0.0, probability=0.9), piece("lo", 0.08, probability=0.5), piece(" world", 0.4),
               piece(".", 0.48)]
@@ -53,14 +58,23 @@ def test_a_word_completes_once_done_until_passes_its_end_by_the_gap():
 def test_streaming_asr_returns_completed_words_and_the_open_word_s_start():
     engine = FakeEngine([piece(" a", 0.0), piece(" b", 0.5), piece("c", 0.58)])
     stage = StreamingASR(engine.stream(), engine.word_gap)
-    assert stage.feed([0.0] * 1600) == AsrUpdate([], 0)  # 0.1 s: "a" is out, still open
-    assert stage.feed([0.0] * 6400) == AsrUpdate([Word(0.0, 0.08, "a", 0.9)], 8000)  # 0.5 s: "a" is complete
-    assert stage.feed([0.0] * 3200) == AsrUpdate([], 8000)  # 0.7 s: "bc" is open
-    assert stage.flush() == AsrUpdate([Word(0.5, 0.66, "bc", 0.9)], round(0.7 * RATE))
+    assert dropped(stage.feed([0.0] * 1600)) == AsrUpdate([], 0)  # 0.1 s: "a" is out, still open
+    assert dropped(stage.feed([0.0] * 6400)) == AsrUpdate([Word(0.0, 0.08, "a", 0.9)], 8000)  # 0.5 s: "a" is complete
+    assert dropped(stage.feed([0.0] * 3200)) == AsrUpdate([], 8000)  # 0.7 s: "bc" is open
+    assert dropped(stage.flush()) == AsrUpdate([Word(0.5, 0.66, "bc", 0.9)], round(0.7 * RATE))
     assert engine.streams[0].closed == 1 and engine.finished == 1
 
 
 def test_done_until_is_the_stream_s_when_no_word_is_open():
     engine = FakeEngine([])
     stage = StreamingASR(engine.stream(), engine.word_gap)
-    assert stage.feed([0.0] * 4000) == AsrUpdate([], 4000)
+    assert dropped(stage.feed([0.0] * 4000)) == AsrUpdate([], 4000)
+
+
+def test_each_update_carries_the_pieces_committed_in_it():
+    """The join writes each piece as a `text` event as soon as it's committed (G4's word delay, #577)."""
+    engine = FakeEngine([piece(" a", 0.0), piece(" b", 0.5), piece("c", 0.58)])
+    stage = StreamingASR(engine.stream(), engine.word_gap)
+    updates = [stage.feed([0.0] * 1600), stage.feed([0.0] * 6400), stage.feed([0.0] * 3200), stage.flush()]
+    assert [p.text for u in updates for p in u.pieces] == [" a", " b", "c"]
+    assert updates[0].pieces == [piece(" a", 0.0)] and updates[0].words == []  # shown before it's complete
