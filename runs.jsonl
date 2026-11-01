@@ -1703,3 +1703,4 @@
 {"at": "2026-11-01T07:04:13+00:00", "event": "start", "item": 616, "pid": 65509, "role": "developer", "run_id": "developer-20261101T070401Z", "task": "Item #616 is sev:1: revert first (blueprint \u00a73), then fix the cause."}
 {"at": "2026-11-01T07:04:45+00:00", "cost_usd": 0.067436, "denials": 0, "denied": [], "event": "end", "five_hour": null, "item": null, "role": "coordinator", "run_id": "coordinator-20261101T070401Z", "seven_day": 0.64, "seven_day_resets_at": 1793894400, "status": "finished", "turns": 14}
 {"at": "2026-11-01T07:05:37+00:00", "event": "start", "item": 514, "pid": 66194, "role": "architect", "run_id": "architect-20261101T070529Z", "task": "Item #514 needs your decision (needs-decision:architect)."}
+{"at": "2026-11-01T07:05:39+00:00", "event": "start", "item": 318, "pid": 66250, "role": "builder", "run_id": "builder-20261101T070529Z", "task": "Item #318 needs your decision (needs-decision:builder)."}
