@@ -89,7 +89,7 @@ class HelpAndVersionTest(unittest.TestCase):
     @pytest.mark.criterion("G1-6")
     def test_version(self):
         code, out, _ = run("--version")
-        self.assertEqual((code, out), (0, "lmt 0.1.0\n"))
+        self.assertEqual((code, out), (0, "lmt 0.2.0\n"))
 
 
 @pytest.mark.criterion("G1-6")
@@ -101,7 +101,7 @@ class OptionTableTest(unittest.TestCase):
         documented = documented_options()
         self.assertEqual(set(documented), {(), ("transcribe",), ("live",), ("models", "download"),
                                            ("models", "list"), ("models", "verify"), ("eval",), ("rename",),
-                                           ("demo",)})
+                                           ("demo",), ("app",)})
         self.assertEqual(parser_options(cli.build_parser()), documented)
 
     def test_transcribe_table_is_read(self):

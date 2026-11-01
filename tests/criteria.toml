@@ -2,7 +2,7 @@
 # (design/internal/criteria.md §2). A criterion not listed is checked in CI and not yet complete.
 
 # The product jobs that upload a record (§3).
-jobs = ["readme", "test", "test-models", "eval-ci"]
+jobs = ["readme", "test", "test-models", "eval-ci", "browser", "install-full"]
 
 # S1-1 to S1-5: check_readme.py makes their checks in full, and the Reviewer read S1-2's wording
 # when S1 closed. S1-4 waits for the evaluation command in the README (g1-stage1.md §1a).
@@ -64,6 +64,25 @@ complete = true
 [G1-11]
 complete = true
 
+# G1-8, G1-9, G1-10, G1-12 and G1-14: .github/scripts/check_results.py reads the Mac's results/full.json against
+# the spec's bounds in the test job, and records a missed bound without failing CI (criteria.md §2, #508). With
+# it: G1-10's disk half is tests/test_models.py's two disk tests; G1-12's CI half is tests/test_eval_ci.py's
+# comparison and test_models.py's manifest test (g1-stage2.md P10); G1-14's drift is tests/test_readme_table.py.
+[G1-8]
+complete = true
+
+[G1-9]
+complete = true
+
+[G1-10]
+complete = true
+
+[G1-12]
+complete = true
+
+[G1-14]
+complete = true
+
 [G1-4m]
 ci = false
 owner = "The two-speaker clip's SRT and WebVTT show their cues at the right times, with the speaker's label, in QuickTime Player and in VLC"
@@ -74,9 +93,73 @@ owner = "The two-speaker clip's SRT and WebVTT show their cues at the right time
 complete = true
 owner = "The two-speaker clip transcribes with Wi-Fi off"
 
+# G2-1: tests/test_live_session_models.py, all passing on main (design/internal/g2-stage1.md).
+[G2-1]
+complete = true
+
+# G2-2: tests/test_live_asr_models.py, all passing on main (design/internal/g2-stage1.md).
+[G2-2]
+complete = true
+
+# G2-3: tests/test_live_diarize_models.py and tests/test_live_session_models.py, all passing on main (design/internal/g2-stage1.md).
+[G2-3]
+complete = true
+
+# G2-4: tests/test_live_realtime_models.py, test_live_shared_run.py and test_live_signals.py, all passing on main (design/internal/g2-stage1.md).
+[G2-4]
+complete = true
+
+# G2-5: tests/test_live_mic.py, test_live_mic_source.py, test_live_options.py and test_portaudio.py, all passing on main (design/internal/g2-stage1.md).
+[G2-5]
+complete = true
+
+# G2-6c: tests/test_live_session_models.py and test_eval_live.py, all passing on main (design/internal/g2-stage1.md).
+[G2-6c]
+complete = true
+
+# G2-7: tests/test_live_cli.py, test_live_cli_args.py and test_live_options.py, all passing on main (design/internal/g2-stage1.md).
+[G2-7]
+complete = true
+
+# G2-8: tests/test_live_cli.py and test_live_shared_run.py, all passing on main (design/internal/g2-stage1.md).
+[G2-8]
+complete = true
+
 [G2-5m]
 ci = false
 owner = "lmt live with the built-in microphone, two voices for about two minutes, stopped with Ctrl-C: labelled text appears within a few seconds, the two voices get different labels, and the four outputs are written and open"
+
+# G3-1: tests/test_rename.py and, in test-models, tests/test_rename_models.py (1b, 1c) (design/internal/g3-stage1.md §6).
+[G3-1]
+complete = true
+
+# G3-2: tests/test_rename_subtitles.py (test and test-models' ffmpeg checks, 1c) and, in browser, tests/browser/test_track.py (3c) (design/internal/g3-stage1.md §6).
+[G3-2]
+complete = true
+
+# G3-3: tests/test_cli.py and tests/test_rename.py (0a, 1b) (design/internal/g3-stage1.md §6).
+[G3-3]
+complete = true
+
+# G3-4: tests/test_demo_server.py, tests/test_demo_process.py, tests/test_demo_sample_process.py and tests/test_cli.py (2a3, 2a4, 2b2) (design/internal/g3-stage1.md §6).
+[G3-4]
+complete = true
+
+# G3-5: in browser, tests/browser/test_page.py, test_play.py and test_track.py (3a to 3d) (design/internal/g3-stage1.md §6).
+[G3-5]
+complete = true
+
+# G3-6: check_full_install.py's record in install-full, on both runners of a workflow_dispatch run (4b1, 4b2, 5a) (design/internal/g3-stage1.md §6).
+[G3-6]
+complete = true
+
+# G3-7: check_readme.py's check_install row, and check_install.py's records in test and install-full (4a2, 4a4, 5a) (design/internal/g3-stage1.md §6).
+[G3-7]
+complete = true
+
+# G3-8: check_full_install.py's record in install-full, on both runners of a workflow_dispatch run (4b1, 4b2, 5a) (design/internal/g3-stage1.md §6).
+[G3-8]
+complete = true
 
 [G3-5m]
 ci = false

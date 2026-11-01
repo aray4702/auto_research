@@ -31,7 +31,9 @@ uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
 
 ## Build
 """
-PYPROJECT = '[project]\nname = "local-meeting-transcriber"\nversion = "0.1.0"\n'
+# The repository's own version: --wheel reads the real pyproject.toml, so the fakes report the same one.
+VERSION = tomllib.loads((Path(cin.REPO) / "pyproject.toml").read_text())["project"]["version"]
+PYPROJECT = f'[project]\nname = "local-meeting-transcriber"\nversion = "{VERSION}"\n'
 # A small lock of uv.lock's shape: av-like entries split at 3.12, a torch-like one split by platform, and the
 # rest without markers.
 LOCK = """\
@@ -92,9 +94,9 @@ for path, source in [(Path(os.environ["UV_TOOL_BIN_DIR"]) / "lmt", os.environ["F
     path.write_text(Path(source).read_text())
     path.chmod(0o755)
 '''
-FAKE_LMT = r'''
+FAKE_LMT = rf'''
 import os
-print(os.environ.get("FAKE_LMT_VERSION", "lmt 0.1.0"))
+print(os.environ.get("FAKE_LMT_VERSION", "lmt {VERSION}"))
 '''
 # The tool's Python: answers the probe from FAKE_VERSIONS, and the module load per FAKE_MODE.
 FAKE_PYTHON = r'''
@@ -274,7 +276,7 @@ class RunTest(unittest.TestCase):
         self.assertEqual(git(self.fake.root, "tag"), "")
 
     def test_the_wheel_is_installed_as_given(self):
-        wheel = self.fake.tmp / "dist" / "local_meeting_transcriber-0.1.0-py3-none-any.whl"
+        wheel = self.fake.tmp / "dist" / f"local_meeting_transcriber-{VERSION}-py3-none-any.whl"
         code, out = self.fake.main(source=["--wheel", str(wheel)])
         self.assertEqual(code, 0, out)
         self.assertEqual(self.fake.entries()[0]["argv"], ["tool", "install", str(wheel.resolve())])

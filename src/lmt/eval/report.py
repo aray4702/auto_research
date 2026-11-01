@@ -1,5 +1,5 @@
-"""The results file, `results/<set>.json`, version 1.0 (design/public-api.md, "Results file";
-design/internal/g1-stage1.md §4)."""
+"""The results file, `results/<set>.json` and, for Apple's engine, `results/<set>-apple.json`, version 2.0
+(design/public-api.md, "Results file"; design/internal/g1-stage1.md §4)."""
 
 import copy
 import json
@@ -13,18 +13,30 @@ from pathlib import Path
 
 from lmt import __version__
 
+ENGINES = ("kyutai", "apple")  # F11: the default first
 TIMING_FIELDS = ("date", "wall_seconds", "rtf", "peak_rss_bytes",
-                 "p50_delay_seconds", "p95_delay_seconds", "max_delay_seconds")
-RUN_TIMING_FIELDS = ("p95_delay_seconds", "behind_seconds")  # in each of a live figure's `runs`
+                 "p50_delay_seconds", "p95_delay_seconds", "max_delay_seconds",
+                 "p50_label_delay_seconds", "p95_label_delay_seconds", "max_label_delay_seconds")
+# in each of a live figure's `runs`
+RUN_TIMING_FIELDS = ("p95_delay_seconds", "p95_label_delay_seconds", "behind_seconds")
 
 
-def build(set_name, figures, models, determinism=None, *, out_dir,
+def file_name(set_name: str, engine: str = "kyutai") -> str:
+    """`<set>.json` for Kyutai, the default; `<set>-apple.json` for Apple's engine."""
+    if engine not in ENGINES:
+        raise ValueError(f"engine must be one of {', '.join(ENGINES)}, not {engine!r}")
+    return f"{set_name}.json" if engine == "kyutai" else f"{set_name}-{engine}.json"
+
+
+def build(set_name, figures, models, determinism=None, *, out_dir, engine="kyutai",
           commit=None, dirty=None, date=None, machine=None) -> dict:
     """The results file, in public-api.md's key order. `commit`, `dirty`, `date` and `machine` are for
     tests; left as None, each is read from git, the clock and this machine."""
+    file_name(set_name, engine)  # ValueError for an unknown engine
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "set": set_name,
+        "engine": engine,
         "commit": _commit() if commit is None else commit,
         "dirty": _dirty(out_dir) if dirty is None else dirty,
         "date": datetime.now().astimezone().isoformat(timespec="seconds") if date is None else date,

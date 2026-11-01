@@ -130,12 +130,13 @@ class Fixture(unittest.TestCase):
 class RealSpecTest(unittest.TestCase):
     def test_counts_and_requirements(self):
         found = criteria.parse_spec((REPO_ROOT / "spec" / "acceptance.md").read_text())
-        self.assertEqual(len(found), 44)
+        self.assertEqual(len(found), 58)
         by_goal = {}
         for c in found:
             by_goal[c["goal"]] = by_goal.get(c["goal"], 0) + 1
-        self.assertEqual(by_goal, {"S1": 5, "G1": 17, "G2": 10, "G3": 12})
+        self.assertEqual(by_goal, {"S1": 5, "G1": 17, "G2": 10, "G3": 12, "G4": 9, "G5": 5})
         by_id = {c["id"]: c for c in found}
+        self.assertEqual(by_id["G4-7"]["requirements"], ["Q9", "Q4", "Q8"])
         self.assertEqual(by_id["G1-15"]["requirements"], ["§7", "Q9"])
         self.assertEqual(by_id["S1-1"]["requirements"], ["S1"])
         self.assertEqual(by_id["G2-3"]["requirements"], ["F6", "U2"])
@@ -144,10 +145,11 @@ class RealSpecTest(unittest.TestCase):
     def test_real_registry_loads(self):
         ids = criteria.spec_ids(REPO_ROOT / "spec" / "acceptance.md")
         jobs, entries = criteria.load_registry(REPO_ROOT / "tests" / "criteria.toml", ids)
-        self.assertEqual(jobs, ["readme", "test", "test-models", "eval-ci"])
+        self.assertEqual(jobs, ["readme", "test", "test-models", "eval-ci", "browser", "install-full"])
         self.assertEqual({k for k, e in entries.items() if e["complete"]},
                          {"S1-1", "S1-2", "S1-3", "S1-5", "G1-1", "G1-2", "G1-3", "G1-4", "G1-5", "G1-6", "G1-7",
-                          "G1-8c", "G1-11", "G1-13"})
+                          "G1-8", "G1-8c", "G1-9", "G1-10", "G1-11", "G1-12", "G1-13", "G1-14", "G3-1", "G3-2", "G3-3", "G3-4", "G3-5", "G3-6", "G3-7", "G3-8",
+                          "G2-1", "G2-2", "G2-3", "G2-4", "G2-5", "G2-6c", "G2-7", "G2-8"})
         self.assertEqual({k for k, e in entries.items() if e["owner"]},
                          {"G1-4m", "G1-13", "G2-5m", "G3-5m", "G3-8m"})
 

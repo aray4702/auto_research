@@ -1,11 +1,11 @@
-"""G2-1, G2-3 and G2-6c (spec/acceptance.md), in process, on the models (design/internal/g2-stage1.md §3a, item
-3a4): one lockstep run of the whole live pipeline on the two-speaker clip, through `FileSource(paced=False)` and
-`run_lockstep`, with the live default ASR model and online diarization, shared by the three cases. Each event's `t`
-is the stream position when it was written. Offline word times come from `two_speakers_run`, and committed words are
+"""G2-1, G2-3 and G2-6c (spec/acceptance.md), on the models (design/internal/g2-stage1.md §3a, item 3a4, moved onto
+the shared run by 3b5): the events of `live_run`, the one lockstep run of `lmt live --from-file` on the two-speaker
+clip, with the live default ASR model and online diarization, shared by the three cases. Each event's `t` is the
+stream position when it was written. Offline word times come from `two_speakers_run`, and committed words are
 matched to them with `lmt.eval.live.match_words`."""
 
-import io
 import json
+import wave
 from collections import Counter
 from itertools import pairwise
 from pathlib import Path
@@ -26,47 +26,27 @@ RATE = 16000
 
 EARLY = 5.0  # s, spec/acceptance.md G2-1: words ending at least 5 s before the clip's end are committed before its end
 SHARE_BOUND = 0.90  # spec/acceptance.md G2-3: at least 90 % of a speaker's words carry their majority label
-P95_BOUND = 2.0  # s, spec/acceptance.md G2-6c: p95 stream delay <= 2.0 s, inclusive
+WORD_BOUND = 0.7  # s, spec/acceptance.md G2-6c: p95 word stream delay <= 0.7 s, inclusive (G4, #577)
+LABEL_BOUND = 2.0  # s, and p95 label stream delay <= 2.0 s
 
 
 class Session(NamedTuple):
     events: list[dict]
-    result: object  # lmt.live.session.SessionResult
+    result: object  # the saved transcript, lmt.transcript.Transcript: its speakers and segments
     duration: float  # s, the clip's length: the position of the source's last block
     asr_name: str
 
 
 @pytest.fixture(scope="module")
-def session():
-    """The one lockstep run. HF_HUB_OFFLINE is put back afterwards, undoing ensure()'s."""
-    from lmt import asr, diarize, models
-    from lmt.live.asr import StreamingASR
-    from lmt.live.diarize import OnlineDiarizer
-    from lmt.live.events import EventWriter
-    from lmt.live.session import run_lockstep
-    from lmt.live.source import FileSource
+def session(live_run):
+    """The shared run's events and transcript."""
+    from lmt import transcript
 
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setenv("HF_HUB_OFFLINE", "0")
-        manifest = models.load_manifest()
-        live_asr = models.default_live_asr(manifest)
-        segmentation, embedding = manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)
-        dirs = models.ensure([live_asr, segmentation, embedding])
-        diarize.scratch_matplotlib()
-        engine = asr.load(dirs[live_asr.name])
-        diarizer = OnlineDiarizer(diarize.load_segmentation(Path(dirs[segmentation.name])),
-                                  diarize.load_embedding(Path(dirs[embedding.name])))
-
-        source = FileSource(TWO_SPEAKERS, paced=False)
-        stream = io.StringIO()
-        # In lockstep, `t` is the position of the last block handed over.
-        writer = EventWriter(stream, jsonl=True, clock_t=lambda: source.position)
-        info = {m: {"name": model.name, "repository": model.repository, "revision": model.revision}
-                for m, model in (("asr", live_asr), ("diarization", manifest.get(diarize.DIARIZATION)))}
-        result = run_lockstep(source, StreamingASR(engine), diarizer, writer,
-                              source_info={"file": TWO_SPEAKERS.name, "live": True}, models=info)
-        events = [json.loads(line) for line in stream.getvalue().splitlines()]
-        yield Session(events, result, source.position / RATE, live_asr.name)
+    assert live_run.returncode == 0, live_run.stderr
+    with wave.open(str(TWO_SPEAKERS), "rb") as w:
+        duration = w.getnframes() / RATE
+    result = transcript.from_dict(json.loads((live_run.out_dir / f"{live_run.stem}.json").read_text(encoding="utf-8")))
+    return Session(live_run.events, result, duration, live_run.events[0]["models"]["asr"]["name"])
 
 
 def committed(events) -> list[tuple[Word, float, str]]:
@@ -155,18 +135,23 @@ def test_g2_3_each_speakers_words_carry_one_label(session):
 
 @pytest.mark.models
 @pytest.mark.criterion("G2-6c")
-def test_g2_6c_the_p95_stream_delay_is_within_the_bound(session, two_speakers_run):
-    from lmt.eval.live import delays, match_words, percentile
+def test_g2_6c_the_p95_word_and_label_stream_delays_are_within_their_bounds(session, two_speakers_run):
+    """The word delay from the `text` events (a word's last piece), the label delay from the labelled `words`
+    events, each against the offline word times, in stream positions (spec G2-6c, G4 "Terms")."""
+    from lmt.eval.live import delays, match_words, percentile, read_text
 
     offline = offline_words(two_speakers_run)
-    matches = match_words(offline, [(w, t) for w, t, _ in committed(session.events)])
-    assert matches, "no committed word matched an offline word"
-
-    values = delays(matches)
-    p50, p95 = percentile(values, 0.50), percentile(values, 0.95)
-    over = sum(d > P95_BOUND for d in values)
+    lines = []
+    for name, hyp, bound in (("word", read_text([(e["t"], e) for e in session.events]), WORD_BOUND),
+                             ("label", [(w, t) for w, t, _ in committed(session.events)], LABEL_BOUND)):
+        matches = match_words(offline, hyp)
+        assert matches, f"no {name} matched an offline word"
+        values = delays(matches)
+        p50, p95 = percentile(values, 0.50), percentile(values, 0.95)
+        text = (f"{name} stream delay p50 {p50:.3f} s, p95 {p95:.3f} s (bound {bound:.1f} s), "
+                f"maximum {max(values):.3f} s, {len(matches)} of {len(offline)} matched")
+        lines.append((name, p95, bound, text))
     line = (f"G2-6c: the live pipeline ({session.asr_name}) in lockstep on tests/fixtures/two_speakers.wav: "
-            f"stream delay p50 {p50:.3f} s, p95 {p95:.3f} s (bound {P95_BOUND:.1f} s), maximum {max(values):.3f} s, "
-            f"{len(matches)} of {len(offline)} offline words matched, {over} over {P95_BOUND:.1f} s")
+            + "; ".join(text for *_, text in lines))
     report(line)
-    assert p95 <= P95_BOUND, line
+    assert all(p95 <= bound for _, p95, bound, _ in lines), line
