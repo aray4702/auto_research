@@ -4,6 +4,8 @@ found before it, and nothing is written until capture starts (G2-7). Positions a
 """
 
 import dataclasses
+import json
+import os
 import signal
 import sys
 import threading
@@ -24,21 +26,41 @@ def _model_info(model) -> dict:
     return {"name": model.name, "repository": model.repository, "revision": model.revision}
 
 
+# `lmt app`'s child protocol (G5, internal; not in the public API): with LMT_APP_CHILD set and --jsonl, the session
+# prints `loading` events as it loads, then `ready`, and waits for one line on stdin before it opens its source:
+# `go [STEM]` starts it (STEM, if given, names its outputs), and anything else, or end of input, exits 0 having
+# written nothing. So the app can load a session ahead of Start, and show its progress.
+APP_CHILD = "LMT_APP_CHILD"
+
+
+def _app_child(args) -> bool:
+    return bool(os.environ.get(APP_CHILD)) and args.jsonl
+
+
+def _progress(args, event: dict) -> None:
+    if _app_child(args):
+        print(json.dumps(event, separators=(",", ":")), flush=True)
+
+
 def load_stages(args, manifest):
-    """Steps 5 and 6: ensure and load the models, then build the stages, with the settings read through their
-    modules. Returns the ASR stage, the diarizer and the models' field of the transcript and `start`. Tests
-    replace it."""
-    from lmt import asr, diarize
+    """Steps 5 and 6: load the engine (G4-2: before any audio is captured), ensure and load the diarization models,
+    then build the stages, with the settings read through their modules. Returns the ASR stage, the diarizer and the
+    models' field of the transcript and `start`. Tests replace it."""
+    from lmt import diarize, engines
     from lmt.live import asr as live_asr
     from lmt.live import diarize as live_diarize
 
-    asr_model = manifest.get(args.model) if args.model else models.default_live_asr(manifest)
-    needed = [asr_model]
+    _progress(args, {"type": "loading", "stage": "engine", "engine": args.engine})
+    engine = engines.load(args.engine, offline=args.offline)
     if not args.no_diarize:
-        needed += [manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)]
+        _progress(args, {"type": "loading", "stage": "speakers"})
+    needed = [] if args.no_diarize else [manifest.get(diarize.SEGMENTATION), manifest.get(diarize.EMBEDDING)]
     dirs = models.ensure(needed, offline=args.offline)
 
-    stage = live_asr.StreamingASR(asr.load(dirs[asr_model.name]), live_asr.DEFAULT_ASR_CONFIG)
+    rate = getattr(engine, "rate", RATE)  # Kyutai's 24 kHz: the stream takes it from the source (#603)
+    stream = engine.stream(rate) if rate != RATE else engine.stream()
+    stage = (live_asr.StreamingASR(stream, engine.word_gap) if rate == RATE
+             else live_asr.StreamingASR(stream, engine.word_gap, rate))
     if args.no_diarize:
         diarizer, diarization = live_diarize.NullDiarizer(), None
     else:
@@ -51,7 +73,7 @@ def load_stages(args, manifest):
             embedding = diarize.load_embedding(Path(dirs[diarize.EMBEDDING]))
         diarizer = live_diarize.OnlineDiarizer(segmentation, embedding, config)
         diarization = _model_info(manifest.get(diarize.DIARIZATION))
-    return stage, diarizer, {"asr": _model_info(asr_model), "diarization": diarization}
+    return stage, diarizer, {"asr": dict(engine.info), "diarization": diarization}
 
 
 def _list_devices() -> int:
@@ -161,6 +183,18 @@ def cli_live(args) -> int:
 
     manifest = models.load_manifest()  # steps 5 and 6
     asr, diarizer, models_info = load_stages(args, manifest)
+    if _app_child(args):  # loaded ahead of Start: wait for the app's go before anything is captured or written
+        _progress(args, {"type": "ready"})
+        line = sys.stdin.readline().split()
+        if not line or line[0] != "go":
+            return 0
+        if len(line) > 1:
+            stem = line[1]
+            export.check(out_dir, stem, args.formats + ["wav"] * args.save_audio, overwrite=args.overwrite)
+            if "device" in source_info:
+                source_info["file"] = stem
+    if hasattr(asr, "attach"):
+        asr.attach(source)  # before capture starts: the ASR side's audio at the engine's rate (#603)
 
     abandon = _Abandon()
     signals = _Signals(source, abandon)

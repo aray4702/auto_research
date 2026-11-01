@@ -130,12 +130,13 @@ class Fixture(unittest.TestCase):
 class RealSpecTest(unittest.TestCase):
     def test_counts_and_requirements(self):
         found = criteria.parse_spec((REPO_ROOT / "spec" / "acceptance.md").read_text())
-        self.assertEqual(len(found), 44)
+        self.assertEqual(len(found), 58)
         by_goal = {}
         for c in found:
             by_goal[c["goal"]] = by_goal.get(c["goal"], 0) + 1
-        self.assertEqual(by_goal, {"S1": 5, "G1": 17, "G2": 10, "G3": 12})
+        self.assertEqual(by_goal, {"S1": 5, "G1": 17, "G2": 10, "G3": 12, "G4": 9, "G5": 5})
         by_id = {c["id"]: c for c in found}
+        self.assertEqual(by_id["G4-7"]["requirements"], ["Q9", "Q4", "Q8"])
         self.assertEqual(by_id["G1-15"]["requirements"], ["§7", "Q9"])
         self.assertEqual(by_id["S1-1"]["requirements"], ["S1"])
         self.assertEqual(by_id["G2-3"]["requirements"], ["F6", "U2"])

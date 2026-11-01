@@ -52,7 +52,7 @@ def test_g1_13_the_offline_run_opens_no_connection_writes_only_its_outputs_and_m
 
     assert r.returncode == 0, r.stderr
     if os.environ.get("CI"):
-        assert r.isolated, "under CI, the run must be isolated (sudo -n unshare --net)"
+        assert r.isolated, "under CI, the run must be isolated (sandbox-exec, network denied)"
     assert not connections, f"the run opened connections: {connections}"
     assert not changed and not gone, f"changed {changed}, gone {gone}"
     assert new == sorted(str(work / name) for name in OUTPUTS), f"new entries: {new}"
