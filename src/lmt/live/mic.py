@@ -93,6 +93,13 @@ class MicSource:
         self._warn = warn
         self._queue = queue.SimpleQueue()
         self._stopped = threading.Event()
+        self.tap = None  # an AsrTap once asr_rate is called: the device's audio at the ASR engine's rate (#603)
+
+    def asr_rate(self, rate: int) -> None:
+        """Also resample the device's audio straight to `rate`, for the ASR engine, not from the 16 kHz blocks."""
+        from lmt.live.source import AsrTap
+
+        self.tap = AsrTap(rate)
 
     def _callback(self, indata, frames, time, status):
         if status and status.input_overflow:
@@ -105,6 +112,7 @@ class MicSource:
             return
         backend = _backend(self._backend)
         resampler = audio.Resampler(self.device.rate, self.device.channels)
+        hi = None if self.tap is None else audio.Resampler(self.device.rate, self.device.channels, out_rate=self.tap.rate)
         silence = _SilenceCheck(self.device, self._warn)
         pending = np.zeros(0, np.float32)
         stream = self._open(backend)
@@ -114,6 +122,8 @@ class MicSource:
                 if chunk is None:  # stop()'s wake-up
                     break
                 silence.check(chunk)
+                if hi is not None:  # before the block, so the ASR side always has its span when the block arrives
+                    self.tap.put(hi.push(chunk))
                 pending = np.concatenate([pending, resampler.push(chunk)])
                 while len(pending) >= BLOCK:
                     block, pending = self._take(pending, BLOCK)
@@ -132,8 +142,12 @@ class MicSource:
                 break
             if chunk is not None:
                 silence.check(chunk)
+                if hi is not None:
+                    self.tap.put(hi.push(chunk))
                 pending = np.concatenate([pending, resampler.push(chunk)])
         pending = np.concatenate([pending, resampler.flush()])
+        if hi is not None:
+            self.tap.put(hi.flush())
         while len(pending):
             block, pending = self._take(pending, BLOCK)
             yield block

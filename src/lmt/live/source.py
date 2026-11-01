@@ -17,9 +17,43 @@ from lmt.audio import SAMPLE_RATE
 BLOCK = 1600
 
 
+class AsrTap:
+    """The source's audio at the ASR engine's own rate, taken straight from the input, not resampled from the 16 kHz
+    blocks (#603): `put` appends what the source produces, `take(until)` hands it out in order up to `until`
+    samples at that rate (None: all of it, at the end), and drops what's been taken, so memory stays bounded."""
+
+    def __init__(self, rate: int):
+        self.rate = rate
+        self._lock = threading.Lock()
+        self._chunks: list[np.ndarray] = []
+        self._have = 0  # samples put so far
+        self._taken = 0  # samples handed out so far
+
+    def put(self, samples) -> None:
+        samples = np.asarray(samples, dtype=np.float32).reshape(-1)
+        if samples.size:
+            with self._lock:
+                self._chunks.append(samples)
+                self._have += samples.size
+
+    def take(self, until: int | None) -> np.ndarray:
+        with self._lock:
+            end = self._have if until is None else min(until, self._have)
+            n = max(0, end - self._taken)
+            if n == 0:
+                return np.zeros(0, np.float32)
+            joined = np.concatenate(self._chunks)
+            out, rest = joined[:n], joined[n:]
+            self._chunks = [rest] if rest.size else []
+            self._taken += n
+            return out
+
+
 class FileSource:
     def __init__(self, path, *, paced: bool, limit: int | None = None, clock=time.monotonic, sleep=time.sleep):
         self._audio = audio.decode(path)  # an InputError (3) before capture starts
+        self._path = path
+        self.tap: AsrTap | None = None
         self.name = Path(path).name
         self.position = 0  # samples handed over so far; read from any thread
         self.reason = None  # "end-of-input", "duration" or "signal", once it stops
@@ -28,6 +62,11 @@ class FileSource:
         self._clock = clock
         self._sleep = sleep
         self._stopped = threading.Event()
+
+    def asr_rate(self, rate: int) -> None:
+        """Also keep the file at `rate`, decoded straight from it, for the ASR engine (#603)."""
+        self._hi = audio.decode(self._path, rate)
+        self.tap = AsrTap(rate)
 
     def blocks(self) -> Iterator[np.ndarray]:
         """Blocks of `BLOCK` samples, the last one shorter if the file or `limit` ends mid-block. Paced, block i
@@ -53,6 +92,10 @@ class FileSource:
                     return
             start = self.position
             self.position = min(start + BLOCK, end)
+            if self.tap is not None:  # the same span at the engine's rate; the last block takes the rest
+                hi_start = round(start * self.tap.rate / SAMPLE_RATE)
+                hi_end = len(self._hi) if self.position >= n else round(self.position * self.tap.rate / SAMPLE_RATE)
+                self.tap.put(self._hi[hi_start:hi_end])
             yield self._audio[start:self.position]
             i += 1
 

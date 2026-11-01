@@ -38,8 +38,11 @@ def committed(engine, path):
     from lmt.live.source import FileSource, lockstep
 
     words = []
-    stage = StreamingASR(engine.stream(), engine.word_gap)
-    for position, (update,) in lockstep(FileSource(path, paced=False), stage):
+    # As `lmt live` builds it: the stream at the engine's rate, fed from the source's own copy at it (#603).
+    stage = StreamingASR(engine.stream(engine.rate), engine.word_gap, engine.rate)
+    source = FileSource(path, paced=False)
+    stage.attach(source)
+    for position, (update,) in lockstep(source, stage):
         words.extend((w, position / SAMPLE_RATE) for w in update.words)
     return words
 
@@ -67,4 +70,5 @@ def test_batch_and_live_give_the_same_words(live_engine):
     from lmt import audio
 
     live = [w for w, _ in committed(live_engine, CLIP)]
-    assert live_engine.transcribe(audio.decode(CLIP)) == live
+    # As `lmt transcribe` runs it: the file decoded straight to the engine's rate (#575, #603).
+    assert live_engine.transcribe(audio.decode(CLIP, live_engine.rate), rate=live_engine.rate) == live
