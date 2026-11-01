@@ -39,3 +39,4 @@
 {"at": "2026-10-29T14:30:04+00:00", "key": "runner:the applied checkout is at 2cc7e620726e11f4c4e49a0c967595566bf8ce77, main is at 1c4972bf649a0be928db2cfa765499dbdf1ee44a", "level": "builder", "title": "The runner differs from main"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: awk", "level": "builder", "title": "Recurring permission denial: Bash: awk"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: cp", "level": "builder", "title": "Recurring permission denial: Bash: cp"}
+{"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: gh issue", "level": "builder", "title": "Recurring permission denial: Bash: gh issue"}
