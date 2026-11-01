@@ -15,8 +15,6 @@ import pytest
 from lmt import cli
 
 PUBLIC_API = Path(__file__).resolve().parents[1] / "design" / "public-api.md"
-# A later goal's command, "(G2)" or "(G3, …)": skipped until the item that adds the command removes its goal here.
-LATER_GOAL = re.compile(r"\((G2|G3)(, [^)]*)?\)$")
 
 
 def run(*argv):
@@ -35,8 +33,6 @@ def documented_options():
         heading, _, body = block.partition("\n")
         if heading == "Global options":
             options[()] = set(re.findall(r"`lmt (--[\w-]+)`", body)) - {"--help"}
-            continue
-        if LATER_GOAL.search(heading):
             continue
         command = re.match(r"`lmt (\w+)", heading).group(1)
         if command == "models":  # one row per subcommand, its options in brackets
@@ -67,10 +63,10 @@ def parser_options(parser, path=()):
 
 
 class HelpAndVersionTest(unittest.TestCase):
-    @pytest.mark.criterion("G1-6")
+    @pytest.mark.criterion("G1-6", "G3-3")
     def test_help_exits_0_for_lmt_and_every_subcommand(self):
         for argv in ([], ["transcribe"], ["models"], ["models", "download"], ["models", "list"],
-                     ["models", "verify"], ["eval"]):
+                     ["models", "verify"], ["eval"], ["rename"], ["demo"]):
             with self.subTest(argv=argv):
                 code, out, err = run(*argv, "--help")
                 self.assertEqual(code, 0, err)
@@ -84,7 +80,8 @@ class HelpAndVersionTest(unittest.TestCase):
 
     def test_help_imports_no_handler_module(self):
         script = ("import sys; from lmt.cli import main; main(['--help']); "
-                  "print([m for m in ('lmt.pipeline', 'lmt.models', 'lmt.eval.cli') if m in sys.modules])")
+                  "print([m for m in ('lmt.pipeline', 'lmt.models', 'lmt.eval.cli', 'lmt.rename', "
+                  "'lmt.demo.server', 'lmt.demo.sample') if m in sys.modules])")
         r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip().splitlines()[-1], "[]")
@@ -92,32 +89,25 @@ class HelpAndVersionTest(unittest.TestCase):
     @pytest.mark.criterion("G1-6")
     def test_version(self):
         code, out, _ = run("--version")
-        self.assertEqual((code, out), (0, "lmt 0.1.0\n"))
+        self.assertEqual((code, out), (0, "lmt 0.2.0\n"))
 
 
 @pytest.mark.criterion("G1-6")
 class OptionTableTest(unittest.TestCase):
     """G1-6: the parser's options are exactly public-api.md's, both ways."""
 
+    @pytest.mark.criterion("G3-3")
     def test_parser_matches_public_api(self):
         documented = documented_options()
-        self.assertEqual(set(documented), {(), ("transcribe",), ("models", "download"), ("models", "list"),
-                                           ("models", "verify"), ("eval",)})
+        self.assertEqual(set(documented), {(), ("transcribe",), ("live",), ("models", "download"),
+                                           ("models", "list"), ("models", "verify"), ("eval",), ("rename",),
+                                           ("demo",), ("app",)})
         self.assertEqual(parser_options(cli.build_parser()), documented)
 
     def test_transcribe_table_is_read(self):
         # Guards the reader: a table it failed to parse would compare empty with empty.
         self.assertIn("--output-dir", documented_options()[("transcribe",)])
         self.assertIn("-f", documented_options()[("transcribe",)])
-
-    def test_later_goals_sections_are_skipped(self):
-        for heading in ("`lmt live` (G2)", "`lmt rename TRANSCRIPT [KEY=NAME ...]` (G3, F7)",
-                        "`lmt demo [TRANSCRIPT]` (G3, F8)"):
-            with self.subTest(heading=heading):
-                self.assertTrue(LATER_GOAL.search(heading))
-        for heading in ("`lmt transcribe INPUT`", "`lmt models`", "`lmt eval`", "Global options"):
-            with self.subTest(heading=heading):
-                self.assertFalse(LATER_GOAL.search(heading))
 
 
 @pytest.mark.criterion("G1-6")
@@ -172,8 +162,10 @@ class UsageErrorTest(unittest.TestCase):
         cli.validate(args)
         self.assertEqual(args.formats, ["vtt", "txt"])
 
+    @pytest.mark.criterion("G1-4")
     def test_default_formats(self):
         args = cli.build_parser().parse_args(["transcribe", "a.wav"])
+        self.assertEqual(args.formats, "txt,srt,vtt,json")
         cli.validate(args)
         self.assertEqual(args.formats, ["txt", "srt", "vtt", "json"])
 
@@ -206,15 +198,46 @@ class UsageErrorTest(unittest.TestCase):
         self.assertUsageError(["eval", "--set", "ci", "--update-readme"], "--update-readme")
         self.assertUsageError(["eval", "--check-readme", "--update-readme"], "--update-readme")
 
+    @pytest.mark.criterion("G3-3")
+    def test_rename_unknown_format(self):
+        self.assertUsageError(["rename", "t.json", "S1=Ana", "-f", "txt,docx"], "--formats")
+
+    @pytest.mark.criterion("G3-4")
+    def test_demo_transcript_and_sample_conflict(self):
+        self.assertUsageError(["demo", "t.json", "--sample"], "--sample")
+
+    def test_demo_needs_transcript_or_sample(self):
+        self.assertUsageError(["demo"], "TRANSCRIPT")
+
+    def test_demo_audio_and_sample_conflict(self):
+        self.assertUsageError(["demo", "--sample", "--audio", "a.wav"], "--audio")
+
+    def test_demo_port_out_of_range(self):
+        for value in ("65536", "-1"):
+            with self.subTest(value=value):
+                self.assertUsageError(["demo", "t.json", "--port", value], "--port")
+
+
+def every_parser(parser):
+    """`parser` and each parser under it, at any depth."""
+    yield parser
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                yield from every_parser(sub)
+
+
+class EnglishOnlyTest(unittest.TestCase):
+    @pytest.mark.criterion("G1-7")
+    def test_no_language_option(self):
+        found = {option for parser in every_parser(cli.build_parser()) for action in parser._actions
+                 for option in action.option_strings}
+        self.assertIn("--num-speakers", found)  # guards the walk: it reached transcribe's parser
+        self.assertIn("--bytes", found)  # and one two levels down
+        self.assertEqual([o for o in found if "lang" in o.lower()], [])
+
 
 class HandlerTest(unittest.TestCase):
-    def test_stubs_exit_1_with_one_line(self):
-        for argv, command in ((["eval", "--set", "full", "--update-readme"], "eval"),):
-            with self.subTest(argv=argv):
-                code, out, err = run(*argv)
-                self.assertEqual((code, out), (1, ""))
-                self.assertEqual(err, f"lmt: error: {command}: not built yet (G1 stage 2)\n")
-
     def test_valid_speakers_reach_the_handler(self):
         with mock.patch("lmt.pipeline.cli_transcribe", return_value=None) as handler:
             code, _, err = run("transcribe", "a.wav", "--min-speakers", "2", "--max-speakers", "2")

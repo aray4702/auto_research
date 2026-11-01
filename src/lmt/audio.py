@@ -3,9 +3,12 @@
 Every failure is an InputError naming the file (exit 3). FFmpeg's own log stays off (`av.logging` at its
 default), so a bad input gives stderr only the one `lmt: error:` line. FFmpeg decodes a WAV whose data is
 cut short without an error, so decode checks a WAV's `data` chunk first (design/internal/g1-stage2.md, P1).
+`Resampler` takes pushed float32 blocks through the same settings, `RESAMPLE` (design/internal/g2-stage1.md, 4b),
+to 16 kHz or another `out_rate`.
 """
 
 import struct
+from fractions import Fraction
 from pathlib import Path
 
 import av
@@ -14,10 +17,45 @@ import numpy
 from lmt.errors import InputError
 
 SAMPLE_RATE = 16_000
+RESAMPLE = {"format": "flt", "layout": "mono", "rate": SAMPLE_RATE}
 
 
-def decode(path: str | Path) -> numpy.ndarray:
-    """The first audio stream's samples: float32, mono, 16 kHz, one dimension."""
+class Resampler:
+    """Float32 `(frames, channels)` blocks at `in_rate`, pushed one at a time, to mono float32 at `out_rate`
+    (16 kHz, or Kyutai's 24 kHz: design/internal/g4-stage1.md §2)."""
+
+    def __init__(self, in_rate: int, channels: int, out_rate: int = SAMPLE_RATE):
+        self.in_rate = in_rate
+        self.channels = channels
+        self.out_rate = out_rate
+        self._layout = {1: "mono", 2: "stereo"}.get(channels, f"{channels}c")
+        self._resampler = av.AudioResampler(**{**RESAMPLE, "rate": out_rate})
+        self._pts = 0
+
+    def push(self, samples: numpy.ndarray) -> numpy.ndarray:
+        samples = numpy.asarray(samples, dtype=numpy.float32).reshape(-1, self.channels)
+        if len(samples) == 0:
+            return numpy.zeros(0, numpy.float32)
+        frame = av.AudioFrame.from_ndarray(numpy.ascontiguousarray(samples.T), format="fltp", layout=self._layout)
+        frame.sample_rate = self.in_rate
+        frame.time_base = Fraction(1, self.in_rate)
+        frame.pts = self._pts
+        self._pts += len(samples)
+        return self._join(self._resampler.resample(frame))
+
+    def flush(self) -> numpy.ndarray:
+        return self._join(self._resampler.resample(None))
+
+    @staticmethod
+    def _join(frames):
+        pieces = [f.to_ndarray().reshape(-1) for f in frames]
+        return numpy.concatenate(pieces).astype(numpy.float32, copy=False) if pieces else numpy.zeros(0, numpy.float32)
+
+
+def decode(path: str | Path, rate: int = SAMPLE_RATE) -> numpy.ndarray:
+    """The first audio stream's samples: float32, mono, at `rate` (16 kHz by default), one dimension. An engine
+    with its own rate gets its audio decoded straight to it: decoding a 48 kHz AAC file to 16 kHz and then
+    resampling it to Kyutai's 24 kHz cost Kyutai 3.4 points of WER on the reference clip (G1-2, #575)."""
     path = Path(path)
     if not path.exists():
         raise InputError(str(path), "no such file")
@@ -36,7 +74,7 @@ def decode(path: str | Path) -> numpy.ndarray:
     try:
         if not container.streams.audio:
             raise InputError(str(path), "no audio track")
-        resampler = av.AudioResampler(format="flt", layout="mono", rate=SAMPLE_RATE)
+        resampler = av.AudioResampler(**{**RESAMPLE, "rate": rate})
         pieces = []
         for frame in container.decode(container.streams.audio[0]):
             pieces.extend(f.to_ndarray().reshape(-1) for f in resampler.resample(frame))

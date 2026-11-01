@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from lmt.errors import InputError, ModelError, UsageError
+from lmt.errors import InputError, ModelError
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"  # before huggingface_hub is imported (Q8)
 
@@ -53,7 +53,7 @@ class Model:
 
 @dataclass(frozen=True)
 class Manifest:
-    default_asr: str
+    default_asr: str  # Kyutai's model (G4: one model serves both modes, so there is no live default)
     models: tuple[Model, ...]
 
     def get(self, name):
@@ -115,14 +115,20 @@ def load_manifest(path=None) -> Manifest:
     return manifest
 
 
-def default_models(manifest, asr=None) -> list[Model]:
-    """The ASR model (default_asr, or `asr`) and the three pyannote models."""
-    name = asr or manifest.default_asr
-    model = manifest.get(name)
-    if model is None or model.role != "asr":
-        choices = ", ".join(m.name for m in manifest.models if m.role == "asr")
-        raise UsageError("--model", f"{name!r} isn't an ASR model in the manifest ({choices})")
-    return [model] + [m for role in DIARIZATION_ROLES for m in manifest.models if m.role == role]
+def diarization_models(manifest) -> list[Model]:
+    """The three pyannote models, in ROLES' order."""
+    return [m for role in DIARIZATION_ROLES for m in manifest.models if m.role == role]
+
+
+def default_models(manifest) -> list[Model]:
+    """The default ASR model, Kyutai's (default_asr), and the three pyannote models."""
+    return [manifest.get(manifest.default_asr)] + diarization_models(manifest)
+
+
+def download_defaults(manifest, engine="kyutai") -> list[Model]:
+    """The manifest's models `lmt models download --engine ENGINE` fetches, and `list` marks DEFAULT: Kyutai's
+    with the diarization models, or for another engine, whose own assets aren't in the manifest, those alone."""
+    return default_models(manifest) if engine == "kyutai" else diarization_models(manifest)
 
 
 def model_dir(model) -> Path:
@@ -228,7 +234,12 @@ def ensure(models, offline=False) -> dict[str, Path]:
 def cli_models(args) -> int:
     manifest = load_manifest(MANIFEST_PATH)
     if args.action == "download":
-        download(default_models(manifest, asr=args.model))
+        needed = download_defaults(manifest, engine=args.engine)
+        if args.engine != "kyutai":  # Kyutai's model is a manifest entry, among `needed`
+            from lmt import engines
+
+            engines.download(args.engine)
+        download(needed)
         return 0
     if args.action == "list":
         return _list(manifest, args.bytes)
@@ -236,19 +247,15 @@ def cli_models(args) -> int:
 
 
 def _list(manifest, with_bytes):
-    defaults = {m.name for m in default_models(manifest)}
+    defaults = {m.name for m in download_defaults(manifest)}
     header = ["NAME", "ROLE", "REVISION", "DEFAULT", "STATUS"] + (["BYTES"] if with_bytes else [])
     print("\t".join(header))
-    total = 0
     for model in manifest.models:
         status, size = model_status(model)
         row = [model.name, model.role, model.revision, "yes" if model.name in defaults else "no", status]
         if with_bytes:
-            total += size if model.name in defaults else 0
-            row.append(str(size))
+            row.append(str(size))  # each model is bounded on its own, so there is no total (G1-10, G4)
         print("\t".join(row))
-    if with_bytes:
-        print(f"total-default\t{total}")
     return 0
 
 

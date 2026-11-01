@@ -1,0 +1,69 @@
+"""G1-13: the libraries a product run loads leave no file outside its outputs (design/internal/g1-stage2.md, P13),
+with no model. Each case is a fresh process with fresh HOME, TMPDIR and XDG_CACHE_HOME, and an empty working
+directory; nothing else is set, so MPLCONFIGDIR doesn't come from outside. onnxruntime's half (Whisper's VAD) went
+with Whisper (#584)."""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+from isolation import snapshot
+
+pytestmark = pytest.mark.criterion("G1-13")
+
+# The product's paths for both libraries: diarize.load's matplotlib (through pyannote.audio's tasks, imported inside
+# _quiet() as load does) and P11's VAD path, which starts onnxruntime's environment and runs a session.
+BOTH = """
+import json
+import numpy
+from lmt import diarize
+diarize.scratch_matplotlib()
+with diarize._quiet():
+    import pyannote.audio.pipelines
+import matplotlib
+print(json.dumps(str(matplotlib.get_cachedir())))
+"""
+SCRATCH = """
+import json, os
+from lmt import diarize
+a, b = diarize.scratch_matplotlib(), diarize.scratch_matplotlib()
+print(json.dumps([str(a), str(b), os.environ.get("MPLCONFIGDIR"), a.is_dir()]))
+"""
+
+
+def run(code, tmp_path):
+    """The child's last stdout line as JSON, once it has exited 0, the four directories it was given, and its
+    stderr."""
+    dirs = home, tmp, xdg, work = [tmp_path / name for name in ("home", "tmp", "xdg", "work")]
+    for directory in dirs:
+        directory.mkdir()
+    env = {"PATH": os.environ["PATH"], "LANG": "C.UTF-8", "HOME": str(home), "TMPDIR": str(tmp),
+           "XDG_CACHE_HOME": str(xdg)}
+    r = subprocess.run([sys.executable, "-c", code], env=env, cwd=work, capture_output=True, text=True,
+                       check=False, timeout=600)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.splitlines()[-1]), dirs, r.stderr
+
+
+def test_neither_library_leaves_a_file(tmp_path):
+    cachedir, dirs, stderr = run(BOTH, tmp_path)
+    left = snapshot(*dirs)
+    assert left == {}, f"left after the run: {sorted(left)}"
+    assert Path(cachedir).resolve().is_relative_to(dirs[1].resolve()), f"matplotlib's directory: {cachedir}"
+    # The font list is always built here, so matplotlib's "building the font cache" warning prints unless its
+    # logger is quiet.
+    loud = [line for line in stderr.splitlines() if "matplotlib" in line.lower()]
+    assert not loud, f"matplotlib on stderr: {loud}"
+
+
+def test_the_scratch_directory_is_the_processs_own_and_goes_at_exit(tmp_path):
+    (a, b, variable, is_dir), (_home, tmp, _xdg, _work), _stderr = run(SCRATCH, tmp_path)
+    assert a == b == variable
+    assert is_dir
+    assert Path(a).parent == tmp
+    assert not Path(a).exists()
+    assert os.listdir(tmp) == []
+

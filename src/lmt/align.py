@@ -1,5 +1,6 @@
 """Alignment: words and turns into the transcript (design/architecture.md, "Pipeline";
-design/internal/g1-slice.md, S4). G2's live join reuses the rules."""
+design/internal/g1-slice.md, S4; turns-first, design/internal/g1-stage2.md, P12). G2's live join
+reuses the words-first rules."""
 
 from lmt.transcript import SCHEMA_VERSION, Segment, Speaker, Transcript, Turn, Word
 
@@ -58,32 +59,81 @@ def _rounded(words, d: int) -> list[Word]:
     return out
 
 
-def _speakers_of(words, turns) -> list:
-    """Each word's diarization speaker; with no turns, one speaker for all."""
-    if not turns:
-        return [None] * len(words)
-    earliest = min(turns, key=lambda t: t.start).speaker  # for a first word with no turn near it
-    out, previous = [], None
+def _clipped(turns, d: int) -> list[list]:
+    """P12 step 1: turns in whole milliseconds, clipped to [0, d], the empty ones dropped, ordered by
+    (start, end, index in the input). Each is [start, end, speaker]."""
+    out = []
+    for i, t in enumerate(turns or ()):
+        start, end = min(max(_ms(t.start), 0), d), min(max(_ms(t.end), 0), d)
+        if end > start:
+            out.append((start, end, i, t.speaker))
+    return [[start, end, speaker] for start, end, _, speaker in sorted(out)]
+
+
+def _place(words, turns) -> list[list[Word]]:
+    """P12 steps 2 and 3: each word to the turn holding its midpoint, overlapping it most; a stray word
+    to the nearest turn, which stretches to cover it. Ties go to the earlier turn."""
+    held = [[] for _ in turns]
+    strays = []
     for w in words:
-        speaker = assign_speaker(w, turns, previous)
-        previous = earliest if speaker is None else speaker
-        out.append(previous)
+        ws, we = _ms(w.start), _ms(w.end)
+        best = None  # (overlap, index)
+        for k, (start, end, _) in enumerate(turns):
+            if 2 * start <= ws + we < 2 * end and (best is None or min(we, end) - max(ws, start) > best[0]):
+                best = (min(we, end) - max(ws, start), k)
+        if best is None:
+            k = min((max(start - we, ws - end, 0), k) for k, (start, end, _) in enumerate(turns))[1]
+            strays.append((k, ws, we))
+        else:
+            k = best[1]
+        held[k].append(w)
+    for k, ws, we in strays:
+        turns[k][0], turns[k][1] = min(turns[k][0], ws), max(turns[k][1], we)
+    return held
+
+
+def _pieces(start: int, end: int, words) -> list:
+    """P12 step 6: a turn cut greedily before a word, at a word boundary, once a piece would pass
+    MAX_SEGMENT. Every piece holds a word. Each is (start, end, [words]), in milliseconds."""
+    pieces, held, reach = [], [], 0  # reach: the end of every word in the piece so far
+    for w in words:
+        ws, we = _ms(w.start), _ms(w.end)
+        if held and we - start > _ms(MAX_SEGMENT) and ws >= reach and ws > start:
+            pieces.append((start, ws, held))
+            start, held, reach = ws, [], 0
+        held.append(w)
+        reach = max(reach, we)
+    return pieces + [(start, end, held)]
+
+
+def _turns_first(words, turns) -> list:
+    """With turns (P12): each turn holding words is a segment, with its span and speaker."""
+    out = []
+    for (start, end, speaker), ws in zip(turns, _place(words, turns)):
+        if ws:
+            out += [(s / 1000, e / 1000, speaker, piece) for s, e, piece in _pieces(start, end, ws)]
     return out
+
+
+def _words_first(words) -> list:
+    """Without turns: runs of words, broken by `breaks`, all one speaker."""
+    runs = []
+    for w in words:
+        if not runs or breaks(runs[-1][-1], w, runs[-1][0].start):
+            runs.append([])
+        runs[-1].append(w)
+    return [(ws[0].start, max(w.end for w in ws), None, ws) for ws in runs]
 
 
 def build(words, turns: list[Turn] | None, *, duration_samples: int, source_file: str, models: dict,
           lmt_version: str) -> Transcript:
     d = duration_samples // 16  # ms at 16 kHz, rounded down so no time passes the audio's end
     words = _rounded(words, d)
-    ids = {}
-    runs = []  # [id, [words]]
-    for w, raw in zip(words, _speakers_of(words, turns)):
-        speaker = ids.setdefault(raw, f"S{len(ids) + 1}")
-        if not runs or runs[-1][0] != speaker or breaks(runs[-1][1][-1], w, runs[-1][1][0].start):
-            runs.append([speaker, []])
-        runs[-1][1].append(w)
-    segments = tuple(Segment(ws[0].start, max(w.end for w in ws), speaker, segment_text(ws), tuple(ws))
-                     for speaker, ws in runs)
+    turns = _clipped(turns, d)
+    runs = sorted(_turns_first(words, turns) if turns else _words_first(words), key=lambda r: r[0])
+    ids = {}  # speakers numbered by first appearance
+    segments = tuple(Segment(start, end, ids.setdefault(raw, f"S{len(ids) + 1}"), segment_text(ws), tuple(ws))
+                     for start, end, raw, ws in runs)
     speakers = tuple(Speaker(f"S{n}", f"Speaker {n}") for n in range(1, len(ids) + 1))
     return Transcript(SCHEMA_VERSION, lmt_version, {"file": source_file, "duration": d / 1000}, models,
                       speakers, segments)
