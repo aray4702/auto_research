@@ -64,3 +64,9 @@ button:focus-visible {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* lmt app's loading bar (G5) */
+#loading { display: flex; align-items: center; gap: 0.75em; margin: 0.5em 0 1em; }
+#loading[hidden] { display: none; }
+#loadbar { width: 16em; height: 0.8em; }
+#loadstage { color: #555; }

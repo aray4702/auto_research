@@ -41,6 +41,15 @@ def main(args):
         print("lmt: error: the fake failed", file=sys.stderr)
         return int(code)
     stem, out_dir = option(args, "-n"), Path(option(args, "-o"))
+    if os.environ.get("LMT_APP_CHILD") and "--jsonl" in args:  # lmt app's child protocol (lmt.live.command)
+        emit({"type": "loading", "stage": "engine", "engine": option(args, "--engine")})
+        emit({"type": "loading", "stage": "speakers"})
+        emit({"type": "ready"})
+        line = sys.stdin.readline().split()
+        if not line or line[0] != "go":
+            return 0
+        if len(line) > 1:
+            stem = line[1]
     emit({"type": "start", "schema_version": "1.0", "t": 0, "source": {"file": stem, "live": True},
           "models": MODELS})
     time.sleep(0.3)
