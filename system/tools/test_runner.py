@@ -105,6 +105,18 @@ class SettingsTest(unittest.TestCase):
             for cmd in never:  # a build runs a package's code; an unhashed install takes any package
                 self.assertFalse(allowed(cmd), f"{role}: {cmd}")
 
+    def test_the_criteria_merge_writes_only_for_writers(self):
+        # Denied in three runs a week (#319): every product role reads the spec and registry's states, and only a
+        # role with Write may name records and an --out file.
+        bare = "python3 -I .github/scripts/criteria.py --spec spec/acceptance.md --registry tests/criteria.toml"
+        out = f"{bare} --out tmp/criteria.json criteria-test-1.json"
+        for role, r in CONFIG["runner"]["roles"].items():
+            allow = runner.role_settings(CONFIG, role)["permissions"]["allow"]
+            prefixes = [a[len("Bash("):-len(":*)")] for a in allow if a.startswith("Bash(") and a.endswith(":*)")]
+            allowed = lambda cmd: f"Bash({cmd})" in allow or any(cmd == p or cmd.startswith(p + " ") for p in prefixes)
+            self.assertEqual(allowed(bare), r["product_tools"], role)
+            self.assertEqual(allowed(out), r["product_tools"] and "Write" in r["tools"], role)
+
     def test_every_role_may_list_a_commits_files(self):
         # A :* rule matches whole words, so git ls-files doesn't cover git ls-tree (#179).
         for role in CONFIG["runner"]["roles"]:

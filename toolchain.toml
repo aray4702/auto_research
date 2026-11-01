@@ -18,6 +18,9 @@ allow = [
   "Bash(uv run --frozen lmt:*)",  # writes only where -o/--out points; downloads only pinned models (#89)
   # G1-15's licence check: reads an install's site-packages and this file (#220).
   "Bash(python3 -I .github/scripts/check_licences.py:*)",
+  # The criteria merge on the spec and registry alone, to stdout: is the registry valid, and what state does each
+  # criterion start from (#319). Only this exact form, since --out writes any path the run names.
+  "Bash(python3 -I .github/scripts/criteria.py --spec spec/acceptance.md --registry tests/criteria.toml)",
 ]
 # Commands that change pyproject.toml, uv.lock or files the run names (#92). No ffmpeg or ffprobe here or
 # above: they read and write URLs and any path, so the product's tests run them instead.
@@ -30,6 +33,9 @@ allow_write = [
   # The product's own dataset tool: it downloads only the manifests' pinned URLs and writes only to the data
   # cache and the fixture paths (design/internal/g1-slice.md S1, #269).
   "Bash(uv run --frozen python -m lmt.eval.datasets:*)",
+  # The criteria merge on records a run wrote (pytest --criteria-out), writing criteria.json where --out
+  # points (#319). Standard library only; it reads the spec, the registry and the records named.
+  "Bash(python3 -I .github/scripts/criteria.py:*)",
 ]
 
 # The uv release CI's setup-uv steps and the README use. tests/test_toolchain.py and check_readme.py check both.
