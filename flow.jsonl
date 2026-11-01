@@ -111,3 +111,114 @@
 {"closed": "2026-10-29T05:58:00+00:00", "hours": 26.48, "idle_hours": 0.01, "idle_spans": [], "item": 108, "prs": [276], "stages": {"blocked": 25.68, "decision": 0.02, "merging": 0.01, "owner": 0.02, "queued": 0.02, "review": 0.03, "rework": 0.09, "running": 0.62}}
 {"closed": "2026-10-29T01:44:11+00:00", "hours": 22.25, "idle_hours": 0.04, "idle_spans": [], "item": 107, "prs": [217], "stages": {"blocked": 19.9, "decision": 1.04, "merging": 0.82, "queued": 0.23, "review": 0.02, "running": 0.25}}
 {"closed": "2026-10-28T23:18:34+00:00", "hours": 19.83, "idle_hours": 0.03, "idle_spans": [], "item": 106, "prs": [188], "stages": {"blocked": 15.07, "decision": 1.33, "merging": 0.05, "owner": 2.35, "queued": 0.07, "running": 0.96}}
+{"closed": "2026-11-01T01:08:52+00:00", "hours": 0.01, "idle_hours": 0.0, "idle_spans": [], "item": 609, "prs": [611], "stages": {"queued": 0.0, "running": 0.01}}
+{"closed": "2026-11-01T00:44:30+00:00", "hours": 0.7, "idle_hours": 0.7, "idle_spans": [["2026-11-01T00:02:31+00:00", "2026-11-01T00:44:30+00:00"]], "item": 603, "prs": [607], "stages": {"queued": 0.7, "review": 0.0}}
+{"closed": "2026-11-01T01:10:36+00:00", "hours": 1.19, "idle_hours": 0.64, "idle_spans": [["2026-11-01T00:32:22+00:00", "2026-11-01T01:10:36+00:00"]], "item": 602, "prs": [612], "stages": {"decision": 0.55, "queued": 0.63, "review": 0.0, "triage": 0.0}}
+{"closed": "2026-11-01T00:51:50+00:00", "hours": 0.88, "idle_hours": 0.33, "idle_spans": [], "item": 601, "prs": [608], "stages": {"queued": 0.32, "review": 0.0, "triage": 0.56}}
+{"closed": "2026-11-01T00:00:18+00:00", "hours": 0.19, "idle_hours": 0.0, "idle_spans": [], "item": 599, "prs": [600], "stages": {"decision": 0.09, "queued": 0.0, "review": 0.01, "running": 0.08}}
+{"closed": "2026-11-01T00:09:51+00:00", "hours": 2.08, "idle_hours": 0.16, "idle_spans": [], "item": 593, "prs": [594], "stages": {"queued": 0.01, "review": 0.61, "rework": 0.02, "running": 1.44}}
+{"closed": "2026-10-31T22:03:31+00:00", "hours": 0.86, "idle_hours": 0.05, "idle_spans": [], "item": 588, "prs": [589], "stages": {"decision": 0.15, "merging": 0.01, "queued": 0.0, "review": 0.07, "rework": 0.02, "running": 0.61}}
+{"closed": "2026-10-31T21:31:33+00:00", "hours": 0.43, "idle_hours": 0.0, "idle_spans": [], "item": 585, "prs": [587], "stages": {"decision": 0.39, "queued": 0.01, "running": 0.02}}
+{"closed": "2026-10-31T23:38:11+00:00", "hours": 2.54, "idle_hours": 0.0, "idle_spans": [], "item": 584, "prs": [598], "stages": {"blocked": 2.53, "queued": 0.0}}
+{"closed": "2026-10-31T21:31:46+00:00", "hours": 0.53, "idle_hours": 0.0, "idle_spans": [], "item": 581, "prs": [582], "stages": {"decision": 0.37, "merging": 0.01, "queued": 0.0, "review": 0.03, "running": 0.11}}
+{"closed": "2026-10-31T23:47:50+00:00", "hours": 2.81, "idle_hours": 0.0, "idle_spans": [], "item": 579, "prs": [592], "stages": {"blocked": 2.81, "queued": 0.0}}
+{"closed": "2026-11-01T01:11:09+00:00", "hours": 4.21, "idle_hours": 1.19, "idle_spans": [["2026-10-31T23:59:59+00:00", "2026-11-01T01:11:09+00:00"]], "item": 577, "prs": [], "stages": {"blocked": 0.95, "queued": 3.09, "running": 0.17}}
+{"closed": "2026-11-01T00:05:57+00:00", "hours": 3.12, "idle_hours": 0.0, "idle_spans": [], "item": 576, "prs": [591], "stages": {"blocked": 0.73, "decision": 1.14, "queued": 0.0, "review": 0.41, "rework": 0.02, "running": 0.82}}
+{"closed": "2026-10-31T23:34:49+00:00", "hours": 2.6, "idle_hours": 0.04, "idle_spans": [], "item": 575, "prs": [596], "stages": {"blocked": 0.24, "decision": 0.72, "queued": 0.06, "running": 1.58}}
+{"closed": "2026-10-31T21:09:47+00:00", "hours": 0.19, "idle_hours": 0.0, "idle_spans": [], "item": 574, "prs": [583], "stages": {"merging": 0.01, "queued": 0.01, "review": 0.03, "running": 0.14}}
+{"closed": "2026-10-31T21:55:36+00:00", "hours": 0.95, "idle_hours": 0.08, "idle_spans": [], "item": 573, "prs": [586, 595], "stages": {"queued": 0.03, "review": 0.81, "running": 0.12}}
+{"closed": "2026-10-31T20:57:02+00:00", "hours": 1.99, "idle_hours": 0.01, "idle_spans": [], "item": 570, "prs": [572], "stages": {"owner": 0.06, "queued": 0.01, "running": 1.92}}
+{"closed": "2026-10-31T18:56:27+00:00", "hours": 2.81, "idle_hours": 0.02, "idle_spans": [], "item": 565, "prs": [569], "stages": {"queued": 1.48, "review": 0.02, "rework": 0.18, "running": 1.12}}
+{"closed": "2026-10-31T15:48:00+00:00", "hours": 0.13, "idle_hours": 0.0, "idle_spans": [], "item": 560, "prs": [], "stages": {"queued": 0.0, "running": 0.12}}
+{"closed": "2026-10-31T17:45:31+00:00", "hours": 2.27, "idle_hours": 0.03, "idle_spans": [], "item": 558, "prs": [566], "stages": {"decision": 0.98, "queued": 0.04, "running": 1.24}}
+{"closed": "2026-10-31T14:42:23+00:00", "hours": 8.98, "idle_hours": 8.98, "idle_spans": [["2026-10-31T05:43:47+00:00", "2026-10-31T14:42:23+00:00"]], "item": 529, "prs": [543], "stages": {"queued": 8.49, "review": 0.48}}
+{"closed": "2026-10-31T05:32:35+00:00", "hours": 0.3, "idle_hours": 0.3, "idle_spans": [], "item": 525, "prs": [527], "stages": {"queued": 0.26, "review": 0.04}}
+{"closed": "2026-10-31T05:08:45+00:00", "hours": 0.73, "idle_hours": 0.73, "idle_spans": [["2026-10-31T04:24:46+00:00", "2026-10-31T05:08:45+00:00"]], "item": 521, "prs": [523], "stages": {"queued": 0.12, "review": 0.61}}
+{"closed": "2026-10-30T23:03:26+00:00", "hours": 0.24, "idle_hours": 0.04, "idle_spans": [], "item": 508, "prs": [509], "stages": {"queued": 0.2, "review": 0.04}}
+{"closed": "2026-10-31T07:13:58+00:00", "hours": 29.36, "idle_hours": 0.0, "idle_spans": [], "item": 445, "prs": [533], "stages": {"blocked": 29.36, "queued": 0.0}}
+{"closed": "2026-10-31T07:13:54+00:00", "hours": 29.36, "idle_hours": 0.0, "idle_spans": [], "item": 444, "prs": [532], "stages": {"blocked": 29.36, "queued": 0.0}}
+{"closed": "2026-10-30T22:49:25+00:00", "hours": 20.95, "idle_hours": 0.0, "idle_spans": [], "item": 443, "prs": [505], "stages": {"blocked": 20.95, "queued": 0.0}}
+{"closed": "2026-10-30T23:54:18+00:00", "hours": 22.03, "idle_hours": 0.0, "idle_spans": [], "item": 442, "prs": [507], "stages": {"blocked": 22.03, "queued": 0.0}}
+{"closed": "2026-10-31T02:12:44+00:00", "hours": 24.34, "idle_hours": 0.0, "idle_spans": [], "item": 441, "prs": [506], "stages": {"blocked": 24.34, "queued": 0.0}}
+{"closed": "2026-10-30T20:38:35+00:00", "hours": 18.77, "idle_hours": 0.0, "idle_spans": [], "item": 440, "prs": [501], "stages": {"blocked": 18.77, "queued": 0.0}}
+{"closed": "2026-10-30T22:12:59+00:00", "hours": 20.35, "idle_hours": 0.0, "idle_spans": [], "item": 439, "prs": [504], "stages": {"blocked": 20.35, "queued": 0.0}}
+{"closed": "2026-10-30T11:13:06+00:00", "hours": 9.35, "idle_hours": 0.0, "idle_spans": [], "item": 438, "prs": [491], "stages": {"blocked": 9.35, "queued": 0.0}}
+{"closed": "2026-10-30T10:13:03+00:00", "hours": 8.35, "idle_hours": 0.0, "idle_spans": [], "item": 437, "prs": [489], "stages": {"blocked": 8.35, "queued": 0.0}}
+{"closed": "2026-10-30T08:12:52+00:00", "hours": 6.35, "idle_hours": 3.58, "idle_spans": [["2026-10-30T04:38:16+00:00", "2026-10-30T08:12:52+00:00"]], "item": 436, "prs": [473], "stages": {"blocked": 2.05, "queued": 0.61, "review": 3.63, "running": 0.05}}
+{"closed": "2026-10-30T20:38:24+00:00", "hours": 18.77, "idle_hours": 0.0, "idle_spans": [], "item": 435, "prs": [498], "stages": {"blocked": 18.77, "queued": 0.0}}
+{"closed": "2026-10-30T15:34:48+00:00", "hours": 13.71, "idle_hours": 10.94, "idle_spans": [["2026-10-30T04:38:16+00:00", "2026-10-30T15:34:48+00:00"]], "item": 434, "prs": [468], "stages": {"blocked": 1.84, "decision": 0.6, "queued": 0.03, "review": 11.03, "running": 0.2}}
+{"closed": "2026-10-30T18:01:16+00:00", "hours": 16.16, "idle_hours": 0.0, "idle_spans": [], "item": 433, "prs": [469], "stages": {"blocked": 1.84, "decision": 14.02, "queued": 0.02, "running": 0.27}}
+{"closed": "2026-10-30T09:07:56+00:00", "hours": 7.27, "idle_hours": 0.0, "idle_spans": [], "item": 432, "prs": [476], "stages": {"blocked": 7.27, "queued": 0.0}}
+{"closed": "2026-10-30T17:28:32+00:00", "hours": 15.61, "idle_hours": 0.0, "idle_spans": [], "item": 431, "prs": [495], "stages": {"blocked": 15.61, "queued": 0.0}}
+{"closed": "2026-10-30T03:55:03+00:00", "hours": 2.05, "idle_hours": 0.0, "idle_spans": [], "item": 430, "prs": [467], "stages": {"blocked": 1.85, "merging": 0.01, "queued": 0.1, "review": 0.02, "running": 0.08}}
+{"closed": "2026-10-30T03:12:29+00:00", "hours": 1.34, "idle_hours": 0.0, "idle_spans": [], "item": 429, "prs": [455], "stages": {"blocked": 0.9, "merging": 0.01, "queued": 0.18, "review": 0.02, "running": 0.24}}
+{"closed": "2026-10-30T03:37:21+00:00", "hours": 1.76, "idle_hours": 0.0, "idle_spans": [], "item": 428, "prs": [456], "stages": {"blocked": 1.04, "merging": 0.01, "queued": 0.23, "review": 0.05, "running": 0.43}}
+{"closed": "2026-10-30T03:42:04+00:00", "hours": 1.84, "idle_hours": 0.0, "idle_spans": [], "item": 427, "prs": [461], "stages": {"merging": 0.02, "queued": 1.6, "review": 0.13, "running": 0.09}}
+{"closed": "2026-10-30T03:45:19+00:00", "hours": 1.89, "idle_hours": 0.0, "idle_spans": [], "item": 426, "prs": [465], "stages": {"merging": 0.01, "queued": 1.77, "review": 0.03, "running": 0.08}}
+{"closed": "2026-10-30T08:43:17+00:00", "hours": 6.86, "idle_hours": 4.08, "idle_spans": [["2026-10-30T04:38:16+00:00", "2026-10-30T08:43:17+00:00"]], "item": 425, "prs": [475], "stages": {"queued": 6.12, "review": 0.74}}
+{"closed": "2026-10-30T03:40:43+00:00", "hours": 1.82, "idle_hours": 0.0, "idle_spans": [], "item": 424, "prs": [459], "stages": {"merging": 0.01, "queued": 1.47, "review": 0.25, "running": 0.09}}
+{"closed": "2026-10-31T06:46:35+00:00", "hours": 29.04, "idle_hours": 0.0, "idle_spans": [], "item": 423, "prs": [535], "stages": {"blocked": 29.04, "queued": 0.0}}
+{"closed": "2026-10-31T05:08:27+00:00", "hours": 27.41, "idle_hours": 0.0, "idle_spans": [], "item": 421, "prs": [524], "stages": {"blocked": 27.4, "queued": 0.0}}
+{"closed": "2026-10-31T04:52:40+00:00", "hours": 27.14, "idle_hours": 0.0, "idle_spans": [], "item": 420, "prs": [522], "stages": {"blocked": 27.14, "queued": 0.0}}
+{"closed": "2026-10-31T04:48:52+00:00", "hours": 27.08, "idle_hours": 0.0, "idle_spans": [], "item": 419, "prs": [520], "stages": {"blocked": 27.08, "queued": 0.0}}
+{"closed": "2026-10-30T11:12:44+00:00", "hours": 9.48, "idle_hours": 0.0, "idle_spans": [], "item": 418, "prs": [490], "stages": {"blocked": 9.48, "queued": 0.0}}
+{"closed": "2026-10-30T10:41:42+00:00", "hours": 8.96, "idle_hours": 0.0, "idle_spans": [], "item": 417, "prs": [488], "stages": {"blocked": 8.96, "queued": 0.0}}
+{"closed": "2026-10-30T10:21:13+00:00", "hours": 8.62, "idle_hours": 0.0, "idle_spans": [], "item": 416, "prs": [486], "stages": {"blocked": 8.62, "queued": 0.0}}
+{"closed": "2026-10-30T17:20:47+00:00", "hours": 15.61, "idle_hours": 0.0, "idle_spans": [], "item": 415, "prs": [485], "stages": {"blocked": 15.61, "queued": 0.0}}
+{"closed": "2026-10-30T09:40:54+00:00", "hours": 7.95, "idle_hours": 0.0, "idle_spans": [], "item": 414, "prs": [482], "stages": {"blocked": 7.95, "queued": 0.0}}
+{"closed": "2026-10-30T09:41:56+00:00", "hours": 7.97, "idle_hours": 0.0, "idle_spans": [], "item": 413, "prs": [484], "stages": {"blocked": 7.97, "queued": 0.0}}
+{"closed": "2026-10-30T09:09:20+00:00", "hours": 7.42, "idle_hours": 0.0, "idle_spans": [], "item": 412, "prs": [471], "stages": {"blocked": 2.01, "queued": 0.19, "review": 0.04, "rework": 4.56, "running": 0.63}}
+{"closed": "2026-10-30T04:33:12+00:00", "hours": 2.82, "idle_hours": 0.0, "idle_spans": [], "item": 411, "prs": [470], "stages": {"blocked": 2.01, "merging": 0.01, "queued": 0.16, "review": 0.03, "running": 0.61}}
+{"closed": "2026-10-30T09:09:55+00:00", "hours": 7.43, "idle_hours": 0.0, "idle_spans": [], "item": 410, "prs": [477], "stages": {"blocked": 7.43, "queued": 0.0}}
+{"closed": "2026-10-30T18:36:42+00:00", "hours": 16.88, "idle_hours": 2.68, "idle_spans": [["2026-10-30T15:56:05+00:00", "2026-10-30T18:36:42+00:00"]], "item": 409, "prs": [452, 500], "stages": {"blocked": 0.39, "merging": 12.29, "queued": 2.0, "review": 0.93, "rework": 0.15, "running": 1.12}}
+{"closed": "2026-10-30T09:08:28+00:00", "hours": 7.41, "idle_hours": 0.0, "idle_spans": [], "item": 408, "prs": [478], "stages": {"blocked": 7.41, "queued": 0.0}}
+{"closed": "2026-10-30T03:44:14+00:00", "hours": 2.01, "idle_hours": 0.0, "idle_spans": [], "item": 407, "prs": [448], "stages": {"merging": 0.03, "queued": 0.12, "review": 1.65, "running": 0.21}}
+{"closed": "2026-10-30T02:07:22+00:00", "hours": 0.39, "idle_hours": 0.0, "idle_spans": [], "item": 406, "prs": [450], "stages": {"decision": 0.07, "merging": 0.01, "queued": 0.02, "review": 0.05, "running": 0.25}}
+{"closed": "2026-10-30T03:29:48+00:00", "hours": 2.24, "idle_hours": 0.0, "idle_spans": [], "item": 402, "prs": [403], "stages": {"blocked": 0.06, "decision": 0.2, "queued": 0.0, "review": 0.1, "rework": 0.46, "running": 1.42}}
+{"closed": "2026-10-30T04:28:37+00:00", "hours": 5.23, "idle_hours": 0.0, "idle_spans": [], "item": 391, "prs": [400], "stages": {"blocked": 3.8, "decision": 0.04, "queued": 0.0, "running": 1.39}}
+{"closed": "2026-10-30T00:44:44+00:00", "hours": 1.49, "idle_hours": 0.0, "idle_spans": [], "item": 390, "prs": [399], "stages": {"blocked": 0.53, "queued": 0.18, "running": 0.78}}
+{"closed": "2026-10-29T23:59:40+00:00", "hours": 0.74, "idle_hours": 0.0, "idle_spans": [], "item": 389, "prs": [397], "stages": {"merging": 0.01, "queued": 0.18, "review": 0.01, "rework": 0.08, "running": 0.45}}
+{"closed": "2026-10-29T23:31:27+00:00", "hours": 0.27, "idle_hours": 0.0, "idle_spans": [], "item": 388, "prs": [396], "stages": {"merging": 0.01, "queued": 0.05, "review": 0.06, "running": 0.15}}
+{"closed": "2026-10-29T23:47:07+00:00", "hours": 0.54, "idle_hours": 0.0, "idle_spans": [], "item": 387, "prs": [398], "stages": {"decision": 0.01, "merging": 0.02, "queued": 0.19, "review": 0.11, "running": 0.21}}
+{"closed": "2026-10-30T00:17:13+00:00", "hours": 1.85, "idle_hours": 0.0, "idle_spans": [], "item": 384, "prs": [394], "stages": {"blocked": 0.67, "queued": 0.0, "review": 0.3, "running": 0.87}}
+{"closed": "2026-10-29T23:15:18+00:00", "hours": 2.08, "idle_hours": 0.3, "idle_spans": [], "item": 372, "prs": [], "stages": {"queued": 1.87, "running": 0.16, "triage": 0.05}}
+{"closed": "2026-10-29T23:21:31+00:00", "hours": 2.32, "idle_hours": 0.3, "idle_spans": [], "item": 371, "prs": [381], "stages": {"blocked": 0.68, "merging": 0.01, "queued": 0.25, "review": 0.09, "running": 1.28}}
+{"closed": "2026-10-29T20:08:36+00:00", "hours": 2.54, "idle_hours": 0.0, "idle_spans": [], "item": 355, "prs": [357], "stages": {"merging": 0.23, "queued": 0.12, "review": 0.29, "rework": 0.05, "running": 1.86}}
+{"closed": "2026-10-29T19:23:17+00:00", "hours": 1.93, "idle_hours": 0.0, "idle_spans": [], "item": 351, "prs": [358], "stages": {"merging": 1.0, "queued": 0.27, "review": 0.28, "running": 0.38}}
+{"closed": "2026-10-29T23:15:16+00:00", "hours": 5.82, "idle_hours": 0.0, "idle_spans": [], "item": 350, "prs": [], "stages": {"blocked": 5.82, "queued": 0.0}}
+{"closed": "2026-10-29T23:15:13+00:00", "hours": 5.82, "idle_hours": 0.0, "idle_spans": [], "item": 349, "prs": [], "stages": {"blocked": 5.74, "queued": 0.0, "running": 0.09}}
+{"closed": "2026-10-29T21:44:47+00:00", "hours": 4.32, "idle_hours": 0.0, "idle_spans": [], "item": 348, "prs": [474], "stages": {"blocked": 4.31, "queued": 0.0, "running": 0.01}}
+{"closed": "2026-10-29T21:59:17+00:00", "hours": 4.56, "idle_hours": 0.02, "idle_spans": [], "item": 347, "prs": [376], "stages": {"blocked": 2.13, "merging": 0.23, "queued": 1.62, "running": 0.57}}
+{"closed": "2026-10-29T22:20:56+00:00", "hours": 4.92, "idle_hours": 0.24, "idle_spans": [], "item": 346, "prs": [380], "stages": {"blocked": 3.0, "merging": 0.15, "queued": 1.18, "review": 0.24, "running": 0.36}}
+{"closed": "2026-10-30T00:31:05+00:00", "hours": 7.09, "idle_hours": 0.0, "idle_spans": [], "item": 345, "prs": [364], "stages": {"blocked": 1.41, "decision": 1.93, "queued": 1.37, "running": 2.39}}
+{"closed": "2026-10-29T20:59:26+00:00", "hours": 3.57, "idle_hours": 0.0, "idle_spans": [], "item": 344, "prs": [363], "stages": {"blocked": 1.01, "merging": 0.56, "queued": 1.23, "running": 0.76}}
+{"closed": "2026-10-30T01:07:55+00:00", "hours": 7.71, "idle_hours": 0.03, "idle_spans": [], "item": 343, "prs": [368], "stages": {"blocked": 3.11, "decision": 2.8, "merging": 0.01, "queued": 0.03, "review": 0.02, "running": 1.75}}
+{"closed": "2026-10-30T00:17:20+00:00", "hours": 6.87, "idle_hours": 0.32, "idle_spans": [], "item": 342, "prs": [393], "stages": {"merging": 0.02, "queued": 5.64, "review": 0.24, "running": 0.98}}
+{"closed": "2026-10-29T20:22:36+00:00", "hours": 2.96, "idle_hours": 0.0, "idle_spans": [], "item": 341, "prs": [362], "stages": {"merging": 0.2, "queued": 2.21, "review": 0.33, "running": 0.22}}
+{"closed": "2026-10-29T18:22:48+00:00", "hours": 0.97, "idle_hours": 0.0, "idle_spans": [], "item": 340, "prs": [356], "stages": {"merging": 0.4, "queued": 0.1, "review": 0.23, "running": 0.23}}
+{"closed": "2026-10-29T18:01:46+00:00", "hours": 0.67, "idle_hours": 0.0, "idle_spans": [], "item": 339, "prs": [353], "stages": {"merging": 0.26, "queued": 0.13, "review": 0.24, "running": 0.04}}
+{"closed": "2026-10-29T19:43:16+00:00", "hours": 2.76, "idle_hours": 0.0, "idle_spans": [], "item": 336, "prs": [338], "stages": {"decision": 1.71, "merging": 0.03, "queued": 0.0, "review": 0.42, "rework": 0.15, "running": 0.15, "triage": 0.3}}
+{"closed": "2026-10-29T17:12:24+00:00", "hours": 0.41, "idle_hours": 0.0, "idle_spans": [], "item": 331, "prs": [337], "stages": {"decision": 0.25, "queued": 0.0, "running": 0.16}}
+{"closed": "2026-10-29T17:51:33+00:00", "hours": 1.07, "idle_hours": 0.0, "idle_spans": [], "item": 329, "prs": [], "stages": {"owner": 0.96, "queued": 0.0, "running": 0.1}}
+{"closed": "2026-10-29T17:43:40+00:00", "hours": 0.94, "idle_hours": 0.0, "idle_spans": [], "item": 328, "prs": [354], "stages": {"decision": 0.12, "merging": 0.04, "owner": 0.69, "queued": 0.0, "review": 0.01, "running": 0.08, "triage": 0.0}}
+{"closed": "2026-10-29T16:51:42+00:00", "hours": 2.26, "idle_hours": 0.0, "idle_spans": [], "item": 326, "prs": [], "stages": {"decision": 2.26, "queued": 0.0}}
+{"closed": "2026-10-29T19:30:39+00:00", "hours": 4.91, "idle_hours": 0.0, "idle_spans": [], "item": 325, "prs": [359], "stages": {"decision": 4.78, "merging": 0.01, "queued": 0.0, "review": 0.03, "running": 0.08}}
+{"closed": "2026-10-29T20:42:57+00:00", "hours": 6.12, "idle_hours": 0.0, "idle_spans": [], "item": 324, "prs": [360], "stages": {"decision": 4.95, "merging": 0.88, "queued": 0.0, "review": 0.13, "running": 0.15}}
+{"closed": "2026-10-29T16:48:29+00:00", "hours": 8.7, "idle_hours": 0.0, "idle_spans": [], "item": 302, "prs": [308], "stages": {"decision": 8.21, "owner": 0.0, "queued": 0.0, "review": 0.26, "rework": 0.04, "running": 0.15, "triage": 0.04}}
+{"closed": "2026-10-29T17:21:33+00:00", "hours": 10.26, "idle_hours": 0.08, "idle_spans": [], "item": 289, "prs": [304], "stages": {"decision": 2.33, "merging": 0.04, "queued": 0.93, "review": 0.22, "rework": 6.06, "running": 0.68}}
+{"closed": "2026-10-31T07:13:51+00:00", "hours": 55.82, "idle_hours": 0.0, "idle_spans": [], "item": 214, "prs": [531], "stages": {"blocked": 55.82, "queued": 0.0}}
+{"closed": "2026-10-30T03:42:12+00:00", "hours": 28.3, "idle_hours": 0.0, "idle_spans": [], "item": 213, "prs": [462], "stages": {"blocked": 26.47, "merging": 0.02, "queued": 1.6, "review": 0.13, "running": 0.07}}
+{"closed": "2026-10-30T03:54:17+00:00", "hours": 28.5, "idle_hours": 0.0, "idle_spans": [], "item": 212, "prs": [466], "stages": {"blocked": 28.3, "merging": 0.02, "queued": 0.02, "review": 0.01, "running": 0.15}}
+{"closed": "2026-10-30T02:54:01+00:00", "hours": 27.5, "idle_hours": 0.0, "idle_spans": [], "item": 211, "prs": [451], "stages": {"blocked": 26.47, "queued": 0.09, "running": 0.93}}
+{"closed": "2026-10-30T02:45:45+00:00", "hours": 27.36, "idle_hours": 0.0, "idle_spans": [], "item": 210, "prs": [453], "stages": {"blocked": 26.48, "queued": 0.25, "running": 0.64}}
+{"closed": "2026-10-31T15:28:08+00:00", "hours": 64.07, "idle_hours": 4.09, "idle_spans": [["2026-10-30T04:38:16+00:00", "2026-10-30T08:43:52+00:00"]], "item": 209, "prs": [], "stages": {"blocked": 26.48, "owner": 30.7, "queued": 6.85, "running": 0.04}}
+{"closed": "2026-10-30T03:41:56+00:00", "hours": 28.3, "idle_hours": 0.0, "idle_spans": [], "item": 208, "prs": [460], "stages": {"blocked": 26.1, "merging": 0.01, "queued": 1.51, "review": 0.19, "running": 0.49}}
+{"closed": "2026-10-31T05:12:55+00:00", "hours": 56.31, "idle_hours": 0.0, "idle_spans": [], "item": 171, "prs": [519], "stages": {"blocked": 56.31, "queued": 0.0}}
+{"closed": "2026-10-30T03:44:21+00:00", "hours": 30.84, "idle_hours": 0.0, "idle_spans": [], "item": 170, "prs": [463], "stages": {"blocked": 28.84, "merging": 0.02, "queued": 1.8, "review": 0.07, "running": 0.11}}
+{"closed": "2026-10-31T04:14:11+00:00", "hours": 55.34, "idle_hours": 0.0, "idle_spans": [], "item": 169, "prs": [516], "stages": {"blocked": 55.34, "queued": 0.0}}
+{"closed": "2026-10-30T03:32:18+00:00", "hours": 30.64, "idle_hours": 0.0, "idle_spans": [], "item": 168, "prs": [457], "stages": {"blocked": 28.85, "decision": 0.35, "queued": 0.68, "review": 0.02, "running": 0.74}}
+{"closed": "2026-10-30T09:40:43+00:00", "hours": 36.79, "idle_hours": 0.0, "idle_spans": [], "item": 167, "prs": [481], "stages": {"blocked": 36.79, "queued": 0.0}}
+{"closed": "2026-10-30T09:08:39+00:00", "hours": 36.26, "idle_hours": 0.0, "idle_spans": [], "item": 166, "prs": [479], "stages": {"blocked": 36.25, "queued": 0.0}}
+{"closed": "2026-10-30T09:08:49+00:00", "hours": 36.26, "idle_hours": 0.0, "idle_spans": [], "item": 165, "prs": [480], "stages": {"blocked": 36.26, "queued": 0.0}}
+{"closed": "2026-10-30T08:42:42+00:00", "hours": 35.83, "idle_hours": 0.0, "idle_spans": [], "item": 164, "prs": [449], "stages": {"blocked": 28.41, "merging": 4.07, "queued": 0.01, "review": 0.17, "rework": 0.25, "running": 2.91}}
+{"closed": "2026-10-29T20:11:58+00:00", "hours": 39.1, "idle_hours": 0.08, "idle_spans": [], "item": 123, "prs": [], "stages": {"blocked": 27.81, "decision": 7.51, "queued": 1.31, "running": 2.47}}
