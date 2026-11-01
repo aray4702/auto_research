@@ -122,6 +122,12 @@ licence = "Apache-2.0 AND BSD-3-Clause"
 source = "https://pypi.org/project/python-dateutil/3.0.0/ (python_dateutil-3.0.0.dist-info/licenses/LICENSE)"
 
 [[licences.override]]
+distribution = "rustymimi"
+version = "0.4.1"
+licence = "MIT OR Apache-2.0"
+source = "https://pypi.org/project/rustymimi/0.4.1/ (rustymimi-0.4.1.dist-info/METADATA: License: MIT/Apache-2.0)"
+
+[[licences.override]]
 distribution = "scipy"
 version = "1.17.1"
 licence = "BSD-3-Clause"
@@ -138,6 +144,12 @@ distribution = "soundfile"
 version = "0.14.0"
 licence = "BSD-3-Clause"
 source = "https://pypi.org/project/soundfile/0.14.0/ (soundfile-0.14.0.dist-info/LICENSE)"
+
+[[licences.override]]
+distribution = "sphn"
+version = "0.2.1"
+licence = "Apache-2.0"
+source = "https://pypi.org/project/sphn/0.2.1/ (sphn-0.2.1.dist-info/licenses/LICENSE, the Apache License 2.0)"
 
 [[licences.override]]
 distribution = "sympy"
@@ -344,32 +356,6 @@ licence = "LGPL-3.0-or-later OR GPL-2.0-or-later"
 platforms = ["linux-x86_64"]
 source = "https://www.gnu.org/software/libunistring/manual/libunistring.html#Licenses"
 
-# ctranslate2 4.8.4: its own library, with oneDNN (Apache-2.0) and Intel MKL linked in on Linux (the
-# strings "dnnl_version" and "Intel(R) oneAPI Math Kernel" in the binary), and spdlog (MIT) on both.
-[[licences.library]]
-distribution = "ctranslate2"
-files = "ctranslate2.libs/libctranslate2-*"
-library = "CTranslate2, with oneDNN and Intel MKL"
-licence = "MIT AND Apache-2.0 AND LicenseRef-Intel-Simplified-Software-License"
-platforms = ["linux-x86_64"]
-source = "https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE, https://github.com/uxlfoundation/oneDNN/blob/main/LICENSE, https://www.intel.com/content/www/us/en/developer/articles/license/onemkl-license-faq.html"
-
-[[licences.library]]
-distribution = "ctranslate2"
-files = "ctranslate2/.dylibs/libctranslate2*"
-library = "CTranslate2"
-licence = "MIT"
-platforms = ["macos-arm64"]
-source = "https://github.com/OpenNMT/CTranslate2/blob/master/LICENSE"
-
-[[licences.library]]
-distribution = "ctranslate2"
-files = "ctranslate2.libs/libgomp-*"
-library = "GCC's OpenMP runtime"
-licence = "GPL-3.0-or-later WITH GCC-exception-3.1"
-platforms = ["linux-x86_64"]
-source = "https://gcc.gnu.org/onlinedocs/libgomp/Library-Index.html"
-
 # numpy 2.4.6 and scipy 1.17.1: OpenBLAS (with LAPACK) and the GCC runtimes, per each wheel's LICENSE.txt.
 [[licences.library]]
 distribution = "numpy"
@@ -443,13 +429,15 @@ licence = "Apache-2.0 WITH LLVM-exception"
 platforms = ["macos-arm64"]
 source = "https://github.com/llvm/llvm-project/blob/main/openmp/LICENSE.TXT"
 
+# mlx 0.26.5 (Kyutai's engine, G4): MLX's own library, which the mlx-metal wheel installs into mlx/lib/;
+# mlx.metallib beside it is its compiled Metal kernels.
 [[licences.library]]
-distribution = "onnxruntime"
-files = "onnxruntime/capi/*onnxruntime*"
-library = "ONNX Runtime"
+distribution = "mlx-metal"
+files = "mlx/lib/libmlx.dylib"
+library = "MLX"
 licence = "MIT"
-platforms = ["linux-x86_64", "macos-arm64"]
-source = "https://github.com/microsoft/onnxruntime/blob/main/LICENSE"
+platforms = ["macos-arm64"]
+source = "https://github.com/ml-explore/mlx/blob/v0.26.5/LICENSE (mlx-0.26.5.dist-info/licenses/LICENSE)"
 
 # pillow 13.0.0: per pillow-13.0.0.dist-info/licenses/LICENSE, or upstream's where that file is stale.
 [[licences.library]]

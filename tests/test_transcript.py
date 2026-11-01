@@ -40,8 +40,8 @@ class TranscriptTest(unittest.TestCase):
         self.assertEqual(list(doc["speakers"][0]), ["id", "label"])
 
     def test_version(self):
-        self.assertEqual(SCHEMA_VERSION, "1.1")
-        self.assertEqual(to_dict(two_speakers())["schema_version"], "1.1")
+        self.assertEqual(SCHEMA_VERSION, "1.2")
+        self.assertEqual(to_dict(two_speakers())["schema_version"], "1.2")
 
     def test_document_is_a_copy(self):
         t = two_speakers()
