@@ -42,3 +42,4 @@
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: gh issue", "level": "builder", "title": "Recurring permission denial: Bash: gh issue"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: git commit", "level": "builder", "title": "Recurring permission denial: Bash: git commit"}
 {"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: git reset", "level": "builder", "title": "Recurring permission denial: Bash: git reset"}
+{"at": "2026-11-01T15:30:03+00:00", "key": "denial:Bash: git restore", "level": "builder", "title": "Recurring permission denial: Bash: git restore"}
