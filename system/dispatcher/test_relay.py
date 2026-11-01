@@ -9,7 +9,7 @@ from system.tools import post
 
 NOW = datetime(2026, 10, 28, 1, 0, tzinfo=timezone.utc)
 OWNER, STRANGER = "111", "999"
-IDENTITY = {"repo": "aray4702/auto_research", "owner_login": "aray4702", "escalation": {
+IDENTITY = {"repo": "aray4702/local_meeting_transcriber", "owner_login": "aray4702", "escalation": {
     "keychain_account": "aray4702", "keychain_service": "auto_research.escalation-webhook",
     "discord_bot_keychain_service": "auto_research_relay.discord-bot", "discord_guild_id": "5",
     "discord_channel_id": "6", "owner_discord_user_id": OWNER}}
@@ -78,7 +78,7 @@ class DecideTest(unittest.TestCase):
 
 class RunTest(unittest.TestCase):
     def run_relay(self, handled, channel, held=(67,), dry_run=False, comments=(), on_audit=None):
-        store, gh = mock.Mock(), mock.Mock(repo="aray4702/auto_research")
+        store, gh = mock.Mock(), mock.Mock(repo="aray4702/local_meeting_transcriber")
         store.read.return_value = list(handled)
         gh.api.side_effect = lambda method, path, body=None, paginate=False: (
             list(comments) if method == "GET" and "/comments" in path else
@@ -106,7 +106,7 @@ class RunTest(unittest.TestCase):
                                  "reply to a forwarded question, or start with its item number, as in `#67 1`."])
         posted = [c for c in gh.api.call_args_list if c.args[0] == "POST"]
         self.assertEqual([(c.args[1], c.args[2]["body"]) for c in posted],
-                         [("repos/aray4702/auto_research/issues/67/comments", "1\n\n(from Discord: https://discord.com/channels/5/6/101)")])
+                         [("repos/aray4702/local_meeting_transcriber/issues/67/comments", "1\n\n(from Discord: https://discord.com/channels/5/6/101)")])
         self.assertEqual([(c.args[1]["message_id"], c.args[1]["result"]) for c in store.append.call_args_list],
                          [("101", "relayed"), ("102", "refused"), ("103", "seen")], "the stranger's message moves the cursor only")
         self.assertEqual([c.args[2] for c in replies.call_args_list], ["101", "102"])
@@ -167,7 +167,7 @@ class RunTest(unittest.TestCase):
                                  [f"relay failed: {type(error).__name__}: {error}"])
 
     def test_nothing_is_relayed_while_paused(self):
-        gh = mock.Mock(repo="aray4702/auto_research")
+        gh = mock.Mock(repo="aray4702/local_meeting_transcriber")
         with mock.patch.object(dispatch.post, "GitHub", return_value=gh), \
              mock.patch.object(dispatch.killswitch, "paused", return_value=(True, "AGENTS_PAUSED is 'true'")), \
              mock.patch.object(dispatch, "relay_answers") as relayed:

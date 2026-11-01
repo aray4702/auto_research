@@ -23,15 +23,15 @@ import tomllib
 from pathlib import Path
 
 TITLE = "# Local Meeting Transcriber"
-CLONE_URL = "https://github.com/aray4702/auto_research.git"
-CLONE_LINES = [f"git clone {CLONE_URL}", "cd auto_research"]
+CLONE_URL = "https://github.com/aray4702/local_meeting_transcriber.git"
+CLONE_LINES = [f"git clone {CLONE_URL}", "cd local_meeting_transcriber"]
 BUILD_LAST_LINE = "uv run lmt --help"
 GATE_COMMAND = "python3 -I system/gate/generic.py --base origin/main"
 # S1-4: the product's commands the README names as inline code, each also run by product.yml's jobs.
 PRODUCT_COMMANDS = ["uv run --frozen pytest", "uv run --frozen lmt eval --set ci"]
 PRODUCT_YML = ".github/workflows/product.yml"
 # G3-7: the Install block's one command, and what its section must name.
-INSTALL_COMMAND = re.compile(r"^uv tool install git\+https://github\.com/aray4702/auto_research@v\d+\.\d+\.\d+$")
+INSTALL_COMMAND = re.compile(r"^uv tool install git\+https://github\.com/aray4702/local_meeting_transcriber@v\d+\.\d+\.\d+$")
 UV_INSTALLER_URL = "https://docs.astral.sh/uv/getting-started/installation/"
 HF_TOKEN = "HF_TOKEN"
 
@@ -143,7 +143,7 @@ def check_build(root, text):
         code, out = run_sh(block, tmp, env)
         if code != 0:
             return [f"the Build block exits {code}:\n{out}"]
-        got = head_of(Path(tmp) / "auto_research")
+        got = head_of(Path(tmp) / "local_meeting_transcriber")
     want = head_of(root)
     if not want or got != want:
         return [f"the clone's HEAD is {got}, not the commit under test {want}"]

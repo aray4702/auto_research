@@ -139,7 +139,7 @@ class TestAMIFull:
         for meeting in AMI_FULL:
             edinburgh = f"https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/{meeting}/audio/{meeting}.Mix-Headset.wav"
             # The sample meeting tries this repository's copy first (#529); the others only Edinburgh's.
-            own = [f"https://github.com/aray4702/auto_research/releases/download/sample-data-ami/{meeting}.Mix-Headset.wav"] if meeting == "ES2004a" else []
+            own = [f"https://github.com/aray4702/local_meeting_transcriber/releases/download/sample-data-ami/{meeting}.Mix-Headset.wav"] if meeting == "ES2004a" else []
             assert sources[f"ami-{meeting}"]["urls"] == [*own, edinburgh]
             assert sources[f"ami-rttm-{meeting}"]["urls"] == [
                 f"{URL_PREFIXES[-1]}only_words/rttms/test/{meeting}.rttm"]

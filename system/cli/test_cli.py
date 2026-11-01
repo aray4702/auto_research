@@ -131,7 +131,7 @@ class RunnerViewTest(unittest.TestCase):
 
 def sample():
     return {
-        "now": NOW.isoformat(), "repo": "aray4702/auto_research", "time_zone": "America/Los_Angeles",
+        "now": NOW.isoformat(), "repo": "aray4702/local_meeting_transcriber", "time_zone": "America/Los_Angeles",
         "paused": False, "pause_reason": "AGENTS_PAUSED is not set",
         "decisions": [{"number": 49, "title": "Release <S1>", "asker": "coordinator", "question": "Publish?\n1. Yes",
                        "answered": False, "url": "u"}],

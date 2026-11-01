@@ -17,7 +17,7 @@ import urllib.request
 from system.dispatcher import audit
 
 API = "https://discord.com/api/v10"
-AGENT = "DiscordBot (https://github.com/aray4702/auto_research, 1)"
+AGENT = "DiscordBot (https://github.com/aray4702/local_meeting_transcriber, 1)"
 SETTINGS = ("discord_bot_keychain_service", "discord_guild_id", "discord_channel_id", "owner_discord_user_id")
 HELD = "needs-decision:owner"
 ITEM = re.compile(r"#(\d+)")

@@ -95,7 +95,7 @@ class StagesTest(unittest.TestCase):
             if path.endswith("issues/9/timeline?per_page=100"):
                 return [{"event": "reviewed", "submitted_at": "2026-10-27T10:30:00Z", "user": {"login": BOT}, "state": "approved"}]
             raise AssertionError(path)
-        gh = mock.Mock(repo="aray4702/auto_research", api=mock.Mock(side_effect=api))
+        gh = mock.Mock(repo="aray4702/local_meeting_transcriber", api=mock.Mock(side_effect=api))
         issue = {"number": 8, "created_at": "2026-10-27T08:00:00Z", "closed_at": "2026-10-27T11:00:00Z"}
         got = flow.fetch(gh, issue, [], BOT, OWNER)
         self.assertEqual((got["prs"], got["stages"]), ([9], {"queued": 2, "review": 0.5, "merging": 0.5}),

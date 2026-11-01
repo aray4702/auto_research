@@ -32,7 +32,7 @@ You need [uv](https://docs.astral.sh/uv/getting-started/installation/).
 ```sh
 # A comment isn't a command.
 
-uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
+uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0
 ```
 
 Set `HF_TOKEN` for the models.
@@ -42,8 +42,8 @@ Set `HF_TOKEN` for the models.
 Needs uv 0.9.1.
 
 ```sh
-git clone https://github.com/aray4702/auto_research.git
-cd auto_research
+git clone https://github.com/aray4702/local_meeting_transcriber.git
+cd local_meeting_transcriber
 # A shell comment doesn't end the section.
 uv sync --locked
 uv run lmt --help
@@ -269,15 +269,15 @@ class ReadmeTest(unittest.TestCase):
         self.assertIn("2 commands", self.assertFails(GOOD.replace("# A comment isn't a command.", "uv --version"),
                                                      "G3-7"))
         self.assertIn("0 commands", self.assertFails(
-            GOOD.replace("uv tool install git+https://github.com/aray4702/auto_research@v1.0.0\n", ""), "G3-7"))
+            GOOD.replace("uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0\n", ""), "G3-7"))
 
     def test_install_command_must_match(self):
-        command = "uv tool install git+https://github.com/aray4702/auto_research@v1.0.0"
-        for wrong in ("uv tool install git+https://github.com/aray4702/auto_research@main",
-                      "uv tool install git+https://github.com/aray4702/auto_research@v1.0",
-                      "uv tool install git+https://github.com/someone/auto_research@v1.0.0",
-                      "uv tool install git+https://github.com/aray4702/auto_research@v1.0.0 --force",
-                      "pip install git+https://github.com/aray4702/auto_research@v1.0.0"):
+        command = "uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0"
+        for wrong in ("uv tool install git+https://github.com/aray4702/local_meeting_transcriber@main",
+                      "uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0",
+                      "uv tool install git+https://github.com/someone/local_meeting_transcriber@v1.0.0",
+                      "uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0 --force",
+                      "pip install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0"):
             with self.subTest(wrong=wrong):
                 self.assertIn("doesn't match", self.assertFails(GOOD.replace(command, wrong), "G3-7"))
 
@@ -317,7 +317,7 @@ class ReadmeTest(unittest.TestCase):
         # Only the command: the checks don't run, so a failing Build block doesn't matter.
         self.commit(GOOD, {"FAIL_UV": "", "FAIL_GATE": ""})
         self.assertEqual(self.print_install(),
-                         (0, "uv tool install git+https://github.com/aray4702/auto_research@v1.0.0\n", ""))
+                         (0, "uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0\n", ""))
 
     def test_print_install_fails_on_a_bad_section(self):
         self.commit(GOOD.replace("@v1.0.0", "@main"))
