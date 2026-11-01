@@ -275,11 +275,11 @@ class ReviewTest(unittest.TestCase):
         with self.assertRaises(SystemExit):
             post.cmd_review(IDENTITY, CALLER, 8, "APPROVE", "ok", token=lambda i: "t", send=send)
         post.cmd_review(IDENTITY, ("reviewer", "r1"), 8, "APPROVE", "ok", token=lambda i: "t", send=send)
-        self.assertEqual(sent[0][0], "https://api.github.com/repos/aray4702/auto_research/pulls/8/reviews")
+        self.assertEqual(sent[0][0], "https://api.github.com/repos/aray4702/local_meeting_transcriber/pulls/8/reviews")
         self.assertEqual(sent[0][2]["event"], "APPROVE")
         self.assertTrue(sent[0][2]["body"].startswith("<!-- role:reviewer run:r1 -->"))
         self.assertEqual(post.token_request(IDENTITY), {
-            "repositories": ["auto_research"],
+            "repositories": ["local_meeting_transcriber"],
             "permissions": {"pull_requests": "write", "contents": "read", "checks": "read"},
         })
 

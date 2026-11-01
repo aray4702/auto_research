@@ -154,7 +154,7 @@ class RolesTest(unittest.TestCase):
         page = views.roles_page(d)
         self.assertIn('<a href="/roles" aria-current=page>Roles</a>', page)
         self.assertIn("1 of 6 roles working", page)
-        self.assertIn('<a href="https://github.com/aray4702/auto_research/pull/245">#245</a> Requirements &lt;v1.11&gt;', page)
+        self.assertIn('<a href="https://github.com/aray4702/local_meeting_transcriber/pull/245">#245</a> Requirements &lt;v1.11&gt;', page)
         self.assertIn("no run yet", page)
         self.assertNotIn("cap lifted", page)
         lifted = self.roles(override={"no_daily_run_caps_until": "2026-10-29T07:00:00+00:00"})

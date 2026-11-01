@@ -713,7 +713,7 @@ class NotifyTest(unittest.TestCase):
 
 
 class FakeGitHub:
-    repo = "aray4702/auto_research"
+    repo = "aray4702/local_meeting_transcriber"
     requirements = "## 2. Goals\n\n| ID | Goal | Outcome | Deadline |\n| --- | --- | --- | --- |\n| S1 | seed | x | none |\n"
 
     def __init__(self, repo=None):
@@ -824,8 +824,8 @@ class ReopenTest(unittest.TestCase):
         (first, second), writes, appended = self.passes(False, False)
         self.assertIn("reopen #81: it closed while its question to the Owner was unanswered", first)
         self.assertFalse([line for line in second if "reopen" in line], second)
-        self.assertEqual(writes, [("PATCH", "repos/aray4702/auto_research/issues/81"),
-                                  ("POST", "repos/aray4702/auto_research/issues/81/comments")])
+        self.assertEqual(writes, [("PATCH", "repos/aray4702/local_meeting_transcriber/issues/81"),
+                                  ("POST", "repos/aray4702/local_meeting_transcriber/issues/81/comments")])
         self.assertEqual(appended, [("notices", {"key": "reopen:1", "at": NOW.isoformat()})])
 
     def test_a_failed_check_never_stops_the_pass(self):

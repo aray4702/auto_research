@@ -582,7 +582,7 @@ A new section after `## What it is`, before `## Build`, which is for developers.
 You need [uv](https://docs.astral.sh/uv/getting-started/installation/), installed by its own installer. Nothing else: uv fetches a suitable Python if you don't have one.
 
 ```sh
-uv tool install git+https://github.com/aray4702/auto_research@v1.0.0
+uv tool install git+https://github.com/aray4702/local_meeting_transcriber@v1.0.0
 ```
 
 The speaker models are gated on Hugging Face. Once, before the first download: make a free account, accept the conditions on the pages of [pyannote/speaker-diarization-3.1](…), [pyannote/segmentation-3.0](…) and [pyannote/wespeaker-voxceleb-resnet34-LM](…), create a read token, and set it as `HF_TOKEN` for `lmt models download`. After that, nothing needs the network.
@@ -594,7 +594,7 @@ The tag doesn't exist until the release, but CI checks the command against its o
 
 A new check, `check_install`:
 - `## Install` appears once, with exactly one `sh` block.
-- The block has exactly one line that isn't blank or a comment, and it matches `^uv tool install git\+https://github\.com/aray4702/auto_research@v\d+\.\d+\.\d+$`.
+- The block has exactly one line that isn't blank or a comment, and it matches `^uv tool install git\+https://github\.com/aray4702/local_meeting_transcriber@v\d+\.\d+\.\d+$`.
 - The section links `https://docs.astral.sh/uv/getting-started/installation/` and names `HF_TOKEN`.
 
 `--print-install` prints that line and exits, for `check_install.py`. Unit tests in `test_check_readme.py` cover each rule, passing and failing.
@@ -611,7 +611,7 @@ python3 -I .github/scripts/check_install.py --platform {linux-x86_64,macos-arm64
 ```
 
 1. **The command:**
-   - With `--readme`, it takes the command from `check_readme.py --print-install`, and replaces `git+https://github.com/aray4702/auto_research@` with `git+file://<ROOT resolved>@`. It rewrites the string rather than using git's `insteadOf`, because uv can resolve a GitHub URL's tag through GitHub's API and skip git. With `--tag-checkout`, it first runs `git -C ROOT tag -f <tag> HEAD`, in that checkout only (spec, G3-7). `<tag>` is the one after `@` in the README's line (`v1.0.0`), not `pyproject.toml`'s version, so the redirected URL resolves. Step 3 still compares `lmt --version` with `pyproject.toml`'s version.
+   - With `--readme`, it takes the command from `check_readme.py --print-install`, and replaces `git+https://github.com/aray4702/local_meeting_transcriber@` with `git+file://<ROOT resolved>@`. It rewrites the string rather than using git's `insteadOf`, because uv can resolve a GitHub URL's tag through GitHub's API and skip git. With `--tag-checkout`, it first runs `git -C ROOT tag -f <tag> HEAD`, in that checkout only (spec, G3-7). `<tag>` is the one after `@` in the README's line (`v1.0.0`), not `pyproject.toml`'s version, so the redirected URL resolves. Step 3 still compares `lmt --version` with `pyproject.toml`'s version.
    - With `--wheel`, the command is `uv tool install <wheel>`, for `release.yml`.
 2. **A clean environment:** the command runs with `UV_TOOL_DIR=<scratch>/tools`, `UV_TOOL_BIN_DIR=<scratch>/bin`, `UV_CACHE_DIR=<scratch>/cache` (so no cache is reused) and `UV_PYTHON_INSTALL_DIR=<scratch>/python`, and with the working directory `<scratch>`. It must exit 0.
 3. **The version:** `<scratch>/bin/lmt --version` prints `lmt <pyproject.toml's version>`.

@@ -267,7 +267,7 @@ class DailyPassTest(unittest.TestCase):
         from system.dispatcher import dispatch
         store = mock.Mock()
         store.read.side_effect = lambda kind: {"runs": list(runs), "anomalies": [{"key": k} for k in raised]}.get(kind, [])
-        gh = mock.Mock(repo="aray4702/auto_research")
+        gh = mock.Mock(repo="aray4702/local_meeting_transcriber")
         gh.api.side_effect = lambda method, path, body=None, paginate=False: (
             live_protection if path.endswith("/protection") else [] if paginate else {})
         snap = {"issues": [{"number": 12, "title": "Watch list", "labels": {"record:watch-list"}, "body": ""}], "prs": [], "work_order": []}
@@ -289,7 +289,7 @@ class DailyPassTest(unittest.TestCase):
         loosened["allow_force_pushes"]["enabled"] = True
         lines, store, create, escalate, sh = self.run_pass(loosened)
         self.assertEqual(lines, ["raise (owner): Rule breach: branch protection on main changed"])
-        self.assertIn(["gh", "variable", "set", "AGENTS_PAUSED", "--body", "true", "--repo", "aray4702/auto_research"],
+        self.assertIn(["gh", "variable", "set", "AGENTS_PAUSED", "--body", "true", "--repo", "aray4702/local_meeting_transcriber"],
                       [c.args[0] for c in sh.call_args_list])
         self.assertIn("sev:1", create.call_args.args[3])
         self.assertEqual((escalate.call_args.args[2], escalate.call_args.args[3]), (70, "owner"))
