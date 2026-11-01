@@ -54,6 +54,14 @@ def main(args):
     }
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{stem}.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    if "--save-audio" in args:  # 1 s of silence, as `lmt live --save-audio` writes <stem>.wav
+        import wave
+
+        with wave.open(str(out_dir / f"{stem}.wav"), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"\0\0" * 16000)
     return 0
 
 
