@@ -10,6 +10,7 @@ the command line; Stop sends it SIGINT, as Ctrl-C does, and it saves its outputs
 import hmac
 import importlib.resources
 import json
+import os
 import secrets
 import signal
 import subprocess
@@ -23,6 +24,7 @@ from pathlib import Path
 from lmt import engines
 from lmt.demo import server as demo_server
 from lmt.errors import InputError
+from lmt.live.command import APP_CHILD
 
 LIVE = [sys.executable, "-m", "lmt", "live"]  # the session's command; tests replace it
 PAGE = {
@@ -43,10 +45,14 @@ class Session:
     stderr: list[str] = field(default_factory=list)
     code: int | None = None  # set once the process has exited and its outputs are read
     view: bool = False  # a saved transcript is on view/
+    started: bool = False  # the app has sent it `go`: it captures, and Stop applies
+    stage: str = "starting"  # its last `loading` stage, then "ready"
 
 
 class App:
-    """The state the handler serves: one session at a time, and F8's page for the last one that saved."""
+    """The state the handler serves: one session at a time, loaded ahead of Start (`prepare`), and F8's page for
+    the last one that saved. A session loads its models before it opens its source and waits for `go`
+    (`lmt.live.command`'s child protocol), so Start doesn't wait for the models."""
 
     def __init__(self, out_dir: Path, *, source: list[str], offline: bool, token: str | None = None):
         self.out_dir = out_dir
@@ -58,32 +64,75 @@ class App:
         self.view: demo_server.Demo | None = None
         self.changed = threading.Condition()
 
-    def start(self, engine: str) -> Session:
+    @staticmethod
+    def _check(engine: str) -> None:
         if engine not in engines.ENGINES:
             raise ValueError(f"unknown engine {engine!r}")
-        with self.changed:
-            if self.session is not None and self.session.code is None:
-                raise RuntimeError("a session is running")
-            stem = "live-" + datetime.now().strftime("%Y%m%d-%H%M%S")
-            argv = [*LIVE, "--engine", engine, "--jsonl", "--save-audio", "-o", str(self.out_dir), "-n", stem,
-                    *self.source, *(["--offline"] if self.offline else [])]
-            # Its own process group, so the terminal's Ctrl-C reaches only the app, which then stops the session
-            # with one SIGINT: a second would abandon its save (exit 130).
-            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    text=True, encoding="utf-8", bufsize=1, start_new_session=True)
-            self.session = session = Session(engine, stem, proc)
-            self.changed.notify_all()
+
+    def _spawn(self, engine: str) -> Session:
+        argv = [*LIVE, "--engine", engine, "--jsonl", "--save-audio", "-o", str(self.out_dir), "-n", "live-pending",
+                *self.source, *(["--offline"] if self.offline else [])]
+        # Its own process group, so the terminal's Ctrl-C reaches only the app, which then stops the session with
+        # one SIGINT: a second would abandon its save (exit 130).
+        proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", bufsize=1, start_new_session=True,
+                                env={**os.environ, APP_CHILD: "1"})
+        session = Session(engine, "live-pending", proc)
         threading.Thread(target=self._read_stderr, args=(session,), daemon=True).start()
         threading.Thread(target=self._read_events, args=(session,), daemon=True).start()
         return session
 
+    def prepare(self, engine: str) -> Session:
+        """A session for `engine`, loading or loaded and waiting: the current one if it's for `engine` (or already
+        started), else a new one, after cancelling one that's waiting for another engine."""
+        self._check(engine)
+        with self.changed:
+            s = self.session
+            if s is not None and s.code is None:
+                if s.started or s.engine == engine:
+                    return s
+                _cancel(s)
+            self.session = self._spawn(engine)
+            self.changed.notify_all()
+            return self.session
+
+    def start(self, engine: str) -> Session:
+        self._check(engine)
+        with self.changed:
+            s = self.session
+            if s is not None and s.code is None and s.started:
+                raise RuntimeError("a session is running")
+        s = self.prepare(engine)
+        with self.changed:
+            s.stem = "live-" + datetime.now().strftime("%Y%m%d-%H%M%S")
+            s.started = True
+            try:  # if it's still loading, it reads this once it's ready
+                s.proc.stdin.write(f"go {s.stem}\n")
+                s.proc.stdin.flush()
+            except OSError:
+                pass  # it has exited; its end event says why
+            self.changed.notify_all()
+        return s
+
     def stop(self) -> bool:
         with self.changed:
-            session = self.session
-            if session is None or session.code is not None:
+            s = self.session
+            if s is None or s.code is not None or not s.started:
                 return False
-        session.proc.send_signal(signal.SIGINT)  # as Ctrl-C: the session stops and saves
+        s.proc.send_signal(signal.SIGINT)  # as Ctrl-C: the session stops and saves
         return True
+
+    def shutdown(self) -> None:
+        """At the app's exit: a running session is stopped and saved, a waiting one cancelled."""
+        s = self.session
+        if s is None or s.code is not None:
+            return
+        if s.started:
+            s.proc.send_signal(signal.SIGINT)
+            s.proc.wait(timeout=120)
+        else:
+            _cancel(s)
+            s.proc.wait(timeout=30)
 
     def _read_stderr(self, session: Session) -> None:
         for line in session.proc.stderr:
@@ -93,14 +142,23 @@ class App:
     def _read_events(self, session: Session) -> None:
         for line in session.proc.stdout:
             line = line.strip()
-            if line:
-                with self.changed:
-                    session.events.append(line)
-                    self.changed.notify_all()
+            if not line:
+                continue
+            try:
+                kind = json.loads(line).get("type")
+            except ValueError:
+                kind = None
+            with self.changed:
+                if kind == "loading":
+                    session.stage = json.loads(line).get("stage", session.stage)
+                elif kind == "ready":
+                    session.stage = "ready"
+                session.events.append(line)
+                self.changed.notify_all()
         code = session.proc.wait()
         view = None
         transcript = self.out_dir / f"{session.stem}.json"
-        if transcript.is_file():
+        if session.started and transcript.is_file():
             try:
                 view = demo_server.load(transcript, self.out_dir / f"{session.stem}.wav", True)
                 view.token, view.port = self.token, self.port
@@ -112,14 +170,25 @@ class App:
             session.view = view is not None
             session.code = code
             self.changed.notify_all()
+        if session.started and code == 0:  # load the next one now, so the next Start is quick too
+            self.prepare(session.engine)
 
     def state(self) -> dict:
         with self.changed:
             s = self.session
-            return {"engines": list(engines.ENGINES), "running": s is not None and s.code is None,
-                    "session": None if s is None else {"engine": s.engine, "stem": s.stem, "code": s.code,
-                                                       "events": len(s.events), "view": s.view,
-                                                       "error": "\n".join(s.stderr) if s.code else None}}
+            return {"engines": list(engines.ENGINES), "running": s is not None and s.code is None and s.started,
+                    "session": None if s is None else {
+                        "engine": s.engine, "stem": s.stem, "code": s.code, "events": len(s.events),
+                        "view": s.view, "started": s.started, "stage": s.stage,
+                        "error": "\n".join(s.stderr) if s.code else None}}
+
+
+def _cancel(session: Session) -> None:
+    """A session that hasn't started: end of input, so it exits 0 having written nothing."""
+    try:
+        session.proc.stdin.close()
+    except OSError:
+        pass
 
 
 class AppServer(demo_server.Server):
@@ -160,7 +229,7 @@ class AppHandler(demo_server.Handler):
         if not path.startswith("/") or not under or not hmac.compare_digest(first.encode("latin-1", "replace"),
                                                                             app.token.encode()):
             return self.refuse(404, head=head)
-        if rest in ("api/start", "api/stop"):
+        if rest in ("api/start", "api/stop", "api/prepare"):
             return self.command_route(rest, head=head)
         if self.command not in ("GET", "HEAD"):
             return self.refuse(405, head=head, headers=[("Allow", "GET, HEAD")])
@@ -194,7 +263,7 @@ class AppHandler(demo_server.Handler):
             return self.json(200 if app.stop() else 409, app.state(), head=head)
         try:
             engine = json.loads(body or b"{}").get("engine", "kyutai")
-            app.start(engine)
+            (app.prepare if route == "api/prepare" else app.start)(engine)
         except (ValueError, AttributeError):
             return self.json(400, {"error": "engine must be one of " + ", ".join(engines.ENGINES)}, head=head)
         except RuntimeError as e:
@@ -281,7 +350,6 @@ def cli_app(args) -> int:
         pass
     finally:
         signal.signal(signal.SIGTERM, previous)
-        if app.stop():
-            app.session.proc.wait(timeout=120)
+        app.shutdown()
         server.server_close()
     return 0
