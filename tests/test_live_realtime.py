@@ -180,7 +180,7 @@ class Flow(unittest.TestCase):
         source = GatedSource([5])
         out, _ = run(source, asr_stage(), diar_stage())
         got = events(out)
-        self.assertEqual(got[0], {"type": "start", "schema_version": "1.0", "t": 0, "source": SOURCE,
+        self.assertEqual(got[0], {"type": "start", "schema_version": "1.1", "t": 0, "source": SOURCE,
                                   "models": MODELS})
         self.assertEqual(got[-1], {"type": "stop", "t": 0.5, "reason": "end-of-input"})
 
@@ -200,8 +200,10 @@ class Flow(unittest.TestCase):
         source = GatedSource([10, 10], lambda burst: labelled.wait(WAIT))
         out, _ = run(source, asr, diar, Sinks(on_segment=lambda s, label: labelled.set()))
         got = events(out)
-        self.assertEqual([e["type"] for e in got], ["start", "words", "segment", "stop"])
-        self.assertEqual([e["t"] for e in got[1:3]], [1.0, 1.0])
+        # Its text is written once it is committed, in the first burst, before its label.
+        self.assertEqual([e["type"] for e in got], ["start", "text", "words", "segment", "stop"])
+        self.assertLessEqual(got[1]["t"], 1.0)
+        self.assertEqual([e["t"] for e in got[2:4]], [1.0, 1.0])
         self.assertEqual(got[-1]["t"], 2.0)
 
 
