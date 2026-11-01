@@ -7,7 +7,7 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    "module", ["faster_whisper", "pyannote.audio", "huggingface_hub", "jiwer", "pyannote.metrics"]
+    "module", ["lmt._vendor.moshi_mlx", "mlx.core", "rustymimi", "pyannote.audio", "huggingface_hub", "jiwer", "pyannote.metrics"]
 )
 def test_imports(module):
     importlib.import_module(module)

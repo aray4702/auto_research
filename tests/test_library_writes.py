@@ -1,6 +1,7 @@
 """G1-13: the libraries a product run loads leave no file outside its outputs (design/internal/g1-stage2.md, P13),
 with no model. Each case is a fresh process with fresh HOME, TMPDIR and XDG_CACHE_HOME, and an empty working
-directory; nothing else is set, so neither MPLCONFIGDIR nor ORT_DISABLE_TELEMETRY comes from outside."""
+directory; nothing else is set, so MPLCONFIGDIR doesn't come from outside. onnxruntime's half (Whisper's VAD) went
+with Whisper (#584)."""
 
 import json
 import os
@@ -18,26 +19,18 @@ pytestmark = pytest.mark.criterion("G1-13")
 BOTH = """
 import json
 import numpy
-from lmt import asr, diarize
+from lmt import diarize
 diarize.scratch_matplotlib()
 with diarize._quiet():
     import pyannote.audio.pipelines
 import matplotlib
 print(json.dumps(str(matplotlib.get_cachedir())))
-asr.quiet_onnxruntime()
-from faster_whisper.vad import get_speech_timestamps
-get_speech_timestamps(numpy.zeros(16_000, numpy.float32))
 """
 SCRATCH = """
 import json, os
 from lmt import diarize
 a, b = diarize.scratch_matplotlib(), diarize.scratch_matplotlib()
 print(json.dumps([str(a), str(b), os.environ.get("MPLCONFIGDIR"), a.is_dir()]))
-"""
-SWITCH = """
-import json, os
-import lmt.asr
-print(json.dumps(os.environ.get("ORT_DISABLE_TELEMETRY")))
 """
 
 
@@ -74,7 +67,3 @@ def test_the_scratch_directory_is_the_processs_own_and_goes_at_exit(tmp_path):
     assert not Path(a).exists()
     assert os.listdir(tmp) == []
 
-
-def test_onnxruntimes_telemetry_switch_is_set(tmp_path):
-    value, _dirs, _stderr = run(SWITCH, tmp_path)
-    assert value == "1"
